@@ -1,0 +1,229 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+   
+    <record id="view_driver_rounds_tree" model="ir.ui.view">
+        <field name="name">round.management.batch.driver.rounds.list</field>
+        <field name="model">round.management.batch</field>
+        <field name="arch" type="xml">
+            <list string="Driver Rounds Dispatch Grid" editable="bottom">
+                <field name="delivery_date" string="Del Date"/>
+                <field name="round_code" string="Code"/>
+                <field name="round_id" string="Round" readonly="1" options="{'no_open': True}"/>
+                <field name="depot_id" string="Depot" readonly="1"/>
+                
+                <field name="drops_count" sum="Total Drops" string="Drops"/>
+                <field name="late_orders_count" sum="Total Late Orders" string="Late Orders"/>
+                <field name="total_drops" sum="Grand Total Drops" string="Total Drops" readonly="1"/>
+                <field name="card_reader_count" string="Card Reader"/>
+                <field name="pickups_count" string="Pickups"/>
+                <field name="extras" string="Extras"/>
+                <field name="is_b2b_batch" string="B2B"/>
+                <field name="driver_id" string="Driver" options="{'no_create': True}"/>
+                <field name="helper_id" string="Helper" options="{'no_create': True}"/>
+                <field name="vehicle_id" string="Vehicle" options="{'no_create': True}"/>
+                <field name="is_spare_vehicle" string="Spare"/>
+                <field name="is_off_road" string="Off Road"/>
+                <field name="driver_on_leave" string="Drivers Hols/Sick"/>
+            </list>
+        </field>
+    </record>
+
+
+   
+    <record id="view_round_batch_tree" model="ir.ui.view">
+        <field name="name">round.management.batch.tree</field>
+        <field name="model">round.management.batch</field>
+        <field name="arch" type="xml">
+            <list string="Round Batches Summary">
+                <field name="code"/>
+                <field name="round_id"/>
+                <field name="depot_id"/>
+                <field name="delivery_date"/>
+                <field name="week_number" readonly="1" optional="hide"/>
+                <field name="driver_id"/>
+                <field name="vehicle_id"/>
+                <field name="total_drops" sum="Total Drops"/>
+                <field name="state" 
+                       widget="badge" 
+                       decoration-info="state == 'pln'"
+                       decoration-warning="state == 'act'"
+                       decoration-primary="state == 'prt'"
+                       decoration-success="state == 'com'"
+                       decoration-danger="state == 'cancel'"/>
+            </list>
+        </field>
+    </record>
+
+
+   
+    <record id="view_round_batch_form" model="ir.ui.view">
+        <field name="name">round.management.batch.form</field>
+        <field name="model">round.management.batch</field>
+        <field name="arch" type="xml">
+            <form string="Round Batch Details">
+                <header>
+                    <button name="action_start_batch" 
+                            string="Start Batch" 
+                            type="object" 
+                            class="btn-primary" 
+                            invisible="state != 'pln'"/>
+
+                    <button name="action_print_manifest" 
+                            string="Print Manifest" 
+                            type="object" 
+                            class="btn-primary" 
+                            invisible="state not in ('act', 'pln')"/>
+
+                    <button name="action_complete_batch" 
+                            string="Mark Completed" 
+                            type="object" 
+                            class="btn-success" 
+                            invisible="state != 'prt'"/>
+
+                    <button name="action_reset_to_planned" 
+                            string="Reset to Planned" 
+                            type="object" 
+                            invisible="state not in ('act', 'prt', 'cancel')"/>
+
+                    <field name="state" 
+                           widget="statusbar" 
+                           statusbar_visible="pln,act,prt,com" 
+                           options="{'clickable': '1'}"/>
+                </header>
+
+                <sheet>
+                    <div class="oe_title">
+                        <label for="code" string="Batch Code"/>
+                        <h1><field name="code" placeholder="e.g. 123183" readonly="1"/></h1>
+                    </div>
+                    
+
+                   
+                    <group>
+                        <group string="Batch Details">
+                            <label for="round_id" string="Round"/>
+                            <div class="o_row">
+                                <field name="round_code" placeholder="Code" nolabel="1"/>
+                                <field name="round_id" placeholder="Select Round" nolabel="1"/>
+                            </div>
+                            <field name="reference"/>
+                            <field name="depot_id"/>
+                            <field name="delivery_date"/>
+                            <field name="week_number" readonly="1"/>
+                        </group>
+                        
+                        <group string="Logistics &amp; Crew">
+                            <!--<field name="vehicle_id" options="{'no_create': True}" readonly="state == 'com'"/>-->
+                            <field name="driver_id" options="{'no_create': True}" readonly="state == 'com'"/>
+                            <field name="helper_id" options="{'no_create': True}"/>
+                            <!--<field name="pay_grade"/>-->
+                            <field name="max_alt_drops"/>
+                        </group>
+                    </group>
+
+                    
+                    <group>
+                        <group string="Operational Options">
+                            <field name="helper_needed"/>
+                            <field name="knockup_round"/>
+                            <field name="is_spare_vehicle"/>
+                            <field name="is_off_road"/>
+                            <field name="driver_on_leave"/>
+                        </group>
+
+                        <!--<group string="Live Order Summary Counts">
+                            <field name="drops_count"/>
+                            <field name="late_orders_count"/>
+                            <field name="card_reader_count"/>
+                            <field name="pickups_count"/>
+                            <field name="total_drops" class="fw-bold"/>
+                            <field name="is_b2b_batch"/>
+                            <field name="extras"/>
+                        </group>-->
+                    </group>
+
+                    
+                    <group string="Notes:-">
+                        <field name="notes" nolabel="1" placeholder="Add operational batch notes..."/>
+                    </group>
+
+                   
+                    <notebook>
+                        <page string="Linked Orders" name="orders">
+                            <field name="order_ids" 
+                                   domain="[('round_id', '=', round_id)]" 
+                                   context="{'default_round_id': round_id, 'default_batch_id': id}">
+                                <list editable="bottom">
+                                    <field name="name" string="Order Ref"/>
+                                    <field name="partner_id" string="Customer"/>
+                                    <field name="round_id" column_invisible="1"/>
+                                   
+                                    <field name="is_late_order" string="Late?"/>
+                                    <field name="is_pickup" string="Pickup?"/>
+                                    <field name="has_card_reader" string="Card Reader?"/>
+                                    <field name="is_b2b" string="B2B?"/>
+                                    <field name="amount_total" sum="Total Revenue"/>
+                                    <field name="state" widget="badge"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+
+   
+    <record id="view_round_batch_calendar" model="ir.ui.view">
+        <field name="name">round.management.batch.calendar</field>
+        <field name="model">round.management.batch</field>
+        <field name="arch" type="xml">
+            <calendar string="Rounds Calendar Dispatch" 
+                      date_start="delivery_date" 
+                      color="driver_id" 
+                      quick_create="false">
+                <field name="round_id"/>
+                <field name="driver_id"/>
+                <field name="total_drops"/>
+                <field name="state"/>
+            </calendar>
+        </field>
+    </record>
+
+
+    
+    <!--<record id="view_round_batch_search" model="ir.ui.view">
+        <field name="name">round.management.batch.search</field>
+        <field name="model">round.management.batch</field>
+        <field name="arch" type="xml">
+            <search string="Search Batches Manager">
+                <field name="code" string="Batch Code"/>
+                <field name="round_id" string="Round Name/Code"/>
+                <field name="driver_id"/>
+                <field name="vehicle_id"/>
+                <field name="delivery_date"/>
+                
+                <separator/>
+                <filter string="Planned Runs" name="state_planned" domain="[('state', '=', 'pln')]"/>
+                <filter string="Active Runs" name="state_active" domain="[('state', '=', 'act')]"/>
+                <filter string="Completed Runs" name="state_complete" domain="[('state', '=', 'com')]"/>
+                
+                <separator/>
+                <filter string="Driver Hol/Sick Only" name="driver_sick" domain="[('driver_on_leave', '=', True)]"/>
+                <filter string="Spare Vehicles In Use" name="spare_vehicles" domain="[('is_spare_vehicle', '=', True)]"/>
+                <filter string="B2B Runs Only" name="b2b_only" domain="[('is_b2b_batch', '=', True)]"/>
+
+                <group expand="0" string="Group By">
+                    <filter string="Delivery Date" name="group_by_date" context="{'group_by': 'delivery_date:day'}"/>
+                    <filter string="ISO Week" name="group_by_week" context="{'group_by': 'week_number'}"/>
+                    <filter string="Driver" name="group_by_driver" context="{'group_by': 'driver_id'}"/>
+                    <filter string="Depot" name="group_by_depot" context="{'group_by': 'depot_id'}"/>
+                    <filter string="Status" name="group_by_status" context="{'group_by': 'state'}"/>
+                </group>
+            </search>
+        </field>
+    </record>-->
+
+</odoo>

@@ -1,0 +1,72 @@
+<odoo>
+    <record id="view_order_form_inherit_round" model="ir.ui.view">
+        <field name="name">sale.order.form.inherit.round</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="arch" type="xml">
+            
+            <xpath expr="//field[@name='partner_id']" position="after">
+                <field name="round_id" options="{'no_create': True}"/>
+                <field name="round_code" string="Round Code" invisible="not round_id"/>
+                <field name="commitment_date"/>
+                <field name="batch_id" domain="[('round_id', '=', round_id)]"/>
+                <field name="week_number" readonly="1"/>
+            </xpath>
+            
+            <xpath expr="//field[@name='payment_term_id']" position="after">
+            
+            <field name="is_late_order"/>
+            <field name="is_pickup"/>
+            <field name="has_card_reader"/>
+            <field name="is_b2b"/>
+        </xpath>
+        
+        
+            <xpath expr="//field[@name='partner_id']" position="after">
+                
+                
+                <label for="round_id" string="Delivery Round"/>
+                <div class="o_row">
+                    <field name="round_id" placeholder="Select Delivery Round..."/>
+                    <button name="action_select_alt_delivery_round" 
+                            string="Alternative Delivery Round" 
+                            type="object" 
+                            class="btn-secondary ms-2"/>
+                </div>
+
+                <!-- Delivery Times Field -->
+                <field name="delivery_time_slot" placeholder="e.g. 13:00 to 19:00"/>
+
+                
+               <!--  <label for="requested_delivery_after" string="Requested Delivery Time"/>
+                <div class="o_row">
+                    <span class="me-1">After:</span>
+                    <field name="requested_delivery_after" placeholder="13:00"/>
+                    <span class="ms-3 me-1">Before:</span>
+                    <field name="requested_delivery_before" placeholder="19:00"/>
+                </div>-->
+
+            </xpath>
+            
+            <xpath expr="//group[@name='order_details']" position="after">
+                <div class="row mt-3 mb-3">
+                    <div class="col-6">
+                        <label for="note" string="Order Notes:-" class="fw-bold"/>
+                        <field name="note" 
+                               placeholder="Enter specific order notes..." 
+                               nolabel="1" 
+                               style="min-height: 80px;"/>
+                    </div>
+                    <div class="col-6">
+                        <label for="permanent_notes" string="Permanent Notes:-" class="fw-bold text-primary"/>
+                        <field name="permanent_notes" 
+                               placeholder="e.g. 1-2, shop, both, haddock, no, no, 2, no budget" 
+                               nolabel="1" 
+                               style="min-height: 80px;"/>
+                    </div>
+                </div>
+            </xpath>
+
+        </field>
+    </record>
+</odoo>

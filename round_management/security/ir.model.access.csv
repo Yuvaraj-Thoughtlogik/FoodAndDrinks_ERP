@@ -1,0 +1,7 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_round_user,round.user,model_round_management_round,base.group_user,1,1,1,1
+access_batch_user,batch.user,model_round_management_batch,base.group_user,1,1,1,1
+access_wizard_bulk_round_change,access.wizard.bulk.round.change,model_wizard_bulk_round_change,base.group_user,1,1,1,1
+access_bulk_round_change_wizard,access.bulk.round.change.wizard,model_bulk_round_change_wizard,base.group_user,1,1,1,1
+access_batch_duplicator_wizard,access.batch.duplicator.wizard,model_batch_duplicator_wizard,base.group_user,1,1,1,1
+access_round_management_alternative,access.round.management.alternative,model_round_management_alternative,base.group_user,1,1,1,1

@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- 1. ROOT MENU -->
+    <menuitem id="menu_round_management_root"
+              name="Round Management"
+              web_icon="round_management,static/description/icon.png"
+              sequence="10"/>
+
+    <!-- ==================== OPERATIONS CATEGORY ==================== -->
+    <menuitem id="menu_round_operations_categ"
+              name="Operations"
+              parent="menu_round_management_root"
+              sequence="10"/>
+
+    <!-- Action for Round Batches (Active/Planned Runs) -->
+    <record id="action_round_batch_management" model="ir.actions.act_window">
+        <field name="name">Round Batches</field>
+        <field name="res_model">round.management.batch</field>
+        <field name="view_mode">list,form,calendar,pivot</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Create a Round Batch
+            </p>
+            <p>
+                Schedule daily driver dispatches, map vehicles, and assign helper drivers.
+            </p>
+        </field>
+    </record>
+
+
+    <record id="action_round_batch_view_tree" model="ir.actions.act_window.view">
+        <field name="sequence" eval="1"/>
+        <field name="view_mode">list</field>
+        <field name="view_id" ref="view_round_batch_tree"/>
+        <field name="act_window_id" ref="action_round_batch_management"/>
+    </record>
+
+    <record id="action_round_batch_view_form" model="ir.actions.act_window.view">
+        <field name="sequence" eval="2"/>
+        <field name="view_mode">form</field>
+        <field name="view_id" ref="view_round_batch_form"/>
+        <field name="act_window_id" ref="action_round_batch_management"/>
+    </record>
+
+    <menuitem id="menu_round_batch"
+              name="Round Batches"
+              parent="menu_round_operations_categ"
+              action="action_round_batch_management"
+              sequence="10"/>
+
+    
+    <menuitem id="menu_round_customers_categ"
+              name="Customers"
+              parent="menu_round_management_root"
+              sequence="20"/>
+
+    
+    <record id="action_round_customers" model="ir.actions.act_window">
+        <field name="name">Round Customers</field>
+        <field name="res_model">res.partner</field>
+        <field name="view_mode">list,form,kanban</field>
+        <field name="domain">[('customer_rank', '>', 0)]</field>
+        <field name="context">{'search_default_group_by_round': 1}</field>
+    </record>
+
+    <menuitem id="menu_round_customers_list"
+              name="Customers by Round"
+              parent="menu_round_customers_categ"
+              action="action_round_customers"
+              sequence="10"/>
+
+    
+    <record id="action_wizard_bulk_round_change" model="ir.actions.act_window">
+        <field name="name">Bulk Change Rounds</field>
+        <field name="res_model">wizard.bulk.round.change</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
+    <menuitem id="menu_wizard_bulk_round_change"
+              name="Bulk Round Transfer"
+              parent="menu_round_customers_categ"
+              action="action_wizard_bulk_round_change"
+              sequence="20"/>
+
+    
+    <menuitem id="menu_round_config_categ"
+              name="Configuration"
+              parent="menu_round_management_root"
+              sequence="100"/>
+
+    
+    <record id="action_round_master_setup" model="ir.actions.act_window">
+        <field name="name">Rounds Configuration</field>
+        <field name="res_model">round.management.round</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <menuitem id="menu_round_master"
+              name="Rounds Setup"
+              parent="menu_round_config_categ"
+              action="action_round_master_setup"
+              sequence="10"/>
+
+    
+    <record id="action_alternative_rounds" model="ir.actions.act_window">
+        <field name="name">Alternative Round Rules</field>
+        <field name="res_model">round.management.alternative</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <menuitem id="menu_alternative_rounds"
+              name="Alternative Rounds"
+              parent="menu_round_config_categ"
+              action="action_alternative_rounds"
+              sequence="20"/>
+              
+    
+<record id="action_driver_rounds_grid" model="ir.actions.act_window">
+    <field name="name">Driver Rounds</field>
+    <field name="res_model">round.management.batch</field>
+    <field name="view_mode">list,form</field>
+    <field name="view_id" ref="view_driver_rounds_tree"/>
+    <field name="domain">[('round_id.state', '=', 'active')]</field>
+</record>
+
+
+<menuitem id="menu_driver_rounds_dispatch"
+          name="Driver Rounds"
+          parent="menu_round_management_root"
+          action="action_driver_rounds_grid"
+          sequence="20"/>
+</odoo>

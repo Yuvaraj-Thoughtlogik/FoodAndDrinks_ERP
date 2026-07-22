@@ -1,0 +1,206 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+   
+    <record id="view_round_tree" model="ir.ui.view">
+        <field name="name">round.management.round.tree</field>
+        <field name="model">round.management.round</field>
+        <field name="arch" type="xml">
+            <list string="Rounds">
+                <field name="code"/>
+                <field name="name"/>
+                <field name="state" widget="badge" decoration-success="state == 'active'" decoration-danger="state == 'inactive'"/>
+                <field name="region"/>
+                <field name="depot_id"/>
+            </list>
+        </field>
+    </record>
+
+    
+    <record id="view_round_form" model="ir.ui.view">
+        <field name="name">round.management.round.form</field>
+        <field name="model">round.management.round</field>
+        <field name="arch" type="xml">
+            <form string="Round Entry">
+            
+                <sheet>
+                <header>
+    
+    <button name="action_open_new_batch_wizard" 
+            string="Create Round Batch" 
+            type="object" 
+            class="btn-primary"/>
+             </header>
+                    <div class="oe_title">
+                        <label for="code"/>
+                        <h1><field name="code" placeholder="e.g. 1050"/></h1>
+                    </div>
+                    <group>
+                        <group string="Round Details">
+                            <field name="name"/>
+                            <field name="state" widget="radio" options="{'horizontal': true}"/>
+                            <field name="region"/>
+                            <field name="depot_id"/>
+                        </group>
+                        <group string="Configurations">
+                            <!--<field name="pay_grade"/>-->
+                            <field name="target_cust_rev"/>
+                            <field name="max_alt_drops"/>
+                        </group>
+                    </group>
+                    
+                    <notebook>
+                        <page string="Schedules" name="schedules">
+    <group string="Operating Times">
+        <group>
+           
+            <label for="mon_active" string="Monday"/>
+            <div class="o_row">
+                <field name="mon_active"/>
+                <span invisible="not mon_active">From</span>
+                <field name="mon_from" widget="float_time" invisible="not mon_active"/>
+                <span invisible="not mon_active">To</span>
+                <field name="mon_to" widget="float_time" invisible="not mon_active"/>
+            </div>
+
+            
+            <label for="tue_active" string="Tuesday"/>
+            <div class="o_row">
+                <field name="tue_active"/>
+                <span invisible="not tue_active">From</span>
+                <field name="tue_from" widget="float_time" invisible="not tue_active"/>
+                <span invisible="not tue_active">To</span>
+                <field name="tue_to" widget="float_time" invisible="not tue_active"/>
+            </div>
+
+            <!-- Wednesday -->
+            <label for="wed_active" string="Wednesday"/>
+            <div class="o_row">
+                <field name="wed_active"/>
+                <span invisible="not wed_active">From</span>
+                <field name="wed_from" widget="float_time" invisible="not wed_active"/>
+                <span invisible="not wed_active">To</span>
+                <field name="wed_to" widget="float_time" invisible="not wed_active"/>
+            </div>
+
+           
+            <label for="thu_active" string="Thursday"/>
+            <div class="o_row">
+                <field name="thu_active"/>
+                <span invisible="not thu_active">From</span>
+                <field name="thu_from" widget="float_time" invisible="not thu_active"/>
+                <span invisible="not thu_active">To</span>
+                <field name="thu_to" widget="float_time" invisible="not thu_active"/>
+            </div>
+
+            
+            <label for="fri_active" string="Friday"/>
+            <div class="o_row">
+                <field name="fri_active"/>
+                <span invisible="not fri_active">From</span>
+                <field name="fri_from" widget="float_time" invisible="not fri_active"/>
+                <span invisible="not fri_active">To</span>
+                <field name="fri_to" widget="float_time" invisible="not fri_active"/>
+            </div>
+
+            
+            <label for="sat_active" string="Saturday"/>
+            <div class="o_row">
+                <field name="sat_active"/>
+                <span invisible="not sat_active">From</span>
+                <field name="sat_from" widget="float_time" invisible="not sat_active"/>
+                <span invisible="not sat_active">To</span>
+                <field name="sat_to" widget="float_time" invisible="not sat_active"/>
+            </div>
+
+           
+            <label for="sun_active" string="Sunday"/>
+            <div class="o_row">
+                <field name="sun_active"/>
+                <span invisible="not sun_active">From</span>
+                <field name="sun_from" widget="float_time" invisible="not sun_active"/>
+                <span invisible="not sun_active">To</span>
+                <field name="sun_to" widget="float_time" invisible="not sun_active"/>
+            </div>
+        </group>
+
+        <group string="Schedule Options">
+            <field name="no_between_times"/>
+        </group>
+        <group string="Notes:-">
+                        <field name="notes" nolabel="1" placeholder="Add operational notes or customer move logs here..." colspan="2"/>
+                    </group>
+                        </group>
+                    </page>
+                        
+                        <page string="Round Batches" name="batches">
+                            <field name="batch_ids" readonly="1">
+                                <list>
+                                    <field name="code"/>
+                                    <field name="week_number"/>
+                                    <field name="delivery_date"/>
+                                    <field name="state"/>
+                                </list>
+                            </field>
+                        </page>
+                        
+                        <!-- Tab 2: Alternative Rounds (Matches your legacy UI) -->
+                        <page string="Alternative Rounds" name="alternative_rounds">
+                            <field name="alt_round_ids">
+                                <list string="Alternative Rounds" editable="bottom">
+                                    <field name="alt_round_code"/>
+                                    <field name="alt_round_id" string="Alter. Round Name" options="{'no_create': True}"/>
+                                    <field name="before_time" string="Before"/>
+                                    <field name="after_time" string="After"/>
+                                    <field name="active" string="Active"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+    
+    <record id="view_round_management_round_search" model="ir.ui.view">
+    <field name="name">round.management.round.search</field>
+    <field name="model">round.management.round</field>
+    <field name="arch" type="xml">
+        <search string="Search Rounds">
+            <!-- Searchable fields -->
+            <field name="name" string="Round Name"/>
+            <field name="code" string="Round Code"/>
+            
+            <separator/>
+            <!-- Status Filters -->
+            <filter string="Active Rounds" name="active_rounds" domain="[('state', '=', 'active')]"/>
+            <filter string="Dead / Inactive" name="inactive_rounds" domain="[('state', '=', 'inactive')]"/>
+            
+            <!-- Group By Section -->
+            
+        </search>
+    </field>
+</record>
+
+<record id="view_round_management_round_list_select" model="ir.ui.view">
+    <field name="name">round.management.round.list.select</field>
+    <field name="model">round.management.round</field>
+    <field name="arch" type="xml">
+        <list create="false" edit="false">
+            <field name="code"/>
+            <field name="name"/>
+            <field name="state"/>
+            <button name="action_assign_to_sale_order" 
+                    string="Select" 
+                    type="object" 
+                    class="btn-primary"/>
+        </list>
+    </field>
+</record>
+
+    <!-- Action -->
+    <record id="action_round_management" model="ir.actions.act_window">
+        <field name="name">Rounds</field>
+        <field name="res_model">round.management.round</field>
+        <field name="view_mode">list,form</field>
+    </record>
+</odoo>
