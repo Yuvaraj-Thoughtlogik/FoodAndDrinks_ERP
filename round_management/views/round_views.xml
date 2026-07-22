@@ -185,14 +185,11 @@
     <field name="name">round.management.round.list.select</field>
     <field name="model">round.management.round</field>
     <field name="arch" type="xml">
-        <list create="false" edit="false">
+        <list create="true" edit="true">
             <field name="code"/>
             <field name="name"/>
             <field name="state"/>
-            <button name="action_assign_to_sale_order" 
-                    string="Select" 
-                    type="object" 
-                    class="btn-primary"/>
+           
         </list>
     </field>
 </record>

@@ -95,14 +95,7 @@ class RoundManagementRound(models.Model):
         return super().create(vals_list)
         
         
-    def action_assign_to_sale_order(self):
-        """Assigns this round to the active sales order passed via context."""
-        self.ensure_one()
-        active_order_id = self.env.context.get('active_sale_order_id')
-        if active_order_id:
-            order = self.env['sale.order'].browse(active_order_id)
-            order.write({'round_id': self.id})
-        return {'type': 'ir.actions.act_window_close'}
+    
 
     _sql_constraints = [
         ('code_uniq', 'unique(code)', 'The Round Code must be unique!')

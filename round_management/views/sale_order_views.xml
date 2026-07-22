@@ -6,9 +6,18 @@
         <field name="arch" type="xml">
             
             <xpath expr="//field[@name='partner_id']" position="after">
-                <field name="round_id" options="{'no_create': True}"/>
+                <label for="round_id" string="Delivery Round"/>
+                <div class="o_row">
+                    <field name="round_id" placeholder="Select Delivery Round..."/>
+                    <button name="action_select_alt_delivery_round" 
+                            string="Alternative Delivery Round" 
+                            type="object" 
+                            class="btn-secondary ms-2"/>
+                </div>
+
                 <field name="round_code" string="Round Code" invisible="not round_id"/>
                 <field name="commitment_date"/>
+                <field name="delivery_time_slot" placeholder="e.g. 13:00 to 19:00"/>
                 <field name="batch_id" domain="[('round_id', '=', round_id)]"/>
                 <field name="week_number" readonly="1"/>
             </xpath>
@@ -22,20 +31,12 @@
         </xpath>
         
         
-            <xpath expr="//field[@name='partner_id']" position="after">
+            
                 
                 
-                <label for="round_id" string="Delivery Round"/>
-                <div class="o_row">
-                    <field name="round_id" placeholder="Select Delivery Round..."/>
-                    <button name="action_select_alt_delivery_round" 
-                            string="Alternative Delivery Round" 
-                            type="object" 
-                            class="btn-secondary ms-2"/>
-                </div>
-
+                
                 <!-- Delivery Times Field -->
-                <field name="delivery_time_slot" placeholder="e.g. 13:00 to 19:00"/>
+               
 
                 
                <!--  <label for="requested_delivery_after" string="Requested Delivery Time"/>
@@ -46,7 +47,7 @@
                     <field name="requested_delivery_before" placeholder="19:00"/>
                 </div>-->
 
-            </xpath>
+           
             
             <xpath expr="//group[@name='order_details']" position="after">
                 <div class="row mt-3 mb-3">
@@ -55,14 +56,14 @@
                         <field name="note" 
                                placeholder="Enter specific order notes..." 
                                nolabel="1" 
-                               style="min-height: 80px;"/>
+                               style="min-height: 100px;"/>
                     </div>
                     <div class="col-6">
                         <label for="permanent_notes" string="Permanent Notes:-" class="fw-bold text-primary"/>
                         <field name="permanent_notes" 
-                               placeholder="e.g. 1-2, shop, both, haddock, no, no, 2, no budget" 
+                               placeholder="Enter specific Permanent notes..." 
                                nolabel="1" 
-                               style="min-height: 80px;"/>
+                               style="min-height: 100px;"/>
                     </div>
                 </div>
             </xpath>

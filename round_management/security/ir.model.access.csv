@@ -5,3 +5,5 @@ access_wizard_bulk_round_change,access.wizard.bulk.round.change,model_wizard_bul
 access_bulk_round_change_wizard,access.bulk.round.change.wizard,model_bulk_round_change_wizard,base.group_user,1,1,1,1
 access_batch_duplicator_wizard,access.batch.duplicator.wizard,model_batch_duplicator_wizard,base.group_user,1,1,1,1
 access_round_management_alternative,access.round.management.alternative,model_round_management_alternative,base.group_user,1,1,1,1
+access_select_alt_round_wizard,access_select_alt_round_wizard,model_select_alt_round_wizard,base.group_user,1,1,1,1
+access_select_alt_round_line,access_select_alt_round_line,model_select_alt_round_line,base.group_user,1,1,1,1

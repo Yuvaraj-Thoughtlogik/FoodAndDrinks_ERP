@@ -34,7 +34,7 @@ class RoundManagementBatch(models.Model):
         help="Driver allocated to execute this batch."
     )
     helper_id = fields.Many2one('res.partner', string='Helper', domain="[('partner_share', '=', False)]")
-    notes = fields.Html(string='Notes')
+    notes = fields.Text(string='Notes')
 
     # Duplication Info & Warnings
     duplication_comments = fields.Char(string='Duplication Comments', readonly=True)

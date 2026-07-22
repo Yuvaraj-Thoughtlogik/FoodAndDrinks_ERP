@@ -67,16 +67,27 @@ class SaleOrder(models.Model):
             
             
     def action_select_alt_delivery_round(self):
-        """Opens round list view where user clicks row button to select."""
+        """Populates wizard lines and opens the modal."""
         self.ensure_one()
+        
+        # Fetch active rounds
+        active_rounds = self.env['round.management.round'].search([('state', '=', 'active')])
+        
+        lines = [(0, 0, {
+            'round_id': round_rec.id,
+            'selected': (round_rec.id == self.round_id.id)
+        }) for round_rec in active_rounds]
+
+        wizard = self.env['select.alt.round.wizard'].create({
+            'sale_order_id': self.id,
+            'line_ids': lines,
+        })
+
         return {
             'name': _('Select Alternative Delivery Round'),
             'type': 'ir.actions.act_window',
-            'res_model': 'round.management.round',
-            'view_mode': 'list',
-            'view_id': self.env.ref('round_management.view_round_management_round_list_select').id,
+            'res_model': 'select.alt.round.wizard',
+            'res_id': wizard.id,
+            'view_mode': 'form',
             'target': 'new',
-            'context': {
-                'active_sale_order_id': self.id,
-            }
         }
