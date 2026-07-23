@@ -9,6 +9,7 @@ class FleetVehicle(models.Model):
     def _compute_round_batch_count(self):
         for vehicle in self:
             vehicle.round_batch_count = len(vehicle.round_batch_ids)
+            
 
     def action_view_driver_rounds(self):
         self.ensure_one()

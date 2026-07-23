@@ -28,12 +28,29 @@ class RoundManagementBatch(models.Model):
     helper_needed = fields.Boolean(string='Helper Needed')
     knockup_round = fields.Boolean(string='Knockup Round')
     driver_id = fields.Many2one(
-        'res.partner', 
+        'res.partner',
         string='Assigned Driver',
-        domain="[('is_company', '=', False)]",
-        help="Driver allocated to execute this batch."
+        domain="""[
+            ('is_company', '=', False),
+            '|',
+            ('employee_ids.job_id.name', 'ilike', 'Driver'),
+            ('user_ids.employee_id.job_id.name', 'ilike', 'Driver')
+        ]""",
+        help="Only partners linked to an Employee with 'Driver' job position can be selected."
     )
-    helper_id = fields.Many2one('res.partner', string='Helper', domain="[('partner_share', '=', False)]")
+
+    
+    helper_id = fields.Many2one(
+        'res.partner',
+        string='Helper',
+        domain="""[
+            ('is_company', '=', False),
+            '|',
+            ('employee_ids.job_id.name', 'ilike', 'Helper'),
+            ('user_ids.employee_id.job_id.name', 'ilike', 'Helper')
+        ]""",
+        help="Only partners linked to an Employee with 'Helper' job position can be selected."
+    )
     notes = fields.Text(string='Notes')
 
     # Duplication Info & Warnings
@@ -77,6 +94,47 @@ class RoundManagementBatch(models.Model):
     start_odometer = fields.Float(string='Start Odometer (km)')
     end_odometer = fields.Float(string='End Odometer (km)')
     distance_run = fields.Float(string='Distance (km)', compute='_compute_distance', store=True)
+    
+    
+    @api.onchange('vehicle_id')
+    def _onchange_vehicle_id_fetch_driver(self):
+        """Directly assigns Fleet vehicle driver (res.partner) without conversion errors."""
+        if self.vehicle_id and self.vehicle_id.driver_id:
+            self.driver_id = self.vehicle_id.driver_id
+        else:
+            self.driver_id = False
+
+   
+    @api.constrains('driver_id', 'helper_id')
+    def _check_partner_employee_designation(self):
+        for record in self:
+            # Check Driver Job Position
+            if record.driver_id:
+                employee = self.env['hr.employee'].search([
+                    '|',
+                    ('work_contact_id', '=', record.driver_id.id),
+                    ('user_id.partner_id', '=', record.driver_id.id)
+                ], limit=1)
+
+                if not employee or 'driver' not in (employee.job_id.name or '').lower():
+                    job_title = employee.job_id.name if employee and employee.job_id else 'No Job Assigned'
+                    raise ValidationError(_(
+                        "Selected Driver contact '%s' is not an employee with 'Driver' job position (Current: %s)."
+                    ) % (record.driver_id.name, job_title))
+
+            # Check Helper Job Position
+            if record.helper_id:
+                employee = self.env['hr.employee'].search([
+                    '|',
+                    ('work_contact_id', '=', record.helper_id.id),
+                    ('user_id.partner_id', '=', record.helper_id.id)
+                ], limit=1)
+
+                if not employee or 'helper' not in (employee.job_id.name or '').lower():
+                    job_title = employee.job_id.name if employee and employee.job_id else 'No Job Assigned'
+                    raise ValidationError(_(
+                        "Selected Helper contact '%s' is not an employee with 'Helper' job position (Current: %s)."
+                    ) % (record.helper_id.name, job_title))
     
     @api.model_create_multi
     def create(self, vals_list):

@@ -9,10 +9,11 @@
                 <label for="round_id" string="Delivery Round"/>
                 <div class="o_row">
                     <field name="round_id" placeholder="Select Delivery Round..."/>
-                    <button name="action_select_alt_delivery_round" 
-                            string="Alternative Delivery Round" 
-                            type="object" 
-                            class="btn-secondary ms-2"/>
+                    <button name="action_select_alt_delivery_round"
+                            string="Alternative Delivery Round"
+                            type="object"
+                            icon="fa-truck"
+                            class="oe_highlight o_alt_round_btn"/>
                 </div>
 
                 <field name="round_code" string="Round Code" invisible="not round_id"/>
