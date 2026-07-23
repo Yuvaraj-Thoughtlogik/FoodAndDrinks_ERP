@@ -203,7 +203,7 @@ class ResPartner(models.Model):
             deliveries = rec.sale_order_ids.mapped('picking_ids').filtered(
                 lambda p: p.picking_type_code == 'outgoing'
             )
-            last_delivery = deliveries[-1]
+            last_delivery = deliveries[-1] if len(deliveries) else False
 
             done_deliveries = deliveries.filtered(lambda p: p.state == 'done')
             cancelled_deliveries = deliveries.filtered(lambda p: p.state == 'cancel')
