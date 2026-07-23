@@ -70,4 +70,51 @@
 
         </field>
     </record>
+    
+    <record id="view_order_tree_inherit_round_management" model="ir.ui.view">
+        <field name="name">sale.order.tree.inherit.round.management</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_tree"/>
+        <field name="arch" type="xml">
+            
+           
+            <xpath expr="//field[@name='partner_id']" position="after">
+                <field name="round_id" optional="show"/>
+                <field name="round_code" optional="show"/>
+                <field name="batch_id" optional="show"/>
+                <field name="commitment_date" string="Delivery Date" widget="date" optional="show"/>
+                <field name="delivery_time_slot" optional="show"/>
+                <field name="week_number" optional="show"/>
+                
+                
+                <field name="is_late_order" widget="boolean_toggle" optional="hide"/>
+                <field name="has_card_reader" optional="hide"/>
+                <field name="is_pickup" optional="hide"/>
+                <field name="is_b2b" optional="hide"/>
+            </xpath>
+
+        </field>
+    </record>
+    
+    <record id="view_quotation_tree_inherit_round_management" model="ir.ui.view">
+        <field name="name">sale.quotation.tree.inherit.round.management</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_quotation_tree_with_onboarding"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='partner_id']" position="after">
+                <field name="round_id" optional="show"/>
+                <field name="round_code" optional="show"/>
+                <field name="batch_id" optional="show"/>
+                <field name="commitment_date" string="Delivery Date" widget="date" optional="show"/>
+                <field name="delivery_time_slot" optional="show"/>
+                <field name="week_number" optional="show"/>
+                
+                
+                <field name="is_late_order" widget="boolean_toggle" optional="hide"/>
+                <field name="has_card_reader" optional="hide"/>
+                <field name="is_pickup" optional="hide"/>
+                <field name="is_b2b" optional="hide"/>
+            </xpath>
+        </field>
+    </record>
 </odoo>
