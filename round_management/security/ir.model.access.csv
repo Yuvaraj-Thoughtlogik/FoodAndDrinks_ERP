@@ -7,4 +7,5 @@ access_batch_duplicator_wizard,access.batch.duplicator.wizard,model_batch_duplic
 access_round_management_alternative,access.round.management.alternative,model_round_management_alternative,base.group_user,1,1,1,1
 access_select_alt_round_wizard,access_select_alt_round_wizard,model_select_alt_round_wizard,base.group_user,1,1,1,1
 access_select_alt_round_line,access_select_alt_round_line,model_select_alt_round_line,base.group_user,1,1,1,1
+access_custom_vehicle_type_user,custom.vehicle.type.user,model_custom_vehicle_type,base.group_user,1,1,1,1
 
