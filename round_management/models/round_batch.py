@@ -1,12 +1,13 @@
 from odoo import models, fields, api, _
 from datetime import datetime, timedelta
+from odoo.exceptions import ValidationError
 
 class RoundManagementBatch(models.Model):
     _name = 'round.management.batch'
     _description = 'Round Execution Batch'
     _rec_name = 'code'
 
-    # Core Fields
+    
     code = fields.Char(string='Batch Code', required=True, copy=False, default=lambda self: _('New'))
     round_id = fields.Many2one('round.management.round', string='Round', required=True,domain="[('state', '=', 'active')]")
     round_code = fields.Char(related='round_id.code', string='Round Code', readonly=True)
