@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_partner_form_inherit_customer" model="ir.ui.view">
+        <field name="name">res.partner.form.customer</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//sheet" position="before">
+                <header>
+                    <button name="action_close_account"
+                            type="object"
+                            string="Close Account"
+                            class="btn-primary"
+                            invisible="is_closed"
+                    />
+                    <button name="action_reopen_account"
+                            type="object"
+                            string="Reopen"
+                            class="btn-primary"
+                            invisible="not is_closed"
+                    />
+                    <field
+                            name="customer_lifecycle_status"
+                            widget="statusbar"
+                            invisible="customer_lifecycle_status == 'closed'"
+                            statusbar_visible="new,ftlt,main_customer,old_ftlt,dormant"
+                    />
+                    <field
+                            name="customer_lifecycle_status"
+                            widget="statusbar"
+                            invisible="customer_lifecycle_status not in ['inactive','cancelled','closed']"
+                            statusbar_visible="inactive,cancelled_ftlt,closed"
+                    />
+                </header>
+            </xpath>
+
+            <xpath expr="//sheet/group" position="after">
+                <group string="Customer Details">
+                    <group>
+                        <field name="customer_source"/>
+                        <field name="customer_type"/>
+                        <field name="user_id"/>
+                    </group>
+                    <group  invisible="not is_closed" >
+                        <field name="account_closed_date"/>
+                        <field name="closed_reason"/>
+                    </group>
+                </group>
+
+            </xpath>
+            <xpath expr="//field[@name='company_type']" position="before">
+                <group>
+                    <group>
+                        <field name="customer_code" readonly="id and customer_code"/>
+
+                    </group>
+                </group>
+
+
+            </xpath>
+            <xpath expr="//page[@name='internal_notes']" position="after">
+                <page name="Closed &amp; Reopen Details" invisible="not is_closed and not is_reopened">
+                    <group>
+                        <group string="Closed Details">
+                            <field name="is_closed" widget="boolean_toggle"/>
+                            <field name="closed_reason"/>
+                            <field name="account_closed_date"/>
+                        </group>
+                        <group string="Reopen Details">
+                            <field name="is_reopened" widget="boolean_toggle"/>
+                            <field name="account_reopen_date"/>
+                        </group>
+                    </group>
+                </page>
+            </xpath>
+
+        </field>
+    </record>
+
+    <record id="action_partner_close_customer" model="ir.actions.server">
+        <field name="name">Close Customer</field>
+        <field name="model_id" ref="base.model_res_partner"/>
+        <field name="binding_model_id" ref="base.model_res_partner"/>
+        <field name="binding_view_types">list</field>
+        <field name="state">code</field>
+        <field name="code">
+            action = records.action_close_partner()
+        </field>
+    </record>
+
+</odoo>

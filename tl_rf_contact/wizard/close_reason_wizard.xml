@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo>
+    <data>
+        <record id="view_form_close_reason_wizard" model="ir.ui.view">
+            <field name="name">close.reason.wizard.from</field>
+            <field name="model">close.reason.wizard</field>
+            <field name="arch" type="xml">
+                <form name="Reason">
+                    <group>
+
+                        <field name="reason"/>
+                    </group>
+                    <footer>
+                        <button
+                                name="confirm"
+                                type="object"
+                                class="btn-primary"
+                                string="Close Account"
+                        />
+                        <button special="cancel" string="Cancel"/>
+
+
+                    </footer>
+                </form>
+            </field>
+        </record>
+    </data>
+</odoo>
