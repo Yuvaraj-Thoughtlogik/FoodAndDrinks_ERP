@@ -10,6 +10,7 @@
         'product',
         'sale_management',
         'stock',
+        'contacts',
     ],
 
     'data': [

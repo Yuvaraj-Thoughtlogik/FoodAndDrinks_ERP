@@ -12,6 +12,7 @@
         'sale',
         'stock',
         'fleet',
+        'hr'
     ],
 
     'data': [
