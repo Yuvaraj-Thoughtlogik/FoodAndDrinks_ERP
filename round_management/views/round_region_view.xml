@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <data>
+
+        <record id="view_round_region_pincode_list" model="ir.ui.view">
+            <field name="name">round.region.pincode.list</field>
+            <field name="model">round.region.pincode</field>
+            <field name="arch" type="xml">
+                <list editable="top">
+                    <field name="name"/>
+                    <field name="region_id" readonly="True"/>
+                </list>
+            </field>
+        </record>
+
+
+        <record id="action_round_region_pincode" model="ir.actions.act_window">
+            <field name="name">Pin Codes</field>
+            <field name="res_model">round.region.pincode</field>
+            <field name="view_mode">list</field>
+        </record>
+
+
+
+        <record id="view_round_region_list" model="ir.ui.view">
+            <field name="name">round.region.list</field>
+            <field name="model">round.region</field>
+            <field name="arch" type="xml">
+                <list editable="top">
+                    <field name="name"/>
+                    <field name="pincode_ids" widget="many2many_tags" domain="[('region_id','=',False)]"/>
+                </list>
+            </field>
+        </record>
+
+
+        <record id="action_round_region" model="ir.actions.act_window">
+            <field name="name">Round Regions</field>
+            <field name="res_model">round.region</field>
+            <field name="view_mode">list</field>
+        </record>
+
+
+        <menuitem
+            id="menu_round_region"
+            name="Regions"
+            parent="round_management.menu_round_config_categ"
+            action="action_round_region"
+            sequence="90"/>
+
+        <menuitem
+            id="menu_round_region_pincode"
+            name="Pin Codes"
+            parent="round_management.menu_round_config_categ"
+            action="action_round_region_pincode"
+            sequence="100"/>
+
+    </data>
+</odoo>
