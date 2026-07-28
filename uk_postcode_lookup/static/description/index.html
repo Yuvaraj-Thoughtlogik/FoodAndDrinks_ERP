@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: Arial, sans-serif; color: #333; line-height: 1.6; }
+        .hero { background: linear-gradient(135deg, #1a1a5e 0%, #6c3fc5 100%);
+                color: #fff; padding: 48px 40px; text-align: center; }
+        .hero h1 { font-size: 32px; font-weight: 900; margin-bottom: 10px; }
+        .hero p  { font-size: 16px; opacity: 0.85; max-width: 620px; margin: 0 auto 16px; }
+        .hero .tagline { font-size: 12px; letter-spacing: 2px; text-transform: uppercase; opacity: 0.6; }
+        .badges { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+        .badge { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3);
+                 color: #fff; padding: 4px 14px; border-radius: 20px; font-size: 12px; }
+        .section { padding: 40px; max-width: 960px; margin: 0 auto; }
+        h2 { color: #1a1a5e; font-size: 22px; margin-bottom: 20px;
+             border-bottom: 3px solid #6c3fc5; padding-bottom: 8px; }
+        .feature-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px,1fr)); gap: 16px; }
+        .feature-card { background: #f8f9ff; border-left: 4px solid #1a1a5e; padding: 14px 16px; border-radius: 4px; }
+        .feature-card .icon { font-size: 22px; margin-bottom: 6px; }
+        .feature-card h3 { font-size: 13px; color: #1a1a5e; margin-bottom: 4px; font-weight: 700; }
+        .feature-card p { font-size: 12px; color: #666; }
+        .fee-example { background: #f8f9ff; border-radius: 8px; padding: 24px;
+                       border: 1px solid #e0e4f0; margin-top: 8px; max-width: 400px; }
+        .fee-row { display: flex; justify-content: space-between; padding: 6px 0;
+                   font-size: 14px; border-bottom: 1px solid #eee; }
+        .fee-row:last-child { border-bottom: none; font-weight: 700; color: #1a1a5e; font-size: 15px; }
+        .fee-label { color: #555; }
+        .step { display: flex; gap: 20px; margin-bottom: 24px; align-items: flex-start; }
+        .step-num { background: linear-gradient(135deg,#1a1a5e,#6c3fc5); color:#fff; width:36px; height:36px;
+                    border-radius:50%; display:flex; align-items:center; justify-content:center;
+                    font-weight:800; font-size:16px; flex-shrink:0; }
+        .step-content h3 { color:#1a1a5e; margin-bottom:6px; font-size:15px; }
+        .step-content p,.step-content li { font-size:13px; color:#555; }
+        .step-content ul { padding-left:18px; margin-top:4px; }
+        .screenshot-section { padding:40px; background:#f0f0f0; }
+        .screenshot-section h2 { color:#1a1a5e; font-size:22px; margin-bottom:24px;
+                                  border-bottom:3px solid #6c3fc5; padding-bottom:8px;
+                                  max-width:960px; margin-left:auto; margin-right:auto; }
+        .screenshot-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(440px,1fr));
+                           gap:20px; max-width:960px; margin:0 auto; }
+        .screenshot-card { background:#fff; border-radius:8px; overflow:hidden;
+                           box-shadow:0 2px 12px rgba(0,0,0,0.1); }
+        .screenshot-card img { width:100%; display:block; border-bottom:1px solid #eee; }
+        .screenshot-card .caption { padding:10px 14px; font-size:13px; font-weight:600; color:#1a1a5e; }
+        .cta { text-align:center; padding:40px; background:#f8f9ff; }
+        .cta h2 { color:#1a1a5e; border:none; margin-bottom:10px; }
+        .cta a { background:linear-gradient(135deg,#1a1a5e,#6c3fc5); color:#fff;
+                 padding:12px 28px; border-radius:6px; text-decoration:none; font-weight:700; display:inline-block; }
+    </style>
+</head>
+<body>
+
+<div class="hero">
+    <h1>Stripe Fees Extension</h1>
+    <p>Automatically add Stripe processing fees to customer payments on eCommerce checkout and invoice portal. Stop absorbing fees — pass them to your customers.</p>
+    <div class="tagline">by Technical Rajni · Solutions | Automation | Innovation</div>
+    <div class="badges">
+        <span class="badge">Odoo 19</span>
+        <span class="badge">Community &amp; Enterprise</span>
+        <span class="badge">eCommerce</span>
+        <span class="badge">Invoice Portal</span>
+        <span class="badge">Domestic &amp; International</span>
+    </div>
+</div>
+
+<div class="section">
+    <h2>Key Features</h2>
+    <div class="feature-grid">
+        <div class="feature-card">
+            <div class="icon">🛒</div>
+            <h3>eCommerce Checkout</h3>
+            <p>Stripe fees automatically added when customers pay on your website store.</p>
+        </div>
+        <div class="feature-card">
+            <div class="icon">🧾</div>
+            <h3>Invoice Portal</h3>
+            <p>Customers paying invoices from My Account portal also pay the Stripe fee.</p>
+        </div>
+        <div class="feature-card">
+            <div class="icon">🌍</div>
+            <h3>Domestic &amp; International</h3>
+            <p>Set different fee rates for domestic and international card transactions.</p>
+        </div>
+        <div class="feature-card">
+            <div class="icon">⚙️</div>
+            <h3>Flexible Configuration</h3>
+            <p>Configure fixed + percentage fees directly in the Stripe payment provider settings.</p>
+        </div>
+        <div class="feature-card">
+            <div class="icon">📊</div>
+            <h3>Fee Tracking</h3>
+            <p>Each transaction records the base amount and Stripe fee separately for your records.</p>
+        </div>
+        <div class="feature-card">
+            <div class="icon">⚡</div>
+            <h3>Auto Calculation</h3>
+            <p>Fee = Fixed Fee + (Amount × Percentage%). Calculated and added automatically.</p>
+        </div>
+    </div>
+
+    <div style="margin-top:32px;">
+        <h2>Fee Calculation Example</h2>
+        <div class="fee-example">
+            <div class="fee-row">
+                <span class="fee-label">Order Amount</span>
+                <span>$100.00</span>
+            </div>
+            <div class="fee-row">
+                <span class="fee-label">Stripe Fixed Fee</span>
+                <span>$0.30</span>
+            </div>
+            <div class="fee-row">
+                <span class="fee-label">Stripe % Fee (2.9%)</span>
+                <span>$2.90</span>
+            </div>
+            <div class="fee-row">
+                <span class="fee-label">Total Charged to Customer</span>
+                <span>$103.20</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="screenshot-section">
+    <h2>Screenshots</h2>
+    <div class="screenshot-grid">
+        <div class="screenshot-card">
+            <img src="screen1_settings.png" alt="Stripe Fees Settings"/>
+            <div class="caption">⚙️ Stripe Provider → Stripe Fees tab — enable and configure fee rates</div>
+        </div>
+    </div>
+</div>
+
+<div class="section">
+    <h2>Configuration Steps</h2>
+    <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-content">
+            <h3>Install the Module</h3>
+            <p>Go to <strong>Apps → Search "Stripe Fees" → Install</strong></p>
+        </div>
+    </div>
+    <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-content">
+            <h3>Configure Fees on Stripe Provider</h3>
+            <ul>
+                <li>Go to <strong>Accounting → Configuration → Payment Providers → Stripe</strong></li>
+                <li>Click the <strong>"Stripe Fees"</strong> tab</li>
+                <li>Enable <strong>"Charge Stripe Fees to Customer"</strong></li>
+                <li>Set <strong>Domestic Fixed Fee</strong>: e.g. 0.30</li>
+                <li>Set <strong>Domestic Percentage Fee</strong>: e.g. 2.9</li>
+                <li>Optionally set higher rates for <strong>International</strong> transactions</li>
+                <li>Click <strong>Save</strong></li>
+            </ul>
+        </div>
+    </div>
+    <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-content">
+            <h3>Fees Apply Automatically</h3>
+            <p>When a customer pays via Stripe — on website checkout or invoice portal — the fee is automatically calculated and added to their payment amount. No extra steps needed.</p>
+        </div>
+    </div>
+</div>
+
+<div class="cta">
+    <h2>Stop Absorbing Stripe Fees!</h2>
+    <p style="color:#555; margin-bottom:16px;">Pass Stripe processing costs to customers — automatically, every time.</p>
+    <a href="mailto:magentodeveloper1993@gmail.com">Get Support</a>
+    <p style="margin-top:16px; font-size:12px; color:#999;">
+        Website: <a href="https://www.technicalrajni.com" style="color:#6c3fc5;">www.technicalrajni.com</a>
+        &nbsp;|&nbsp; Email: magentodeveloper1993@gmail.com
+    </p>
+</div>
+
+</body>
+</html>

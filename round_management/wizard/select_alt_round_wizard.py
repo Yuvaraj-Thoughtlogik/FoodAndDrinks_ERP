@@ -7,19 +7,39 @@ class SelectAltRoundWizard(models.TransientModel):
 
     sale_order_id = fields.Many2one('sale.order', string='Sales Order', required=True)
     line_ids = fields.One2many('select.alt.round.line', 'wizard_id', string='Alternative Rounds')
+    
+    @api.model
+    def default_get(self, fields_list):
+        """Auto-populates the wizard lines with Round Batches when opened."""
+        res = super(SelectAltRoundWizard, self).default_get(fields_list)
+        batches = self.env['round.management.batch'].search([])
+        
+        lines = []
+        for batch in batches:
+            lines.append((0, 0, {
+                'batch_id': batch.id,
+                'selected': False,
+            }))
+        res['line_ids'] = lines
+        return res
 
     def action_apply_round(self):
-        """Applies the checked round to the Sales Order."""
+        """Updates the existing batch_id field on Sale Order."""
         self.ensure_one()
-        selected_lines = self.line_ids.filtered(lambda l: l.selected)
-        
-        if not selected_lines:
-            raise UserError(_("Please select a delivery round."))
-        if len(selected_lines) > 1:
-            raise UserError(_("Please select only ONE delivery round to apply."))
 
-        # Assign selected round to Sale Order
-        self.sale_order_id.write({'round_id': selected_lines.round_id.id})
+        selected_lines = self.line_ids.filtered(lambda l: l.selected)
+
+        if not selected_lines:
+            raise UserError(_("Please select a Round Batch before applying."))
+        if len(selected_lines) > 1:
+            raise UserError(_("You can only select one Round Batch at a time."))
+
+        # Update the existing batch_id directly
+        if self.sale_order_id:
+            self.sale_order_id.write({
+                'batch_id': selected_lines.batch_id.id,
+            })
+
         return {'type': 'ir.actions.act_window_close'}
 
 
@@ -29,8 +49,12 @@ class SelectAltRoundLine(models.TransientModel):
 
     wizard_id = fields.Many2one('select.alt.round.wizard', ondelete='cascade')
     selected = fields.Boolean(string='Select', default=False)
-    round_id = fields.Many2one('round.management.round', string='Round', required=True)
     
-    code = fields.Char(related='round_id.code', string='Round Code', readonly=True)
-    name = fields.Char(related='round_id.name', string='Round Name', readonly=True)
-    state = fields.Selection(related='round_id.state', string='Status', readonly=True)
+    batch_id = fields.Many2one('round.management.batch', string='Batch', required=True)
+    
+    code = fields.Char(related='batch_id.code', string='Batch Code', readonly=True)
+    round_id = fields.Many2one(related='batch_id.round_id', string='Round', readonly=True)
+    reference = fields.Char(related='batch_id.reference', string='Reference', readonly=True)
+    depot_id = fields.Many2one(related='batch_id.depot_id', string='Depot', readonly=True)
+    delivery_date = fields.Date(related='batch_id.delivery_date', string='Delivery Date', readonly=True)
+    #iso_week_no = fields.Char(related='batch_id.iso_week_no', string='ISO Week No.', readonly=True)

@@ -46,11 +46,18 @@ class SaleOrder(models.Model):
     )
     permanent_notes = fields.Html(string='Permanent Notes')
     
-    @api.onchange('partner_id')
-    def _onchange_partner_id_permanent_notes(self):
-        """Optionally pull permanent notes directly from customer master when selected."""
-        if self.partner_id and hasattr(self.partner_id, 'permanent_notes'):
-            self.permanent_notes = self.partner_id.permanent_notes
+    @api.onchange('partner_shipping_id', 'partner_id')
+    def _onchange_partner_update_address_notes(self):
+        """Pulls and formats the full address of the selected customer/delivery address."""
+       
+        partner = self.partner_shipping_id or self.partner_id
+        
+        if partner:
+           
+            self.permanent_notes = partner._display_address(without_company=True)
+            # self.permanent_notes = partner.contact_address
+        else:
+            self.permanent_notes = False
 
     @api.depends('batch_id', 'batch_id.delivery_date', 'batch_id.week_number')
     def _compute_batch_delivery_info(self):
@@ -66,17 +73,17 @@ class SaleOrder(models.Model):
             self.round_id = self.partner_id.round_id
             
             
-    def action_select_alt_delivery_round(self):
-        """Populates wizard lines and opens the modal."""
+     def action_select_alt_delivery_round(self):
+        """Populates wizard lines with Round Batches and opens the modal."""
         self.ensure_one()
         
-        # Fetch active rounds
-        active_rounds = self.env['round.management.round'].search([('state', '=', 'active')])
+        # Fetch active batches
+        batches = self.env['round.management.batch'].search([])
         
         lines = [(0, 0, {
-            'round_id': round_rec.id,
-            'selected': (round_rec.id == self.round_id.id)
-        }) for round_rec in active_rounds]
+            'batch_id': batch_rec.id,
+            'selected': (batch_rec.id == getattr(self, 'batch_id', self.env['round.management.batch']).id)
+        }) for batch_rec in batches]
 
         wizard = self.env['select.alt.round.wizard'].create({
             'sale_order_id': self.id,
@@ -84,7 +91,7 @@ class SaleOrder(models.Model):
         })
 
         return {
-            'name': _('Select Alternative Delivery Round'),
+            'name': _('Select Alternative Delivery Round Batch'),
             'type': 'ir.actions.act_window',
             'res_model': 'select.alt.round.wizard',
             'res_id': wizard.id,

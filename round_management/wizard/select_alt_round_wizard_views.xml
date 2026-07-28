@@ -1,26 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <record id="view_select_alt_round_wizard_form" model="ir.ui.view">
-        <field name="name">select.alt.round.wizard.form</field>
-        <field name="model">select.alt.round.wizard</field>
-        <field name="arch" type="xml">
-            <form string="Select Alternative Delivery Round">
-                <field name="sale_order_id" invisible="1"/>
-                
-                <field name="line_ids">
-                    <list editable="bottom" create="false" delete="false">
-                        <field name="selected" string="" widget="boolean_toggle"/>
-                        <field name="code"/>
-                        <field name="name"/>
-                        <field name="state"/>
-                    </list>
-                </field>
+     <record id="view_select_alt_round_wizard_form" model="ir.ui.view">
+    <field name="name">select.alt.round.wizard.form</field>
+    <field name="model">select.alt.round.wizard</field>
+    <field name="arch" type="xml">
+        <form string="Select Alternative Delivery Round Batch">
+            <field name="sale_order_id" invisible="1"/>
+            
+            <field name="line_ids">
+                <list editable="bottom" create="false" delete="false">
+                    <field name="selected" string="" widget="boolean_toggle"/>
+                    <field name="code" string="Batch Code"/>
+                    <field name="round_id"/>
+                    <field name="reference"/>
+                    <field name="depot_id"/>
+                    <field name="delivery_date"/>
+                    
+                </list>
+            </field>
 
-                <footer>
-                    <button name="action_apply_round" string="Apply" type="object" class="btn-primary"/>
-                    <button string="Cancel" class="btn-secondary" special="cancel"/>
-                </footer>
-            </form>
-        </field>
-    </record>
+            <footer>
+                <button name="action_apply_round" string="Apply" type="object" class="btn-primary"/>
+                <button string="Cancel" class="btn-secondary" special="cancel"/>
+            </footer>
+        </form>
+    </field>
 </odoo>

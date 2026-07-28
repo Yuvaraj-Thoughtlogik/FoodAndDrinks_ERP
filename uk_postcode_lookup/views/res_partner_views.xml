@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+
+    <record id="view_partner_form_postcode_lookup" model="ir.ui.view">
+
+        <field name="name">res.partner.form.postcode.lookup</field>
+
+        <field name="model">res.partner</field>
+
+        <field name="inherit_id" ref="base.view_partner_form"/>
+
+        <field name="arch" type="xml">
+
+            <xpath expr="//field[@name='zip']" position="after">
+
+                <button
+                    name="action_lookup_postcode"
+                    type="object"
+                    string="Lookup Address"
+                    icon="fa-search"/>
+
+            </xpath>
+
+        </field>
+
+    </record>
+
+</odoo>

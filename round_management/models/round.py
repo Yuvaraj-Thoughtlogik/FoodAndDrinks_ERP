@@ -4,6 +4,11 @@ class RoundManagementRound(models.Model):
     _name = 'round.management.round'
     _description = 'Round Details'
     _rec_name = 'name'
+    
+    @api.model
+    def _default_round_code(self):
+        """Generate sequence automatically as soon as the form opens/Create is clicked."""
+        return self.env['ir.sequence'].next_by_code('round.management.1050.code') or 'New'
 
     name = fields.Char(string='Round Name', required=True)
     code = fields.Char(
@@ -11,7 +16,7 @@ class RoundManagementRound(models.Model):
         required=True, 
         copy=False, 
         readonly=True, 
-        default='New'
+        default=_default_round_code
     )
     state = fields.Selection([
         ('active', 'Active'),
@@ -30,34 +35,67 @@ class RoundManagementRound(models.Model):
     target_cust_rev = fields.Float(string='Target Cust. Rev.', default=0.0)
     max_alt_drops = fields.Integer(string='Max. Alt. Drops', default=0)
     
-    # Schedule Configuration
+    TIME_SELECTION_24H = [
+        ('00:00', '00:00'), ('00:30', '00:30'),
+        ('01:00', '01:00'), ('01:30', '01:30'),
+        ('02:00', '02:00'), ('02:30', '02:30'),
+        ('03:00', '03:00'), ('03:30', '03:30'),
+        ('04:00', '04:00'), ('04:30', '04:30'),
+        ('05:00', '05:00'), ('05:30', '05:30'),
+        ('06:00', '06:00'), ('06:30', '06:30'),
+        ('07:00', '07:00'), ('07:30', '07:30'),
+        ('08:00', '08:00'), ('08:30', '08:30'),
+        ('09:00', '09:00'), ('09:30', '09:30'),
+        ('10:00', '10:00'), ('10:30', '10:30'),
+        ('11:00', '11:00'), ('11:30', '11:30'),
+        ('12:00', '12:00'), ('12:30', '12:30'),
+        ('13:00', '13:00'), ('13:30', '13:30'),
+        ('14:00', '14:00'), ('14:30', '14:30'),
+        ('15:00', '15:00'), ('15:30', '15:30'),
+        ('16:00', '16:00'), ('16:30', '16:30'),
+        ('17:00', '17:00'), ('17:30', '17:30'),
+        ('18:00', '18:00'), ('18:30', '18:30'),
+        ('19:00', '19:00'), ('19:30', '19:30'),
+        ('20:00', '20:00'), ('20:30', '20:30'),
+        ('21:00', '21:00'), ('21:30', '21:30'),
+        ('22:00', '22:00'), ('22:30', '22:30'),
+        ('23:00', '23:00'), ('23:30', '23:30'),
+    ]
+
+    # Monday
     mon_active = fields.Boolean(string='Monday')
-    mon_from = fields.Float(string='From (Mon)')
-    mon_to = fields.Float(string='To (Mon)')
-    
+    mon_from = fields.Selection(TIME_SELECTION_24H, string='From (Mon)', default='08:00')
+    mon_to = fields.Selection(TIME_SELECTION_24H, string='To (Mon)', default='17:00')
+
+    # Tuesday
     tue_active = fields.Boolean(string='Tuesday')
-    tue_from = fields.Float(string='From (Tue)')
-    tue_to = fields.Float(string='To (Tue)')
-    
+    tue_from = fields.Selection(TIME_SELECTION_24H, string='From (Tue)', default='08:00')
+    tue_to = fields.Selection(TIME_SELECTION_24H, string='To (Tue)', default='17:00')
+
+    # Wednesday
     wed_active = fields.Boolean(string='Wednesday')
-    wed_from = fields.Float(string='From (Wed)')
-    wed_to = fields.Float(string='To (Wed)')
-    
+    wed_from = fields.Selection(TIME_SELECTION_24H, string='From (Wed)', default='08:00')
+    wed_to = fields.Selection(TIME_SELECTION_24H, string='To (Wed)', default='17:00')
+
+    # Thursday
     thu_active = fields.Boolean(string='Thursday')
-    thu_from = fields.Float(string='From (Thu)')
-    thu_to = fields.Float(string='To (Thu)')
-    
+    thu_from = fields.Selection(TIME_SELECTION_24H, string='From (Thu)', default='08:00')
+    thu_to = fields.Selection(TIME_SELECTION_24H, string='To (Thu)', default='17:00')
+
+    # Friday
     fri_active = fields.Boolean(string='Friday')
-    fri_from = fields.Float(string='From (Fri)')
-    fri_to = fields.Float(string='To (Fri)')
-    
+    fri_from = fields.Selection(TIME_SELECTION_24H, string='From (Fri)', default='08:00')
+    fri_to = fields.Selection(TIME_SELECTION_24H, string='To (Fri)', default='17:00')
+
+    # Saturday
     sat_active = fields.Boolean(string='Saturday')
-    sat_from = fields.Float(string='From (Sat)')
-    sat_to = fields.Float(string='To (Sat)')
-    
+    sat_from = fields.Selection(TIME_SELECTION_24H, string='From (Sat)', default='08:00')
+    sat_to = fields.Selection(TIME_SELECTION_24H, string='To (Sat)', default='17:00')
+
+    # Sunday
     sun_active = fields.Boolean(string='Sunday')
-    sun_from = fields.Float(string='From (Sun)')
-    sun_to = fields.Float(string='To (Sun)')
+    sun_from = fields.Selection(TIME_SELECTION_24H, string='From (Sun)', default='08:00')
+    sun_to = fields.Selection(TIME_SELECTION_24H, string='To (Sun)', default='17:00')
     
     no_between_times = fields.Boolean(string='No Between times on round')
     notes = fields.Html(string='Notes')
@@ -86,13 +124,13 @@ class RoundManagementRound(models.Model):
             }
         }
 
-    @api.model_create_multi
-    def create(self, vals_list):
-        for vals in vals_list:
-            if vals.get('code', 'New') == 'New':
+    #@api.model_create_multi
+    #def create(self, vals_list):
+        #for vals in vals_list:
+            #if vals.get('code', 'New') == 'New':
                
-                vals['code'] = self.env['ir.sequence'].next_by_code('round.management.1050.code') or 'New'
-        return super().create(vals_list)
+                #vals['code'] = self.env['ir.sequence'].next_by_code('round.management.1050.code') or 'New'
+        #return super().create(vals_list)
         
         
     

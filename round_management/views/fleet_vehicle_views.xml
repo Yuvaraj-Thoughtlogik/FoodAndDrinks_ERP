@@ -13,12 +13,12 @@
                         icon="fa-truck">
                     <field name="round_batch_count" widget="statinfo" string="Driver Rounds"/>
                 </button>
-                <button name="action_view_vehicle_track_history"
+               <!-- <button name="action_view_vehicle_track_history"
                         type="object"
                         class="oe_stat_button"
                         icon="fa-road">
                     <field name="track_history_count" widget="statinfo" string="Vehicle Tracks"/>
-                </button>
+                </button>-->
             </xpath>
         </field>
     </record>
@@ -33,12 +33,12 @@
               <xpath expr="//field[@name='vehicle_type']" position="attributes">
                   <attribute name="widget">selection</attribute>
               </xpath>
-              <!-- Include 'truck', 'panel_van', 'refrigerated_panel_van' -->
+             
                   <xpath expr="//page[@name='information']/group/group[1]" position="attributes">
                       <attribute name="invisible">0</attribute>
                   </xpath>
 
-                  <!-- 2. Target the Engine group using its technical 'name' attribute -->
+                  
                   <xpath expr="//group[@name='group_engine']" position="attributes">
                       <attribute name="invisible">0</attribute>
                   </xpath>

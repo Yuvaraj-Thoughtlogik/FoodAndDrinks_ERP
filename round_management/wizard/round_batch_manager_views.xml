@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_round_batch_manager_form" model="ir.ui.view">
+        <field name="name">round.batch.manager.form</field>
+        <field name="model">round.batch.manager</field>
+        <field name="arch" type="xml">
+            <form string="Round Batch Manager">
+                <sheet>
+                    <!-- SEARCH CRITERIA HEADER -->
+                    <group string="Search Criteria">
+                        <group col="3">
+                            <field name="search_delivery_date"/>
+                            <field name="search_reference"/>
+                            <button name="action_search_batches" 
+                                    string="Search" 
+                                    type="object" 
+                                    class="btn-primary" 
+                                    icon="fa-search"/>
+                        </group>
+                    </group>
+
+                    <!-- GRID DATA -->
+                    <field name="line_ids" nolabel="1">
+                        <list editable="bottom" create="0" delete="0">
+                            <field name="selected" widget="boolean_toggle"/>
+                            <field name="round_code"/>
+                            <field name="round_name"/>
+                            <field name="depot_name"/>
+                            <field name="batch_code"/>
+                            <field name="iso_week_no"/>
+                            <field name="delivery_date"/>
+                            <field name="state" widget="badge"
+                                   decoration-info="state == 'pln'"
+                                   decoration-success="state in ('act', 'com')"
+                                   decoration-warning="state == 'prt'"
+                                   decoration-danger="state == 'cancel'"/>
+                            <field name="duplication_comments"/>
+                            <field name="warning"/>
+                        </list>
+                    </field>
+
+                    <!-- SELECTION BUTTONS -->
+                    <div class="mt-2 mb-3">
+                        <button name="action_select_all" string="Select All" type="object" class="btn-secondary me-2" icon="fa-plus-square"/>
+                        <button name="action_deselect_all" string="Deselect All" type="object" class="btn-secondary" icon="fa-minus-square"/>
+                    </div>
+
+                    <!-- BOTTOM CONTROLS TAB -->
+                    <notebook>
+                        <page string="Update Statuses">
+                            <group col="3">
+                                <field name="target_week_no" placeholder="Week &amp; Year e.g. 202635"/>
+                                <field name="target_delivery_date"/>
+                                <field name="target_status"/>
+                            </group>
+                            <div class="mt-2">
+                                <button name="action_validate_status_update" 
+                                        string="Validate" 
+                                        type="object" 
+                                        class="btn-success" 
+                                        icon="fa-check-circle"/>
+                            </div>
+                        </page>
+                        
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+</odoo>

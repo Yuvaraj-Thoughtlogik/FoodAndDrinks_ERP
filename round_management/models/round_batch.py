@@ -6,9 +6,13 @@ class RoundManagementBatch(models.Model):
     _name = 'round.management.batch'
     _description = 'Round Execution Batch'
     _rec_name = 'code'
-
     
-    code = fields.Char(string='Batch Code', required=True, copy=False, default=lambda self: _('New'))
+    @api.model
+    def _default_batch_code(self):
+        """Generate 6-digit sequence code immediately on clicking 'Create'."""
+        return self.env['ir.sequence'].next_by_code('round.management.batch') or 'New'
+    
+    code = fields.Char(string='Batch Code', required=True, copy=False, default=_default_batch_code)
     round_id = fields.Many2one('round.management.round', string='Round', required=True,domain="[('state', '=', 'active')]")
     round_code = fields.Char(related='round_id.code', string='Round Code', readonly=True)
     reference = fields.Char(string='Reference')
@@ -71,10 +75,10 @@ class RoundManagementBatch(models.Model):
     total_drops = fields.Integer(string='Total Drops', compute='_compute_order_metrics', store=True)
     
    
-    card_reader_count = fields.Selection([
-        ('Y', 'Yes'),
-        ('N', 'No'),
-    ], string='Card Reader', compute='_compute_order_metrics', store=True)
+    #card_reader_count = fields.Selection([
+        #('Y', 'Yes'),
+        #('N', 'No'),
+    #], string='Card Reader', compute='_compute_order_metrics', store=True)
     
     pickups_count = fields.Integer(string='Pickups', compute='_compute_order_metrics', store=True)
     extras = fields.Integer(string='Extras', default=0)
@@ -96,6 +100,18 @@ class RoundManagementBatch(models.Model):
     end_odometer = fields.Float(string='End Odometer (km)')
     distance_run = fields.Float(string='Distance (km)', compute='_compute_distance', store=True)
     
+    
+    @api.depends('code', 'reference')
+    def _compute_display_name(self):
+        for batch in self:
+            if batch.code and batch.reference:
+                batch.display_name = f"{batch.code} - {batch.reference}"
+            elif batch.code:
+                batch.display_name = batch.code
+            elif batch.reference:
+                batch.display_name = batch.reference
+            else:
+                batch.display_name = _('New Batch')
     
     @api.onchange('vehicle_id')
     def _onchange_vehicle_id_fetch_driver(self):
@@ -208,14 +224,14 @@ class RoundManagementBatch(models.Model):
         self.write({'state': 'pln'})
 
     
-    @api.model_create_multi
-    def create(self, vals_list):
-        for vals in vals_list:
+    #@api.model_create_multi
+    #def create(self, vals_list):
+        #for vals in vals_list:
             
-            if vals.get('code', _('New')) in (_('New'), 'New', False, None):
-                sequence_code = self.env['ir.sequence'].next_by_code('round.management.batch')
-                vals['code'] = sequence_code or str(int(datetime.now().timestamp()))
-        return super().create(vals_list)
+            #if vals.get('code', _('New')) in (_('New'), 'New', False, None):
+                #sequence_code = self.env['ir.sequence'].next_by_code('round.management.batch')
+                #vals['code'] = sequence_code or str(int(datetime.now().timestamp()))
+        #return super().create(vals_list)
 
     @api.depends('delivery_date')
     def _compute_week_number(self):
