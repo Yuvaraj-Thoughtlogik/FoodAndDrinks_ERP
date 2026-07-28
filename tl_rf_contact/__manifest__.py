@@ -9,8 +9,9 @@
         'base',
         'product',
         'sale_management',
-        'stock',
+        'sale_stock',
         'contacts',
+        'tl_contact_utm'
     ],
 
     'data': [
