@@ -7,7 +7,7 @@
             
            
             <xpath expr="//field[@name='category_id']" position="after">
-                <field name="round_id" string="Assigned Round"/>
+                <field name="round_id" string="Assigned Round" domain="[('id', 'in', available_round_ids)]"/>
                 <field name="round_code" string="Round Code" invisible="not round_id"/>
             </xpath>
 

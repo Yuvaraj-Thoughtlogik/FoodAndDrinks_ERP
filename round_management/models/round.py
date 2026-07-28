@@ -29,6 +29,7 @@ class RoundManagementRound(models.Model):
         ('east', 'East'),
         ('west', 'West')
     ], string='Region')
+    region_id = fields.Many2one(comodel_name='round.region', string='Region')
     
     depot_id = fields.Many2one('stock.warehouse', string='Default Depot') 
     #pay_grade = fields.Char(string='Pay Grade')

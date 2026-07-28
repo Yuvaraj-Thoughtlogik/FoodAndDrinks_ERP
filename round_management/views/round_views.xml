@@ -9,7 +9,7 @@
                 <field name="code"/>
                 <field name="name"/>
                 <field name="state" widget="badge" decoration-success="state == 'active'" decoration-danger="state == 'inactive'"/>
-                <field name="region"/>
+                <field name="region_id"/>
                 <field name="depot_id"/>
             </list>
         </field>
@@ -38,7 +38,7 @@
                         <group string="Round Details">
                             <field name="name"/>
                             <field name="state" widget="radio" options="{'horizontal': true}"/>
-                            <field name="region"/>
+                            <field name="region_id"/>
                             <field name="depot_id"/>
                         </group>
                         <group string="Configurations">

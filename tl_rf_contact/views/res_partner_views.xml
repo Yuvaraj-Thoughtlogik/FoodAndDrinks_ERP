@@ -37,7 +37,7 @@
             <xpath expr="//sheet/group" position="after">
                 <group string="Customer Details">
                     <group>
-                        <field name="customer_source"/>
+                        <field name="customer_source_id"/>
                         <field name="customer_type"/>
                         <field name="user_id"/>
                     </group>

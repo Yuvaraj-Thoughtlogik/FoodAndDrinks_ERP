@@ -1,0 +1,3 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_list_filter_configuration,list.filter.configuration,model_list_filter_configuration,base.group_system,1,1,1,1
+access_list_date_filter_wizard,list.date.filter.wizard,model_list_date_filter_wizard,,1,1,1,1

@@ -12,6 +12,7 @@
         'sale',
         'stock',
         'fleet',
+        'hr'
     ],
 
     'data': [
@@ -28,6 +29,7 @@
         'wizard/bulk_round_change_views.xml',
 
         'views/menus.xml',
+        'views/round_region_view.xml',
     ],
 
     'images': [
