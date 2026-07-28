@@ -73,7 +73,7 @@ class SaleOrder(models.Model):
             self.round_id = self.partner_id.round_id
             
             
-     def action_select_alt_delivery_round(self):
+    def action_select_alt_delivery_round(self):
         """Populates wizard lines with Round Batches and opens the modal."""
         self.ensure_one()
         
