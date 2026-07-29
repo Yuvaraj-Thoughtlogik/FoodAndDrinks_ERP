@@ -19,8 +19,8 @@ class SaleOrder(models.Model):
     round_code = fields.Char(related='round_id.code', string='Round Code', store=True)
     
     is_late_order = fields.Boolean(string="Late Order")
-    has_card_reader = fields.Boolean(string="Card Reader")
-    is_pickup = fields.Boolean(string="Pickup")
+   
+    is_pickup = fields.Boolean(string="Pet Food / Pickup Order")
     is_b2b = fields.Boolean(string="B2B")
    
     commitment_date = fields.Datetime(
@@ -45,6 +45,20 @@ class SaleOrder(models.Model):
         help="Calculated week and year format (e.g. 202631)"
     )
     permanent_notes = fields.Html(string='Permanent Notes')
+
+    
+    requested_delivery_after = fields.Float(string="Requested Delivery After")
+    requested_delivery_before = fields.Float(string="Requested Delivery Before")
+    last_ring_date = fields.Date(string="Last Ring Date")
+    delivery_day_name = fields.Char(string="Day Name", compute="_compute_delivery_day_name")
+    
+    @api.depends('commitment_date')
+    def _compute_delivery_day_name(self):
+        for order in self:
+            if order.commitment_date:
+                order.delivery_day_name = f"({order.commitment_date.strftime('%a')})"
+            else:
+                order.delivery_day_name = ""
     
     @api.onchange('partner_shipping_id', 'partner_id')
     def _onchange_partner_update_address_notes(self):

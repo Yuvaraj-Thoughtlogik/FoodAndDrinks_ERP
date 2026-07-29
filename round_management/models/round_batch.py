@@ -286,7 +286,7 @@ class RoundManagementBatch(models.Model):
         'order_ids', 
         'order_ids.state', 
         'order_ids.is_late_order', 
-        'order_ids.has_card_reader', 
+        #'order_ids.has_card_reader', 
         'order_ids.is_pickup', 
         'order_ids.is_b2b'
     )
@@ -303,8 +303,8 @@ class RoundManagementBatch(models.Model):
                 record.total_drops = len(active_orders)
                 
                 
-                has_card_req = any(getattr(o, 'has_card_reader', False) for o in active_orders)
-                record.card_reader_count = 'Y' if has_card_req else 'N'
+                #has_card_req = any(getattr(o, 'has_card_reader', False) for o in active_orders)
+                #record.card_reader_count = 'Y' if has_card_req else 'N'
                 
                 record.is_b2b_batch = any(getattr(o, 'is_b2b', False) for o in active_orders)
             else:
@@ -312,5 +312,5 @@ class RoundManagementBatch(models.Model):
                 record.late_orders_count = 0
                 record.pickups_count = 0
                 record.total_drops = 0
-                record.card_reader_count = False  
+                #record.card_reader_count = False  
                 record.is_b2b_batch = False
