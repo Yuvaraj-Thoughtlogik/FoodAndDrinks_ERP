@@ -194,9 +194,11 @@ class ResPartner(models.Model):
             last_order = rec.sale_order_ids.sorted(
                 key=lambda so: so.date_order or fields.Datetime.from_string('1970-01-01 00:00:00')
             )[-1]
+            print(last_order,rec.name)
 
             days = 0
             if last_order.date_order:
+                print(last_order.date_order)
                 days = (today - last_order.date_order.date()).days
 
             deliveries = rec.sale_order_ids.mapped('picking_ids').filtered(
@@ -225,14 +227,12 @@ class ResPartner(models.Model):
                         else:
                             status = 'main_customer'
                         break
-
+            print(days,status,customer_source)
             rec.customer_lifecycle_status = status
 
     @api.model
     def cron_update_customer_lifecycle_status(self):
-        partners = self.search([
-            ('customer_rank', '>', 0)
-        ])
+        partners = self.search([])
         partners._compute_customer_lifecycle_status()
 
     def action_close_account(self):
