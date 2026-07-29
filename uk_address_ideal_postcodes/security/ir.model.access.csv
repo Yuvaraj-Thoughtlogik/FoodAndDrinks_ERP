@@ -1,0 +1,3 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_uk_address_lookup_wizard_user,access.uk.address.lookup.wizard.user,model_uk_address_lookup_wizard,base.group_user,1,1,1,1
+access_uk_address_lookup_line_user,access.uk.address.lookup.line.user,model_uk_address_lookup_line,base.group_user,1,1,1,1
