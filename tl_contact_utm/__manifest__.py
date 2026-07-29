@@ -32,6 +32,7 @@ Features:
         "views/contact_utm_logs_views.xml",
         "views/res_partner_views.xml",
         "views/sale_order_views.xml",
+        "views/customer_source_views.xml",
     ],
     "installable": True,
     "application": False,
