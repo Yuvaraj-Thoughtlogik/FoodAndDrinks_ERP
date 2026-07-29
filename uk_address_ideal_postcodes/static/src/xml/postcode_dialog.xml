@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <t t-name="uk_postcode_lookup.PostcodeDialog">
+
+        <Dialog
+            title="'Select Address'"
+            size="'lg'">
+
+            <div class="table-responsive">
+
+                <table class="table table-hover table-striped">
+
+                    <thead>
+
+                        <tr>
+
+                            <th style="width:40px;"></th>
+                            <th>Address</th>
+                            <th>Town</th>
+                            <th>County</th>
+                            <th>Postcode</th>
+
+                        </tr>
+
+                    </thead>
+
+                    <tbody>
+
+                        <t t-foreach="props.addresses"
+                           t-as="address"
+                           t-key="address.postcode + address.line1">
+
+                            <tr
+                                class="o_address_row"
+                                t-on-click="() => props.select(address)">
+
+                                <td>
+
+                                    <i class="fa fa-map-marker text-primary"/>
+
+                                </td>
+
+                                <td>
+
+                                    <strong t-esc="address.line1"/>
+
+                                    <br/>
+
+                                    <small class="text-muted">
+
+                                        <t t-esc="address.line2"/>
+
+                                        <t t-if="address.line3">
+
+                                            , <t t-esc="address.line3"/>
+
+                                        </t>
+
+                                    </small>
+
+                                </td>
+
+                                <td t-esc="address.city"/>
+
+                                <td t-esc="address.county"/>
+
+                                <td>
+
+                                    <strong t-esc="address.postcode"/>
+
+                                </td>
+
+                            </tr>
+
+                        </t>
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+            <t t-set-slot="footer">
+
+                <button
+                    class="btn btn-secondary"
+                    t-on-click="props.close">
+
+                    Close
+
+                </button>
+
+            </t>
+
+        </Dialog>
+
+    </t>
+
+</templates>
