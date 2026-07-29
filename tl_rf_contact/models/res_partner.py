@@ -179,6 +179,7 @@ class ResPartner(models.Model):
         'sale_order_ids',
         'sale_order_ids.date_order',
         'sale_order_ids.picking_ids.state',
+        'customer_source_id',
     )
     def _compute_customer_lifecycle_status(self):
         today = fields.Date.today()
@@ -194,8 +195,6 @@ class ResPartner(models.Model):
                 key=lambda so: so.date_order or fields.Datetime.from_string('1970-01-01 00:00:00')
             )[-1]
 
-            order_count = len(rec.sale_order_ids)
-
             days = 0
             if last_order.date_order:
                 days = (today - last_order.date_order.date()).days
@@ -203,18 +202,9 @@ class ResPartner(models.Model):
             deliveries = rec.sale_order_ids.mapped('picking_ids').filtered(
                 lambda p: p.picking_type_code == 'outgoing'
             )
-            last_delivery = deliveries[-1] if len(deliveries) else False
-
             done_deliveries = deliveries.filtered(lambda p: p.state == 'done')
-            cancelled_deliveries = deliveries.filtered(lambda p: p.state == 'cancel')
 
-            all_deliveries_done = (
-                    len(deliveries) > 0 and len(done_deliveries) == len(deliveries)
-            )
-
-            all_deliveries_cancelled = (
-                    len(deliveries) > 0 and len(cancelled_deliveries) == len(deliveries)
-            )
+            customer_source = rec.customer_source_id.name
 
             if days > 548:
                 status = 'inactive'
@@ -225,23 +215,16 @@ class ResPartner(models.Model):
             elif days > 98:
                 status = 'cancelled_ftlt'
             else:
-                if order_count == 1:
-                    if all_deliveries_done:
-                        status = 'ftlt'
-                    elif all_deliveries_cancelled:
+                for delivery in deliveries:
+                    if delivery.state == 'cancel':
                         status = 'cancelled_ftlt'
-                    else:
-                        status = 'new'
-                else:
-                    if last_delivery and last_delivery.state == 'cancel':
-                        status = 'cancelled_ftlt'
-                    elif len(done_deliveries) == 1:
-                        status = 'ftlt'
-                    elif len(done_deliveries) > 1:
-                        status = 'main_customer'
-                    else:
-                        status = 'cancelled_ftlt'
-
+                        break
+                    elif delivery.state == 'done':
+                        if len(done_deliveries) == 1:
+                            status = 'ftlt' if customer_source == 'Door Sales' else 'main_customer'
+                        else:
+                            status = 'main_customer'
+                        break
 
             rec.customer_lifecycle_status = status
 

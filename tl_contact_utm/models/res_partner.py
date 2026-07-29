@@ -47,12 +47,12 @@ class ResPartner(models.Model):
 
         active_model = self.env.context.get("active_model")
         active_id = self.env.context.get("active_id")
-        print(self.env.context)
+        # print(self.env.context)
 
         record = False
         if active_model and active_id:
             record = self.env[active_model].browse(active_id)
-            print(record)
+            # print(record)
         for partner in self:
             previous = previous_sources.get(partner.id)
             after = partner.customer_source_id
