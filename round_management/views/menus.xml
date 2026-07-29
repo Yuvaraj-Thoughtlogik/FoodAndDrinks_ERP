@@ -130,4 +130,24 @@
           parent="menu_round_management_root"
           action="action_driver_rounds_grid"
           sequence="20"/>
+          
+          
+    <record id="action_round_batch_manager_server" model="ir.actions.server">
+        <field name="name">Round Batch Manager</field>
+        <field name="model_id" ref="model_round_batch_manager"/>
+        <field name="state">code</field>
+        <field name="code">
+record = env['round.batch.manager'].create({'search_delivery_date': datetime.date.today()})
+action = record.action_search_batches()
+        </field>
+    </record>
+
+    
+
+    
+    <menuitem id="menu_round_batch_manager"
+              name="Round Batch Manager"
+              parent="menu_round_operations_categ"
+              action="action_round_batch_manager_server"
+              sequence="10"/>
 </odoo>

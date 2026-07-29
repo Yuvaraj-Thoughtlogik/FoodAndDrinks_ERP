@@ -9,5 +9,8 @@ access_select_alt_round_wizard,access_select_alt_round_wizard,model_select_alt_r
 access_select_alt_round_line,access_select_alt_round_line,model_select_alt_round_line,base.group_user,1,1,1,1
 access_custom_vehicle_type_user,custom.vehicle.type.user,model_custom_vehicle_type,base.group_user,1,1,1,1
 
+access_round_batch_manager_user,round.batch.manager.user,model_round_batch_manager,base.group_user,1,1,1,1
+access_round_batch_manager_line_user,round.batch.manager.line.user,model_round_batch_manager_line,base.group_user,1,1,1,1
+
 access_round_region_user,round.region.user,model_round_region,base.group_user,1,1,1,1
 access_round_region_pincode_user,round.region.pincode.user,model_round_region_pincode,base.group_user,1,1,1,1
