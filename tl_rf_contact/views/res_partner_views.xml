@@ -22,15 +22,14 @@
                     <field
                             name="customer_lifecycle_status"
                             widget="statusbar"
-                            invisible="customer_lifecycle_status == 'closed'"
                             statusbar_visible="new,ftlt,main_customer,old_ftlt,dormant"
                     />
-                    <field
-                            name="customer_lifecycle_status"
-                            widget="statusbar"
-                            invisible="customer_lifecycle_status not in ['inactive','cancelled','closed']"
-                            statusbar_visible="inactive,cancelled_ftlt,closed"
-                    />
+<!--                    <field-->
+<!--                            name="customer_lifecycle_status"-->
+<!--                            widget="statusbar"-->
+<!--                            invisible="customer_lifecycle_status not in ['inactive','cancelled','closed']"-->
+<!--                            statusbar_visible="inactive,cancelled_ftlt,closed"-->
+<!--                    />-->
                 </header>
             </xpath>
 
