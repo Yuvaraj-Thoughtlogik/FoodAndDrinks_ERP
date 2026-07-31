@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-   
+
+    <!-- BULK CUSTOMER ROUND TRANSFER FORM -->
     <record id="view_wizard_bulk_round_change_form" model="ir.ui.view">
         <field name="name">wizard.bulk.round.change.form</field>
         <field name="model">wizard.bulk.round.change</field>
@@ -14,17 +15,34 @@
                         <field name="new_round_id" options="{'no_create': True}"/>
                     </group>
                 </group>
+
                 <notebook>
                     <page string="Target Customers">
-                        <field name="partner_ids" widget="many2many">
-                            <list name="partners_list" create="false" edit="false">
-                                <field name="name" string="Customer Name"/>
-                                <field name="phone"/>
-                                <field name="city"/>
+                        <div class="mb-2">
+                            <button string="Select All" 
+                                    name="action_select_all" 
+                                    type="object" 
+                                    class="btn btn-secondary btn-sm me-2" 
+                                    icon="fa-check-square-o"/>
+                            <button string="Deselect All" 
+                                    name="action_deselect_all" 
+                                    type="object" 
+                                    class="btn btn-secondary btn-sm" 
+                                    icon="fa-square-o"/>
+                        </div>
+
+                        <!-- EDITABLE LIST WITH BOOLEAN TOGGLE CHECKBOX -->
+                        <field name="line_ids">
+                            <list editable="bottom" create="false" delete="true">
+                                <field name="selected" widget="boolean_toggle"/>
+                                <field name="partner_id" readonly="1" string="Customer Name" force_save="1"/>
+                                <field name="phone" readonly="1" force_save="1"/>
+                                <field name="city" readonly="1" force_save="1"/>
                             </list>
                         </field>
                     </page>
                 </notebook>
+
                 <footer>
                     <button string="Transfer Customers" name="process_round_change" type="object" class="btn-primary"/>
                     <button string="Cancel" class="btn-secondary" special="cancel"/>
@@ -32,7 +50,36 @@
             </form>
         </field>
     </record>
-    
+
+    <!-- SUMMARY POPUP DIALOG VIEW -->
+    <record id="view_wizard_bulk_round_summary_form" model="ir.ui.view">
+        <field name="name">wizard.bulk.round.summary.form</field>
+        <field name="model">wizard.bulk.round.summary</field>
+        <field name="arch" type="xml">
+            <form string="Transfer Summary">
+                <div class="alert alert-success text-center mb-3" role="alert">
+                    <h4 class="alert-heading mb-1"><i class="fa fa-check-circle me-1"/> Transfer Successful!</h4>
+                    <field name="message" class="fw-bold mb-0" style="font-size: 14px;"/>
+                </div>
+
+                <group>
+                    <group>
+                        <field name="old_round_name" string="From Round"/>
+                        <field name="new_round_name" string="To Round"/>
+                    </group>
+                    <group>
+                        <field name="transferred_count" string="Total Customers Moved" class="fw-bold text-success" style="font-size: 18px;"/>
+                    </group>
+                </group>
+
+                <footer>
+                    <button string="OK" class="btn-primary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <!-- MASS ASSIGN ROUND TO SALE ORDERS FORM -->
     <record id="view_bulk_round_change_wizard_form" model="ir.ui.view">
         <field name="name">bulk.round.change.wizard.form</field>
         <field name="model">bulk.round.change.wizard</field>
@@ -49,7 +96,7 @@
         </field>
     </record>
 
-    
+    <!-- ACTIONS -->
     <record id="action_bulk_round_change_wizard" model="ir.actions.act_window">
         <field name="name">Bulk Round Change</field>
         <field name="res_model">bulk.round.change.wizard</field>
@@ -59,11 +106,11 @@
         <field name="binding_view_types">list</field>
     </record>
 
-    
     <record id="action_wizard_bulk_round_change" model="ir.actions.act_window">
         <field name="name">Bulk Customer Round Transfer</field>
         <field name="res_model">wizard.bulk.round.change</field>
         <field name="view_mode">form</field>
         <field name="target">new</field>
     </record>
+
 </odoo>

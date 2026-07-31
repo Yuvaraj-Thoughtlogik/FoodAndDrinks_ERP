@@ -6,77 +6,81 @@
         <field name="arch" type="xml">
 
             <!-- LEFT COLUMN FIELDS -->
-            <xpath expr="//field[@name='partner_shipping_id']" position="after">
-                
-                <!-- Delivery Round (Code + Name + Alternative Button) -->
-                <label for="round_id" string="Delivery Round"/>
-                <div class="o_row">
-                    <field name="round_code" placeholder="Code" style="max-width: 1000px;" readonly="1"/>
-                    <field name="round_id" placeholder="Select Round..."/>
-                    <button name="action_select_alt_delivery_round"
-                            string="Alternative Delivery Round"
-                            type="object"
-                            icon="fa-truck"
-                            class="oe_highlight o_alt_round_btn ms-1"/>
-                </div>
+      <xpath expr="//field[@name='partner_shipping_id']" position="after">
+          
+          <!-- Delivery Round (Code + Name + Alternative Button) -->
+          <label for="round_id" string="Delivery Round"/>
+          <div class="o_row">
+              <field name="round_code" placeholder="Code" style="max-width: 1000px;" readonly="1"/>
+              <field name="round_id" placeholder="Select Round..."/>
+          </div>
 
-                <!-- Delivery Date + Day Name -->
-                <label for="commitment_date" string="Delivery Date"/>
-                <div class="o_row">
-                    <field name="commitment_date"/>
-                    <field name="delivery_day_name" readonly="1" class="fw-bold text-primary ms-2"/>
-                </div>
+          <!-- Batch Code -->
+          <label for="batch_id" string="Batch Code"/>
+          <div class="o_row">
+          <field name="batch_id" string="Batch Code" domain="[('round_id', '=', round_id)]"/>
+          <button name="action_select_alt_delivery_round"
+                      string="Alternative Delivery Round"
+                      type="object"
+                      icon="fa-truck"
+                      class="oe_highlight o_alt_round_btn ms-1"/>
+          </div>
 
-                <!-- Batch Code -->
-                <field name="batch_id" string="Batch Code" domain="[('round_id', '=', round_id)]"/>
+          <!-- Delivery Date + Day Name -->
+          <label for="commitment_date" string="Delivery Date"/>
+          <div class="o_row">
+              <field name="commitment_date"/>
+              <field name="delivery_day_name" readonly="1" class="fw-bold text-primary ms-2"/>
+          </div>
 
-                <!-- Week N° + Helper Text -->
-                <label for="week_number" string="Week N°"/>
-                <div class="o_row">
-                    <field name="week_number" readonly="1" style="max-width: 90px;"/>
-                    <span class="text-muted ms-2">(Week and Year ie. 202630)</span>
-                </div>
+          <!-- Week N° + Helper Text -->
+          <label for="week_number" string="Week N°"/>
+          <div class="o_row">
+              <field name="week_number" readonly="1" style="max-width: 90px;"/>
+              <span class="text-muted ms-2">(Week and Year ie. 202630)</span>
+          </div>
 
-                <!-- Requested Delivery Time Range -->
-                <label for="requested_delivery_after" string="Requested Delivery Time"/>
-                <div class="o_row">
-                    <span class="me-1">After:</span>
-                    <field name="requested_delivery_after" widget="float_time" placeholder="12:00"/>
-                    <span class="ms-3 me-1">Before:</span>
-                    <field name="requested_delivery_before" widget="float_time" placeholder="17:00"/>
-                </div>
+          <!-- Requested Delivery Time Range -->
+          <label for="requested_delivery_after" string="Requested Delivery Time"/>
+          <div class="o_row">
+              <span class="me-1">After:</span>
+              <field name="requested_delivery_after" widget="float_time" placeholder="12:00"/>
+              <span class="ms-3 me-1">Before:</span>
+              <field name="requested_delivery_before" widget="float_time" placeholder="17:00"/>
+          </div>
 
-            </xpath>
+      </xpath>
 
 
-            <!-- RIGHT COLUMN FIELDS -->
-            <xpath expr="//field[@name='payment_term_id']" position="after">
-                
-                <!-- Delivery Times -->
-                <field name="delivery_time_slot" string="Delivery Times" placeholder="e.g. 08:00 to 12:00"/>
+      <!-- RIGHT COLUMN FIELDS -->
+      <xpath expr="//field[@name='payment_term_id']" position="after">
+          
 
-                <!-- Last Ring Date -->
-                <field name="last_ring_date" string="Last Ring Date" readonly="0"/>
+          <!-- Last Ring Date -->
+          <field name="last_ring_date" string="Last Ring Date" readonly="0"/>
 
-                <!-- Checkbox Flags Side-by-Side -->
-                <label for="is_late_order" string="Order Flags"/>
-                <div class="o_row">
-                    <div class="d-flex align-items-center me-3">
-                        <field name="is_late_order" class="me-1"/>
-                        <label for="is_late_order" string="Late Order" class="mb-0"/>
-                    </div>
-                    <div class="d-flex align-items-center me-3">
-                        <field name="is_pickup" class="me-1"/>
-                        <label for="is_pickup" string="Pet Food Order" class="mb-0"/>
-                    </div>
-                    <div class="d-flex align-items-center">
-                        <field name="is_b2b" class="me-1"/>
-                        <label for="is_b2b" string="B2B Order" class="mb-0"/>
-                    </div>
-                </div>
+          <!-- Checkbox Flags Side-by-Side -->
+          <label for="is_late_order" string="Order Flags"/>
+          <div class="o_row">
+              <div class="d-flex align-items-center me-3">
+                  <field name="is_late_order" class="me-1"/>
+                  <label for="is_late_order" string="Late Order" class="mb-0"/>
+              </div>
+              <div class="d-flex align-items-center me-3">
+                  <field name="is_pickup" class="me-1"/>
+                  <label for="is_pickup" string="Pet Food Order" class="mb-0"/>
+              </div>
+              <div class="d-flex align-items-center">
+                  <field name="is_b2b" class="me-1"/>
+                  <label for="is_b2b" string="B2B Order" class="mb-0"/>
+              </div>
+          </div>
 
-            </xpath>
+    <!-- Delivery Times -->
+    <field name="delivery_time_slot" string="Delivery Times" placeholder="e.g. 08:00 to 12:00"/>
 
+
+      </xpath>
 
             <!-- BOTTOM SECTION: Side-by-Side Notes (Order Notes & Permanent Notes) -->
             <xpath expr="//group[@name='order_details']" position="after">

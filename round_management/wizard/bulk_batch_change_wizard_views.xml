@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- MASS ASSIGN BATCH TO SALE ORDERS FORM -->
+    <record id="view_bulk_batch_change_wizard_form" model="ir.ui.view">
+        <field name="name">bulk.batch.change.wizard.form</field>
+        <field name="model">bulk.batch.change.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Mass Assign Batch to Sale Orders">
+                <div class="alert alert-info text-center mb-3" role="alert">
+                    Selected <strong><field name="order_count" readonly="1"/></strong> order(s) for delivery date <strong><field name="delivery_date" readonly="1"/></strong>.
+                </div>
+                <group>
+                    <field name="available_batch_ids" invisible="1"/>
+                    <field name="batch_id" options="{'no_create': True, 'no_open': True}"/>
+                </group>
+                <footer>
+                    <button string="Apply Batch" name="action_apply_batch_change" type="object" class="btn-primary"/>
+                    <button string="Cancel" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <!-- BINDING ACTION TO SALE ORDER LIST VIEW -->
+    <record id="action_bulk_batch_change_wizard" model="ir.actions.act_window">
+        <field name="name">Bulk Batch Change</field>
+        <field name="res_model">bulk.batch.change.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+        <field name="binding_model_id" ref="sale.model_sale_order"/>
+        <field name="binding_view_types">list</field>
+    </record>
+
+</odoo>

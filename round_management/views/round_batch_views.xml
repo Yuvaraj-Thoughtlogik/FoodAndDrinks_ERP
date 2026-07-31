@@ -8,6 +8,7 @@
         <field name="arch" type="xml">
             <list string="Driver Rounds Dispatch Grid" editable="bottom">
                 <field name="delivery_date" string="Del Date"/>
+                <field name="code"/>
                 <field name="round_code" string="Code"/>
                 <field name="round_id" string="Round" readonly="1" options="{'no_open': True}"/>
                 <field name="depot_id" string="Depot" readonly="1"/>

@@ -24,9 +24,12 @@
         'views/sale_order_views.xml',
         'views/res_partner_views.xml',
         'views/fleet_vehicle_views.xml',
+        'views/round_sale_order_views.xml',
         'wizard/select_alt_round_wizard_views.xml',
         'wizard/batch_duplicator_view.xml',
         'wizard/bulk_round_change_views.xml',
+        'wizard/update_status_wizard_views.xml',
+        'wizard/bulk_batch_change_wizard_views.xml',
 
         'views/menus.xml',
         'views/round_region_view.xml',
