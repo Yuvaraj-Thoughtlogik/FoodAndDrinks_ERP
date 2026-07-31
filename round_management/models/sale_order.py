@@ -51,7 +51,13 @@ class SaleOrder(models.Model):
     requested_delivery_before = fields.Float(string="Requested Delivery Before")
     last_ring_date = fields.Date(string="Last Ring Date")
     delivery_day_name = fields.Char(string="Day Name", compute="_compute_delivery_day_name")
-    
+
+    no_between_times_round = fields.Boolean(
+        related='round_id.no_between_times',
+        string='No Between Times on Round',
+        readonly=True
+    )
+
     @api.depends('commitment_date')
     def _compute_delivery_day_name(self):
         for order in self:
