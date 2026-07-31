@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_update_status_wizard_form" model="ir.ui.view">
+    <field name="name">update.status.wizard.form</field>
+    <field name="model">update.status.wizard</field>
+    <field name="arch" type="xml">
+        <form string="Bulk Update Batch Status">
+
+      <sheet>
+
+           <group>
+        <field name="show_search_criteria"/>
+    </group>
+
+    <group string="Search Criteria"
+           invisible="not show_search_criteria">
+
+        <field name="search_delivery_date"/>
+
+        <field name="search_reference"/>
+
+    </group>
+
+          <separator string="Update Values"/>
+
+          <group>
+              <field name="state"/>
+              <field name="delivery_date"/>
+              <field name="iso_week_no"/>
+              <field name="reference"/>
+              
+          </group>
+
+          <footer>
+              <button name="action_apply_status"
+                      string="Validate &amp; Update"
+                      type="object"
+                      class="btn-primary"/>
+
+              <button string="Cancel"
+                      special="cancel"
+                      class="btn-secondary"/>
+          </footer>
+
+      </sheet>
+
+      </form>
+    </field>
+</record>
+
+    <record id="action_update_status_wizard" model="ir.actions.act_window">
+        <field name="name">Update Status</field>
+        <field name="res_model">update.status.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
+    <record id="action_server_update_status" model="ir.actions.server">
+            <field name="name">Update Status</field>
+
+            <field name="model_id" ref="model_round_management_batch"/>
+
+            <field name="binding_model_id" ref="model_round_management_batch"/>
+
+            <field name="binding_view_types">list,form</field>
+
+            <field name="state">code</field>
+
+            <field name="code">
+        action = env['update.status.wizard'].action_open_status_wizard()
+            </field>
+    </record>
+
+<record id="view_round_batch_tree_inherit_status" model="ir.ui.view">
+    <field name="name">round.batch.tree.inherit.status</field>
+    <field name="model">round.management.batch</field>
+    <field name="inherit_id" ref="round_management.view_round_batch_tree"/>
+
+    <field name="arch" type="xml">
+
+        <xpath expr="//list/header" position="inside">
+
+            <button name="%(action_update_status_wizard)d"
+                string="Bulk Status Update"
+                type="action"
+                class="btn btn-success"
+                icon="fa-pencil-square-o"/>
+
+        </xpath>
+
+    </field>
+</record>
+
+
+<!--<record id="view_round_batch_tree_inherit_status" model="ir.ui.view">
+    <field name="name">round.batch.tree.inherit.status</field>
+    <field name="model">round.management.batch</field>
+    <field name="inherit_id" ref="round_management.view_round_batch_tree"/>
+
+    <field name="arch" type="xml">
+        <xpath expr="//list/header" position="inside">
+
+            <button name="%(action_update_status_wizard)d"
+                    string="Update Status"
+                    type="action"
+                    class="btn-secondary"
+                    icon="fa-pencil-square-o"/>
+
+        </xpath>
+    </field>
+</record>-->
+
+</odoo>

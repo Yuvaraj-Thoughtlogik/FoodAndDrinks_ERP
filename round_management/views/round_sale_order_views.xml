@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!-- Inherit Sale Order Search View to Add 'Delivery Date Today' Filter -->
+        <record id="view_sales_order_filter_round_today" model="ir.ui.view">
+            <field name="name">sale.order.list.select.round.today</field>
+            <field name="model">sale.order</field>
+            <field name="inherit_id" ref="sale.view_sales_order_filter"/>
+            <field name="arch" type="xml">
+                <xpath expr="//search" position="inside">
+                    <filter string="Delivery Date Today"
+                            name="filter_delivery_today"
+                            domain="[
+                                ('commitment_date', '&gt;=', context_today().strftime('%Y-%m-%d 00:00:00')),
+                                ('commitment_date', '&lt;=', context_today().strftime('%Y-%m-%d 23:59:59'))
+                            ]"/>
+                </xpath>
+            </field>
+        </record>
+
+        <!-- Window Action for Sale Orders with Default Filter Context -->
+        <record id="action_round_management_sale_order" model="ir.actions.act_window">
+            <field name="name">Sale Orders</field>
+            <field name="res_model">sale.order</field>
+            <field name="view_mode">list,kanban,form</field>
+            <field name="search_view_id" ref="view_sales_order_filter_round_today"/>
+            <field name="context">{
+                'search_default_filter_delivery_today': 1
+            }</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">
+                    Create a new Sale Order!
+                </p>
+            </field>
+        </record>
+
+        <!-- Sale Orders Menu Item (Positioned right after Operations) -->
+        <menuitem id="menu_round_management_sale_order"
+                  name="Sale Orders"
+                  parent="round_management.menu_round_management_root"
+                  action="action_round_management_sale_order"
+                  sequence="15"/>
+
+    </data>
+</odoo>
