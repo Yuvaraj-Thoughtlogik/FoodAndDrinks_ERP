@@ -5,7 +5,7 @@ class ListFilterConfiguration(models.Model):
     _name = 'list.filter.configuration'
     _description = 'List Date Filter Configuration'
 
-    name = fields.Char(required=True)
+    name = fields.Char(required=True,string="Button Name")
 
     model_id = fields.Many2one(
         comodel_name='ir.model',
@@ -15,7 +15,6 @@ class ListFilterConfiguration(models.Model):
         ondelete='cascade',
     )
 
-    create_button = fields.Boolean(default=True)
     model_name = fields.Char(
         related='model_id.model',
         store=False,
@@ -41,115 +40,67 @@ class ListFilterConfiguration(models.Model):
         ondelete='cascade',
     )
 
-    server_action_id = fields.Many2one(
-        'ir.actions.server',
-        string="Server Action",
-        readonly=True,
-        ondelete='cascade',
-    )
+
 
 
     @api.model_create_multi
     def create(self, vals_list):
         records = super().create(vals_list)
-
-        for rec in records:
-
-            # Create Server Action
-            action = self.env['ir.actions.server'].create({
-                'name': f'{rec.name}.{rec.model_id.model}.actions.server',
-                'model_id': rec.model_id.id,
-                'binding_model_id': rec.model_id.id,
-                'binding_view_types': 'list',
-                'state': 'code',
-                'code': f"""
-action = env['list.filter.configuration'].browse({rec.id}).open_filter_wizard()
-                """,
-            })
-
-            rec.server_action_id = action.id
-            action = self.env.ref(
-                'tl_list_date_filter.action_list_date_filter_wizard'
-            )
-            if rec.create_button:
-                if "<header" in rec.view_id.arch_db:
-                    arch = f"""
-<xpath expr="//list/header" position="inside">
-    <button
-        string="{rec.name}"
-        type="action"
-        name="{action.id}"
-        display='always'
-        class="btn btn-primary"
-        context="{{'default_config_id': {rec.id}}}"/>
-</xpath>
-                    """
-                else:
-                    arch = f"""
-<xpath expr="//list" position="inside">
-    <header>
-            <button
-        string="{rec.name}"
-        type="action"
-        name="{action.id}"
-        display='always'
-        class="btn btn-primary"
-        context="{{'default_config_id': {rec.id}}}"/>
-    </header>
-</xpath>
-                    """
-
-                view = self.env['ir.ui.view'].create({
-                    'name': f'{rec.model_id.model}.date.filter',
-                    'type': 'list',
-                    'model': rec.model_id.model,
-                    'mode': 'extension',
-                    'inherit_id': rec.view_id.id,
-                    'arch': arch,
-                })
-
-                rec.created_view_id = view.id
-
+        records._create_or_update_view()
         return records
 
     def write(self, vals):
         res = super().write(vals)
 
-        for rec in self:
-            if rec.created_view_id and 'name' in vals:
-                action = self.env.ref(
-                    'tl_list_date_filter.action_list_date_filter_wizard'
-                )
+        self._create_or_update_view()
 
-                if "<header" in rec.view_id.arch_db:
-                    arch = f"""
+        return res
+
+    def unlink(self):
+        self.mapped('created_view_id').unlink()
+        return super().unlink()
+
+    def _create_or_update_view(self):
+        action = self.env.ref(
+            'tl_list_date_filter.action_list_date_filter_wizard'
+        )
+        for rec in self:
+            if "<header" in rec.view_id.arch_db:
+                arch = f"""
     <xpath expr="//list/header" position="inside">
         <button
             string="{rec.name}"
             type="action"
             name="{action.id}"
-            display="always"
+            display='always'
             class="btn btn-primary"
             context="{{'default_config_id': {rec.id}}}"/>
     </xpath>
-    """
-                else:
-                    arch = f"""
+                        """
+            else:
+                arch = f"""
     <xpath expr="//list" position="inside">
         <header>
-            <button
-                string="{rec.name}"
-                type="action"
-                name="{action.id}"
-                display="always"
-                class="btn btn-primary"
-                context="{{'default_config_id': {rec.id}}}"/>
+                <button
+            string="{rec.name}"
+            type="action"
+            name="{action.id}"
+            display='always'
+            class="btn btn-primary"
+            context="{{'default_config_id': {rec.id}}}"/>
         </header>
     </xpath>
-    """
+                        """
+            values = {
+                'name': f'{rec.model_id.model}.date.filter',
+                'type': 'list',
+                'model': rec.model_id.model,
+                'mode': 'extension',
+                'inherit_id': rec.view_id.id,
+                'arch': arch,
+            }
 
-                rec.created_view_id.write({
-                    'arch': arch,
-                })
-
-        return res
+            if rec.created_view_id:
+               rec.created_view_id.write(values)
+            else:
+                rec.created_view_id = self.env['ir.ui.view'].create([values])

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo>
+    <data>
+        <record id="sale.act_res_partner_2_sale_order" model="ir.actions.act_window">
+           <field name="path">quotes-and-sales</field>
+        </record>
+    </data>
+</odoo>

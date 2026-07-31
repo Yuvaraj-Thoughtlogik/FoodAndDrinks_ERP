@@ -198,7 +198,7 @@ class ResPartner(models.Model):
 
             days = 0
             if last_order.date_order:
-                print(last_order.date_order)
+                # print(last_order.date_order)
                 days = (today - last_order.date_order.date()).days
 
             deliveries = rec.sale_order_ids.mapped('picking_ids').filtered(
@@ -227,7 +227,7 @@ class ResPartner(models.Model):
                         else:
                             status = 'main_customer'
                         break
-            print(days,status,customer_source)
+            # print(days,status,customer_source)
             rec.customer_lifecycle_status = status
 
     @api.model
