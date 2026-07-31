@@ -18,6 +18,7 @@ class ListFilterConfiguration(models.Model):
     model_name = fields.Char(
         related='model_id.model',
         store=False,
+        string="Model Name"
     )
     view_id = fields.Many2one(
         'ir.ui.view',
@@ -64,8 +65,15 @@ class ListFilterConfiguration(models.Model):
         action = self.env.ref(
             'tl_list_date_filter.action_list_date_filter_wizard'
         )
+
         for rec in self:
-            if "<header" in rec.view_id.arch_db:
+            view_data = self.env[rec.model_id.model].get_view(
+                view_id=rec.view_id.id,
+                view_type='list'
+            )
+            combined_arch = view_data['arch']
+
+            if "<header" in combined_arch:
                 arch = f"""
     <xpath expr="//list/header" position="inside">
         <button
