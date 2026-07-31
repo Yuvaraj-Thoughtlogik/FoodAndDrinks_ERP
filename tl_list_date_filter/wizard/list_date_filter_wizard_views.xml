@@ -8,21 +8,21 @@
             <form string="Date Filter">
                 <group>
                     <field name="config_id" invisible="1"/>
-                    <field name="start_date"/>
-                    <field name="end_date"/>
+                    <field name="start_date" widget="date" />
+                    <field name="end_date" invisible="1"/>
                 </group>
 
                 <footer>
                     <button
-                        name="confirm"
-                        type="object"
-                        string="Apply Filter"
-                        class="btn-primary"/>
+                            name="confirm"
+                            type="object"
+                            string="Apply Filter"
+                            class="btn-primary"/>
 
                     <button
-                        string="Cancel"
-                        class="btn-secondary"
-                        special="cancel"/>
+                            string="Cancel"
+                            class="btn-secondary"
+                            special="cancel"/>
                 </footer>
             </form>
         </field>

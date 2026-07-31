@@ -8,6 +8,7 @@
     'depends': [
         'base',
         'product',
+        'sale',
         'sale_management',
         'sale_stock',
         'contacts',
@@ -18,6 +19,7 @@
         "security/ir.model.access.csv",
         "data/cron.xml",
         "data/sequence.xml",
+        "data/actions.xml",
         "views/res_partner_views.xml",
         "wizard/close_reason_wizard.xml",
     ],

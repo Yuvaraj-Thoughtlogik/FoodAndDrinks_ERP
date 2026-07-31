@@ -1,8 +1,5 @@
-from datetime import datetime, time
-
-import pytz
-
 from odoo import api, fields, models
+from datetime import datetime, time
 
 
 class ListDateFilterWizard(models.TransientModel):
@@ -14,50 +11,29 @@ class ListDateFilterWizard(models.TransientModel):
         required=True,
     )
 
-    @api.model
-    def _default_start_date(self):
-        user_tz = pytz.timezone(self.env.user.tz or 'UTC')
-        today = fields.Date.context_today(self)
-
-        local_dt = user_tz.localize(datetime.combine(today, time(0, 0, 0)))
-        return local_dt.astimezone(pytz.UTC).replace(tzinfo=None)
-
-    @api.model
-    def _default_end_date(self):
-        user_tz = pytz.timezone(self.env.user.tz or 'UTC')
-        today = fields.Date.context_today(self)
-
-        local_dt = user_tz.localize(datetime.combine(today, time(23, 59, 59)))
-        return local_dt.astimezone(pytz.UTC).replace(tzinfo=None)
-
-    start_date = fields.Datetime(
+    start_date = fields.Date(
         required=True,
-        default=_default_start_date,
+        default=fields.Date.context_today,
     )
 
-    end_date = fields.Datetime(
+    end_date = fields.Date(
         required=True,
-        default=_default_end_date,
+        default=fields.Date.context_today,
     )
 
     @api.onchange('start_date')
     def _onchange_start_date(self):
         if self.start_date:
-            user_tz = pytz.timezone(self.env.user.tz or 'UTC')
+            self.end_date = self.start_date
 
-            # Convert UTC -> local
-            local_dt = pytz.UTC.localize(self.start_date).astimezone(user_tz)
-
-            # Set local end of day
-            local_dt = local_dt.replace(hour=23, minute=59, second=59, microsecond=0)
-
-            # Convert back to UTC
-            self.end_date = local_dt.astimezone(pytz.UTC).replace(tzinfo=None)
 
     def confirm(self):
         self.ensure_one()
 
         field_name = self.config_id.date_field_id.name
+
+        start = datetime.combine(self.start_date, time.min)
+        end = datetime.combine(self.end_date, time.max)
 
         return {
             'type': 'ir.actions.act_window',
@@ -65,8 +41,8 @@ class ListDateFilterWizard(models.TransientModel):
             'res_model': self.config_id.model_id.model,
             'view_mode': 'list,form',
             'domain': [
-                (field_name, '>=', self.start_date),
-                (field_name, '<=', self.end_date),
+                (field_name, '>=', fields.Datetime.to_string(start)),
+                (field_name, '<=', fields.Datetime.to_string(end)),
             ],
             'target': 'current',
         }
