@@ -1,5 +1,4 @@
 from odoo import models, fields, api
-from odoo.exceptions import UserError
 
 
 class BulkBatchChangeWizard(models.TransientModel):
@@ -15,64 +14,94 @@ class BulkBatchChangeWizard(models.TransientModel):
     available_batch_ids = fields.Many2many(
         'round.management.batch',
         string='Available Batches',
-        compute='_compute_available_batches'
+        compute='_compute_wizard_details'
     )
-    order_count = fields.Integer(string='Selected Orders Count', compute='_compute_available_batches')
-    delivery_date = fields.Date(string='Delivery Date', compute='_compute_available_batches')
+    order_count = fields.Integer(string='Selected Orders Count', compute='_compute_wizard_details')
+    delivery_dates_str = fields.Char(string='Delivery Dates', compute='_compute_wizard_details')
+    current_batches_str = fields.Char(string='Current Batches', compute='_compute_wizard_details')
 
     @api.depends()
-    def _compute_available_batches(self):
-        """Finds alternative batches matching the delivery date of selected orders."""
+    def _compute_wizard_details(self):
+        """Computes count, delivery dates, and current batches for the banner display."""
         active_ids = self.env.context.get('active_ids', [])
-        orders = self.env['sale.order'].browse(active_ids)
+        orders = self.env['sale.order'].browse(active_ids) if active_ids else self.env['sale.order']
+
+        # Collect distinct delivery dates
+        delivery_dates = {
+            order.commitment_date.strftime('%Y-%m-%d') 
+            for order in orders if order.commitment_date
+        }
+
+        # Collect current batch names
+        current_batches = {
+            order.batch_id.display_name for order in orders if order.batch_id
+        }
 
         for wizard in self:
-            if not orders:
-                wizard.available_batch_ids = [(5, 0, 0)]
-                wizard.order_count = 0
-                wizard.delivery_date = False
-                continue
-
-            # Get distinct delivery dates from selected orders
-            delivery_dates = {
-                order.commitment_date.date() if order.commitment_date else False 
-                for order in orders
-            }
-
-            # Validation: All selected orders must have the same delivery date set
-            if len(delivery_dates) > 1 or False in delivery_dates:
-                raise UserError(
-                    "Selected sale orders must all have a valid Delivery Date set and belong to the same Delivery Date."
-                )
-
-            target_date = list(delivery_dates)[0]
-            wizard.delivery_date = target_date
             wizard.order_count = len(orders)
+            wizard.delivery_dates_str = ", ".join(sorted(delivery_dates)) if delivery_dates else "None"
+            wizard.current_batches_str = ", ".join(sorted(current_batches)) if current_batches else "Unassigned"
 
-            # Filter batches matching the target delivery date
-            batches = self.env['round.management.batch'].search([
-                ('delivery_date', '=', target_date)
-            ])
-            
-            wizard.available_batch_ids = batches.ids
+            # Filter matching batches by delivery date
+            if delivery_dates:
+                batches = self.env['round.management.batch'].search([
+                    ('delivery_date', 'in', list(delivery_dates))
+                ])
+                wizard.available_batch_ids = batches
+            else:
+                wizard.available_batch_ids = self.env['round.management.batch']
 
     def action_apply_batch_change(self):
-        """Applies the selected batch to active sale orders and shows a popup message."""
+        """Applies batch to sale orders and opens summary popup."""
         self.ensure_one()
         active_ids = self.env.context.get('active_ids', [])
+        
         if active_ids and self.batch_id:
             orders = self.env['sale.order'].browse(active_ids)
+            count = len(orders)
+
+            # Collect unique old batch names
+            old_batches = [
+                order.batch_id.display_name for order in orders if order.batch_id
+            ]
+            
+            if old_batches:
+                unique_old_batches = list(dict.fromkeys(old_batches))
+                old_batch_str = ", ".join(unique_old_batches)
+            else:
+                old_batch_str = "No Previous Batch"
+
+            new_batch_name = self.batch_id.display_name or 'New Batch'
+
+            # Update batch on selected sale orders
             orders.write({'batch_id': self.batch_id.id})
 
+            summary_msg = f"Successfully updated {count} order(s) to Batch: {new_batch_name}"
+
+            summary = self.env['wizard.bulk.batch.summary'].sudo().create({
+                'transferred_count': count,
+                'old_batch_name': old_batch_str,
+                'new_batch_name': new_batch_name,
+                'message': summary_msg
+            })
+
             return {
-                'type': 'ir.actions.client',
-                'tag': 'display_notification',
-                'params': {
-                    'title': 'Batch Change Successful',
-                    'message': f"Updated {len(orders)} order(s) to Batch '{self.batch_id.display_name}'.",
-                    'type': 'success',
-                    'sticky': False,
-                    'next': {'type': 'ir.actions.act_window_close'},
-                }
+                'name': 'Batch Transfer Summary',
+                'type': 'ir.actions.act_window',
+                'res_model': 'wizard.bulk.batch.summary',
+                'res_id': summary.id,
+                'view_mode': 'form',
+                'target': 'new',
             }
+
         return {'type': 'ir.actions.act_window_close'}
+
+
+class WizardBulkBatchSummary(models.TransientModel):
+    _name = 'wizard.bulk.batch.summary'
+    _description = 'Bulk Batch Change Summary Popup'
+
+    transferred_count = fields.Integer(string='Transferred Orders Count', readonly=True)
+    old_batch_name = fields.Char(string='Previous Batch', readonly=True)
+    new_batch_name = fields.Char(string='New Batch', readonly=True)
+    message = fields.Text(string='Details', readonly=True)

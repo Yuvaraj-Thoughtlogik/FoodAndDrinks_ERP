@@ -1,19 +1,48 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
 
-    <!-- MASS ASSIGN BATCH TO SALE ORDERS FORM -->
     <record id="view_bulk_batch_change_wizard_form" model="ir.ui.view">
         <field name="name">bulk.batch.change.wizard.form</field>
         <field name="model">bulk.batch.change.wizard</field>
         <field name="arch" type="xml">
-            <form string="Mass Assign Batch to Sale Orders">
-                <div class="alert alert-info text-center mb-3" role="alert">
-                    Selected <strong><field name="order_count" readonly="1"/></strong> order(s) for delivery date <strong><field name="delivery_date" readonly="1"/></strong>.
+            <form string="Bulk Batch Change">
+                
+                <!-- CUSTOM DESIGNED BANNER -->
+                <div class="alert alert-info border-0 shadow-sm rounded-3 p-3 mb-4" 
+                     style="background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%); border-left: 5px solid #6366f1 !important; color: #3730a3;">
+                    
+                    <div class="d-flex align-items-center mb-2">
+                        <i class="fa fa-info-circle fa-lg me-2" style="color: #4f46e5;"/>
+                        <strong class="fs-6">Selected Orders Summary</strong>
+                    </div>
+
+                    <div class="row text-muted fs-7 g-2">
+                        <div class="col-6">
+                            <strong>Total Selected:</strong> 
+                            <span class="badge rounded-pill bg-success px-2 ms-1">
+                                <field name="order_count" readonly="1"/> order(s)
+                            </span>
+                        </div>
+                        <div class="col-6">
+                            <strong>Delivery Date(s):</strong> 
+                            <field name="delivery_dates_str" readonly="1" class="fw-bold text-dark"/>
+                        </div>
+                        <div class="col-12 mt-1">
+                            <strong>Current Batch(es):</strong> 
+                            <field name="current_batches_str" readonly="1" class="text-dark"/>
+                        </div>
+                    </div>
                 </div>
+
+                <!-- FORM FIELDS -->
                 <group>
                     <field name="available_batch_ids" invisible="1"/>
-                    <field name="batch_id" options="{'no_create': True, 'no_open': True}"/>
+                    <field name="batch_id" 
+                           domain="[('id', 'in', available_batch_ids)]" 
+                           options="{'no_create': True, 'no_open': True}"/>
                 </group>
+
+                <!-- FOOTER BUTTONS -->
                 <footer>
                     <button string="Apply Batch" name="action_apply_batch_change" type="object" class="btn-primary"/>
                     <button string="Cancel" class="btn-secondary" special="cancel"/>
@@ -22,7 +51,26 @@
         </field>
     </record>
 
-    <!-- BINDING ACTION TO SALE ORDER LIST VIEW -->
+   <record id="view_wizard_bulk_batch_summary_form" model="ir.ui.view">
+        <field name="name">wizard.bulk.batch.summary.form</field>
+        <field name="model">wizard.bulk.batch.summary</field>
+        <field name="arch" type="xml">
+            <form string="Batch Transfer Summary">
+                <div class="alert alert-success text-center mb-3" role="alert">
+                    <field name="message" readonly="1"/>
+                </div>
+                <group>
+                    <field name="transferred_count" string="Orders Updated" readonly="1"/>
+                    <field name="new_batch_name" string="Assigned Batch" readonly="1"/>
+                    <field name="old_batch_name" string="Previous Batch(es)" readonly="1"/>
+                </group>
+                <footer>
+                    <button string="Close" class="btn-primary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+    <!-- ACTION TO OPEN WIZARD -->
     <record id="action_bulk_batch_change_wizard" model="ir.actions.act_window">
         <field name="name">Bulk Batch Change</field>
         <field name="res_model">bulk.batch.change.wizard</field>
@@ -30,6 +78,23 @@
         <field name="target">new</field>
         <field name="binding_model_id" ref="sale.model_sale_order"/>
         <field name="binding_view_types">list</field>
+    </record>
+
+    <!-- INHERIT SALE ORDER LIST VIEW TO ADD BUTTON NEAR ACTION -->
+    <record id="view_order_tree_inherit_bulk_batch_button" model="ir.ui.view">
+        <field name="name">sale.order.list.bulk.batch.button</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//list" position="inside">
+                <header>
+                    <button name="%(action_bulk_batch_change_wizard)d" 
+                            string="Bulk Batch Change" 
+                            type="action" 
+                            class="btn-secondary"/>
+                </header>
+            </xpath>
+        </field>
     </record>
 
 </odoo>

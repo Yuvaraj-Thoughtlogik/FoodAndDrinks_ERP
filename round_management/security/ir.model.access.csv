@@ -2,8 +2,9 @@ id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_round_user,round.user,model_round_management_round,base.group_user,1,1,1,1
 access_batch_user,batch.user,model_round_management_batch,base.group_user,1,1,1,1
 access_wizard_bulk_round_change,access.wizard.bulk.round.change,model_wizard_bulk_round_change,base.group_user,1,1,1,1
-access_wizard_bulk_round_change_line,wizard.bulk.round.change.line,model_wizard_bulk_round_change_line,base.group_user,1,1,1,1
 access_bulk_round_change_wizard,access.bulk.round.change.wizard,model_bulk_round_change_wizard,base.group_user,1,1,1,1
+access_wizard_bulk_round_change_line,wizard.bulk.round.change.line,model_wizard_bulk_round_change_line,base.group_user,1,1,1,1
+
 access_batch_duplicator_wizard,access.batch.duplicator.wizard,model_batch_duplicator_wizard,base.group_user,1,1,1,1
 access_round_management_alternative,access.round.management.alternative,model_round_management_alternative,base.group_user,1,1,1,1
 access_select_alt_round_wizard,access_select_alt_round_wizard,model_select_alt_round_wizard,base.group_user,1,1,1,1
@@ -12,6 +13,7 @@ access_custom_vehicle_type_user,custom.vehicle.type.user,model_custom_vehicle_ty
 access_bulk_batch_change_wizard,bulk.batch.change.wizard,model_bulk_batch_change_wizard,base.group_user,1,1,1,1
 access_update_status_wizard,update.status.wizard,model_update_status_wizard,base.group_user,1,1,1,1
 access_wizard_bulk_round_summary,wizard.bulk.round.summary,model_wizard_bulk_round_summary,base.group_user,1,1,1,1
+access_wizard_bulk_batch_summary,access_wizard_bulk_batch_summary,model_wizard_bulk_batch_summary,base.group_user,1,1,1,1
 
 access_round_region_user,round.region.user,model_round_region,base.group_user,1,1,1,1
 access_round_region_pincode_user,round.region.pincode.user,model_round_region_pincode,base.group_user,1,1,1,1

@@ -31,15 +31,23 @@
                                     icon="fa-square-o"/>
                         </div>
 
-                        <!-- EDITABLE LIST WITH BOOLEAN TOGGLE CHECKBOX -->
+                        
                         <field name="line_ids">
-                            <list editable="bottom" create="false" delete="true">
-                                <field name="selected" widget="boolean_toggle"/>
-                                <field name="partner_id" readonly="1" string="Customer Name" force_save="1"/>
-                                <field name="phone" readonly="1" force_save="1"/>
-                                <field name="city" readonly="1" force_save="1"/>
-                            </list>
-                        </field>
+                          <list editable="bottom" create="false" delete="true">
+                              <field name="selected" widget="boolean_toggle"/>
+                              
+                              
+                              <field name="customer_code" string="Customer Code" readonly="1" force_save="1"/>
+                              <field name="partner_id" string="Customer Name" readonly="1" force_save="1"/>
+                              <!--<field name="customer_lifecycle_status" string="Customer Status" readonly="1" force_save="1"/>-->
+                              <field name="house_no" string="House No" readonly="1" force_save="1"/>
+                              <field name="street" string="Street" readonly="1" force_save="1"/>
+                              <field name="city" string="City" readonly="1" force_save="1"/>
+                              <field name="zip" string="Postcode" readonly="1" force_save="1"/>
+                              <field name="phone" string="Phone" readonly="1" force_save="1"/>
+                              <field name="status_code" string="Customer Status" readonly="1" force_save="1"/>
+                          </list>
+<               /field>
                     </page>
                 </notebook>
 

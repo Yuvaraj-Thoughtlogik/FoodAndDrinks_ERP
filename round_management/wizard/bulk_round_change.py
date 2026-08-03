@@ -104,11 +104,80 @@ class WizardBulkRoundChangeLine(models.TransientModel):
     _description = 'Wizard Bulk Round Change Line'
 
     wizard_id = fields.Many2one('wizard.bulk.round.change', ondelete='cascade')
-    selected = fields.Boolean(string='Selected', default=False)
     partner_id = fields.Many2one('res.partner', string='Customer', required=True)
+
+    selected = fields.Boolean(string='Selected', default=False)
+    
+    # Safe computed field instead of related
+    customer_code = fields.Char(string='Customer Code', compute='_compute_partner_details', store=True)
     
     phone = fields.Char(related='partner_id.phone', string='Phone', store=True, readonly=True)
     city = fields.Char(related='partner_id.city', string='City', store=True, readonly=True)
+    
+    # Address Details
+    house_no = fields.Char(related='partner_id.street2', string='House No', store=True, readonly=True)
+    street = fields.Char(related='partner_id.street', string='Street', store=True, readonly=True)
+    zip = fields.Char(related='partner_id.zip', string='Postcode', store=True, readonly=True)
+
+    # Full Customer Status Description
+    customer_lifecycle_status = fields.Selection([
+        ("new", "New"),
+        ("ftlt", "FTLT"),
+        ("main_customer", "Main Customer"),
+        ("old_ftlt", "Old FTLT"),
+        ("dormant", "Dormant"),
+        ("inactive", "Inactive"),
+        ("cancelled_ftlt", "Cancelled FTLT"),
+        ("closed", "Closed"),
+    ], string="Customer Status", compute="_compute_partner_details", store=True)
+
+    # Single-letter code string
+    status_code = fields.Char(string='Status', compute='_compute_partner_details', store=True)
+    
+    
+    @api.onchange('partner_id')
+    def _onchange_partner_id(self):
+        """Fetch customer code automatically when partner is selected."""
+        for line in self:
+            if line.partner_id:
+                # 1. First check custom 'customer_code' field on partner
+                # 2. Fall back to native 'ref' field if 'customer_code' is empty
+                line.customer_code = getattr(line.partner_id, 'customer_code', False) or line.partner_id.ref or ''
+            else:
+                line.customer_code = ''
+
+    @api.depends('partner_id')
+    def _compute_partner_details(self):
+        """Safely fetch customer code, status, and status code from partner."""
+        mapping = {
+            'new': 'N',
+            'ftlt': 'F',
+            'cancelled_ftlt': 'C',
+            'dormant': 'D',
+            'inactive': 'I',
+            'main_customer': 'M',
+            'old_ftlt': 'O',
+            'closed': 'X',
+        }
+        for line in self:
+            partner = line.partner_id
+            if partner:
+                # Safely get customer_code
+                line.customer_code = getattr(partner, 'customer_code', partner.ref or '')
+                
+                # Safely get status details
+                if hasattr(partner, 'customer_lifecycle_status'):
+                    status = partner.customer_lifecycle_status
+                    line.customer_lifecycle_status = status
+                    line.status_code = mapping.get(status, '')
+                else:
+                    line.customer_lifecycle_status = False
+                    line.status_code = ''
+            else:
+                line.customer_code = ''
+                line.customer_lifecycle_status = False
+                line.status_code = ''
+
 
 
 class WizardBulkRoundSummary(models.TransientModel):
