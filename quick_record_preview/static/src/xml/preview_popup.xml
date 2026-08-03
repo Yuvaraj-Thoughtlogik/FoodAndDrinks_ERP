@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <t t-name="quick_record_preview.PreviewPopup" owl="1">
+        <div class="o_preview_popup_content">
+            <div class="o_preview_popup_header">
+                <h5 class="o_preview_popup_title" t-esc="props.record.display_name || props.record.name || _t('Record')"/>
+                <button type="button" class="btn-close" t-on-click="onCloseClick" aria-label="Close"/>
+            </div>
+            
+            <div class="o_preview_popup_body">
+                <t t-if="state.loading">
+                    <div class="text-center p-3">
+                        <i class="fa fa-spinner fa-spin"/> <t t-esc="_t('Loading...')"/>
+                    </div>
+                </t>
+                <t t-elif="state.data">
+                    <div class="o_preview_fields">
+                        <t t-foreach="props.fields" t-as="fieldName" t-key="fieldName">
+                            <t t-if="state.data[fieldName] !== undefined">
+                                <div class="o_preview_field">
+                                    <span class="o_preview_field_label" t-esc="getFieldLabel(fieldName)"/>:
+                                    <span class="o_preview_field_value" t-esc="formatFieldValue(fieldName, state.data[fieldName])"/>
+                                </div>
+                            </t>
+                        </t>
+                    </div>
+                </t>
+                <t t-else="">
+                    <div class="text-center p-3 text-muted">
+                        <t t-esc="_t('No data available')"/>
+                    </div>
+                </t>
+            </div>
+            
+            <div class="o_preview_popup_footer">
+                <button type="button" class="btn btn-primary btn-sm" t-on-click="onOpenClick">
+                    <i class="fa fa-external-link"/> <t t-esc="_t('Open')"/>
+                </button>
+            </div>
+        </div>
+    </t>
+
+</templates>
+

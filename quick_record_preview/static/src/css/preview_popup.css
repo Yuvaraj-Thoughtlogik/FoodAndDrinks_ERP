@@ -1,0 +1,537 @@
+.o_record_preview_popup {
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    min-width: 300px;
+    max-width: 400px;
+    max-height: 600px;
+    overflow: hidden;
+    animation: fadeIn 0.2s ease-in;
+    display: flex;
+    flex-direction: column;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.o_preview_popup_content {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0; /* Allow flex item to shrink */
+}
+
+.o_preview_popup_header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid #dee2e6;
+    background-color: #f8f9fa;
+    flex-shrink: 0; /* Don't shrink the header */
+}
+
+/* Preview image styles */
+.o_preview_popup_image {
+    width: 100%;
+    max-height: 200px;
+    min-height: 100px;
+    overflow: hidden;
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0; /* Don't shrink the image */
+}
+
+.o_preview_popup_image img {
+    max-width: 100%;
+    max-height: 200px;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    display: block;
+}
+
+.o_preview_popup_title {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: #212529;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.o_preview_popup_header .btn-close {
+    margin-left: 8px;
+    padding: 4px;
+    opacity: 0.5;
+}
+
+.o_preview_popup_header .btn-close:hover {
+    opacity: 1;
+}
+
+.o_preview_popup_body {
+    padding: 12px 16px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    flex: 1 1 auto;
+    min-height: 0; /* Allow flex item to shrink */
+    max-height: 100%; /* Ensure it respects parent height */
+}
+
+/* Custom preview body */
+.o_preview_custom_body {
+    padding: 16px !important;
+}
+
+.o_preview_custom_fields {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px 16px;
+}
+
+.o_preview_custom_field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #e9ecef;
+    min-width: 0; /* Allow text truncation */
+}
+
+.o_preview_custom_field:nth-child(2n) {
+    border-left: 1px solid #e9ecef;
+    padding-left: 16px;
+}
+
+.o_preview_custom_field:nth-last-child(-n+2) {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.o_preview_custom_field_label {
+    font-size: 10px;
+    font-weight: 600;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.o_preview_custom_field_value {
+    font-size: 13px;
+    color: #212529;
+    word-break: break-word;
+    line-height: 1.4;
+    min-height: 18px;
+}
+
+.o_preview_fields {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.o_preview_field {
+    display: flex;
+    flex-direction: column;
+    padding: 6px 0;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.o_preview_field:last-child {
+    border-bottom: none;
+}
+
+.o_preview_field_label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #6c757d;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+}
+
+.o_preview_field_value {
+    font-size: 13px;
+    color: #212529;
+    word-break: break-word;
+}
+
+.o_preview_popup_footer {
+    padding: 12px 16px;
+    border-top: 1px solid #dee2e6;
+    background-color: #f8f9fa;
+    display: flex;
+    justify-content: flex-end;
+    flex-shrink: 0; /* Don't shrink the footer */
+}
+
+.o_preview_popup_footer .btn {
+    min-width: 80px;
+}
+
+/* Form view preview styles */
+.o_record_preview_form {
+    max-width: 600px;
+    max-height: 500px;
+}
+
+.o_preview_form_body {
+    overflow-y: auto;
+    padding: 16px !important;
+}
+
+.o_preview_form_fields {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.o_preview_form_field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.o_preview_form_field .o_preview_field_label {
+    font-weight: 600;
+    color: #495057;
+    font-size: 12px;
+    text-transform: none;
+}
+
+.o_preview_form_field .o_preview_field_value {
+    font-size: 14px;
+    padding: 4px 0;
+}
+
+/* Form view preview - matching Odoo's form view structure */
+.o_preview_form_view {
+    padding: 0;
+}
+
+.o_preview_form_view .o_form_view {
+    background: #f8f9fa;
+    min-height: 100%;
+}
+
+.o_preview_form_view .o_form_sheet {
+    background: white;
+    padding: 16px;
+    margin: 0;
+    border: none;
+    box-shadow: none;
+}
+
+.o_preview_form_view .o_group {
+    margin-bottom: 16px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.o_preview_form_view .o_group.row {
+    margin-left: 0;
+    margin-right: 0;
+}
+
+.o_preview_form_view .o_group.row > .o_field_wrapper {
+    padding-left: 0;
+    padding-right: 0;
+}
+
+.o_preview_form_view .o_field_wrapper {
+    margin-bottom: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+    min-width: 0;
+}
+
+.o_preview_form_view .o_field_wrapper.col-12 {
+    flex: 0 0 100%;
+    max-width: 100%;
+}
+
+.o_preview_form_view .o_field_wrapper.col-6 {
+    flex: 0 0 calc(50% - 8px);
+    max-width: calc(50% - 8px);
+}
+
+.o_preview_form_view .o_form_label {
+    font-weight: 600;
+    color: #495057;
+    font-size: 12px;
+    margin-bottom: 4px;
+    display: block;
+}
+
+.o_preview_form_view .o_form_label span {
+    display: inline-block;
+}
+
+.o_preview_form_view .o_field_char,
+.o_preview_form_view .o_field_text,
+.o_preview_form_view .o_field_widget {
+    font-size: 14px;
+    color: #212529;
+    padding: 4px 0;
+    min-height: 20px;
+}
+
+.o_preview_form_view .o_field_widget.text-muted {
+    color: #6c757d;
+    font-style: italic;
+}
+
+.o_preview_form_view .o_notebook {
+    margin-top: 24px;
+    border-top: 1px solid #dee2e6;
+    padding-top: 16px;
+}
+
+.o_preview_form_view .o_notebook_page {
+    margin-bottom: 24px;
+}
+
+.o_preview_form_view .o_notebook_page[data-name]::before {
+    content: attr(data-name);
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    color: #495057;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.o_preview_form_view .o_notebook_page_content {
+    padding-top: 8px;
+}
+
+.o_preview_form_view .o_form_separator {
+    margin: 24px 0 16px 0;
+    border-top: 1px solid #dee2e6;
+    padding-top: 16px;
+}
+
+.o_preview_form_view .o_form_separator .o_form_label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 0;
+}
+
+.o_preview_form_view .o_label_nowrap {
+    margin-bottom: 8px;
+}
+
+.o_preview_form_view .o_label_nowrap .o_form_label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 0;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #e9ecef;
+}
+
+/* Preview button styles */
+.o_list_preview_header {
+    width: 70px !important;
+    min-width: 70px !important;
+    max-width: 70px !important;
+    box-sizing: border-box;
+    padding: 4px 2px !important;
+    text-align: center;
+    vertical-align: middle;
+    table-layout: fixed !important;
+    overflow: hidden;
+}
+
+.o_list_preview_header span {
+    display: inline-block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+
+.o_list_preview_cell {
+    width: 45px !important;
+    min-width: 45px !important;
+    max-width: 45px !important;
+    padding: 2px !important;
+    box-sizing: border-box;
+    text-align: center;
+    vertical-align: middle;
+    display: table-cell !important;
+    visibility: visible !important;
+    overflow: hidden;
+    word-wrap: break-word;
+    word-break: break-all;
+}
+
+.o_preview_btn {
+    padding: 2px 4px;
+    color: #6c757d;
+    font-size: 14px;
+    line-height: 1;
+    display: inline-block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    min-width: auto;
+    border: none;
+    background: transparent;
+}
+
+.o_preview_btn i {
+    display: inline-block !important;
+    visibility: visible !important;
+}
+
+.o_preview_btn:hover {
+    color: #495057;
+    background-color: #f8f9fa;
+}
+
+.o_preview_btn:focus {
+    box-shadow: none;
+    outline: 1px solid #0d6efd;
+    outline-offset: 2px;
+}
+
+/* Fix table layout for x2many fields inside forms */
+.o_field_x2many .o_list_table {
+    table-layout: fixed;
+    width: 100%;
+}
+
+/* Fix drag handle column width to prevent expansion */
+.o_handle_cell {
+    width: 1px !important;
+    min-width: 1px !important;
+    max-width: 1px !important;
+    overflow: hidden;
+    white-space: nowrap;
+    table-layout: fixed;
+}
+
+.o_list_table th.o_handle_cell,
+.o_list_table td.o_handle_cell {
+    width: 1px !important;
+    min-width: 1px !important;
+    max-width: 1px !important;
+    overflow: hidden;
+    white-space: nowrap;
+    box-sizing: border-box;
+}
+
+/* Ensure table uses fixed layout when handle column exists */
+.o_list_table:has(.o_handle_cell) {
+    table-layout: fixed;
+}
+
+.o_field_x2many .o_list_view {
+    overflow-x: auto;
+    width: 100%;
+}
+
+/* Ensure preview column doesn't break layout in x2many fields */
+.o_field_x2many .o_list_preview_header,
+.o_field_x2many .o_list_preview_cell {
+    width: 70px !important;
+    min-width: 70px !important;
+    max-width: 70px !important;
+    flex-shrink: 0;
+    box-sizing: border-box;
+    padding: 2px !important;
+    text-align: center;
+    pointer-events: auto;
+    overflow: hidden;
+    word-wrap: break-word;
+    word-break: break-all;
+}
+
+/* Specific styles for SectionAndNoteListRenderer (sale order lines) */
+.o_section_and_note_list_view .o_list_preview_header,
+.o_section_and_note_list_view .o_list_preview_cell {
+    width: 30px !important;
+    min-width: 30px !important;
+    max-width: 30px !important;
+    box-sizing: border-box;
+    padding: 2px !important;
+    text-align: center;
+}
+
+/* Ensure table headers align properly */
+.o_field_x2many .o_list_table thead th.o_list_preview_header {
+    vertical-align: middle;
+    white-space: nowrap;
+}
+
+/* Ensure table cells align properly */
+.o_field_x2many .o_list_table tbody td.o_list_preview_cell {
+    vertical-align: middle;
+}
+
+/* Prevent preview button from interfering with drag operations */
+.o_list_preview_cell .o_preview_btn {
+    pointer-events: auto;
+}
+
+/* Ensure drag handle column is not affected */
+.o_list_table td[data-handle] {
+    pointer-events: auto;
+}
+
+/* Ensure table container handles the new column properly */
+.o_field_x2many .o_list_view .o_list_table {
+    min-width: 100%;
+}
+
+/* Kanban preview button styles */
+.o_kanban_preview_btn {
+    padding: 4px 8px;
+    color: #6c757d;
+    background-color: rgba(255, 255, 255, 0.8);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 3px;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.o_kanban_record:hover .o_kanban_preview_btn {
+    opacity: 1;
+}
+
+.o_kanban_preview_btn:hover {
+    color: #495057;
+    background-color: rgba(255, 255, 255, 0.95);
+    border-color: rgba(0, 0, 0, 0.2);
+}
+
+.o_kanban_preview_btn:focus {
+    opacity: 1;
+    box-shadow: none;
+    outline: 1px solid #0d6efd;
+    outline-offset: 2px;
+}
+

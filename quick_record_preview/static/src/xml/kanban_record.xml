@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <t t-name="quick_record_preview.KanbanRecord" t-inherit="web.KanbanRecord" t-inherit-mode="extension">
+        <!-- Add preview button to Kanban card -->
+        <xpath expr="//article" position="inside">
+            <button type="button" 
+                class="btn btn-sm btn-link o_kanban_preview_btn position-absolute" 
+                style="top: 8px; right: 32px; z-index: 10;"
+                title="Quick View"
+                aria-label="Quick View"
+                t-on-click.stop="(ev) => this.onPreviewClick(props.record, ev)"
+                tabindex="0">
+                <i class="fa fa-eye"></i>
+            </button>
+        </xpath>
+    </t>
+
+</templates>
+

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <template name="wi_video_snippet.wi_video_embed" id="wi_video_embed">
+        <section class="wi_video_embed text-center">
+            <div class="wi_video_embed_embedded_class container o_not_editable pt64 pb64">
+                <div class="font-monospace pt8 bg-light">Select <b>"Modify"</b> in the right panel to insert your Video
+                </div>
+            </div>
+        </section>
+    </template>
+
+    <template id="wi_video_embed_snippets" inherit_id="website.snippets" priority="8">
+        <xpath expr="//snippets[@id='snippet_groups']" position="inside">
+            <t t-snippet="wi_video_snippet.wi_video_embed" string="Embed Video"
+               t-thumbnail="/website/static/src/img/snippets_thumbs/s_embed_code.svg" t-forbid-sanitize="true"/>
+        </xpath>
+        <xpath expr="//snippets[@id='snippet_structure']" position="inside">
+            <t t-snippet="wi_video_snippet.wi_video_embed" string="Embed Video"
+               t-thumbnail="/website/static/src/img/snippets_thumbs/s_embed_code.svg" t-forbid-sanitize="true"/>
+        </xpath>
+    </template>
+
+</odoo>

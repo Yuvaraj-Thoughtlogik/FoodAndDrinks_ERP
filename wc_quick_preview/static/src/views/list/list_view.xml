@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+<t t-inherit="web.ListRenderer.RecordRow" t-inherit-mode="extension" owl="1">
+    <xpath expr="//t[@t-set='useUnlink']" position="before">
+            <td t-on-click="(ev) => this.onEyeCellClicked(record, column, ev)"><a class="fa fa-eye"/></td>
+        </xpath>
+    </t>
+</templates>

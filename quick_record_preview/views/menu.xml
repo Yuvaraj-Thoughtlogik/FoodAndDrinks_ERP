@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <menuitem id="menu_preview_config"
+              name="Preview Configuration"
+              parent="base.menu_administration"
+              action="action_preview_config"
+              sequence="100"/>
+</odoo>
+

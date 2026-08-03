@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <!-- Extend ListRenderer header to add preview column header -->
+    <t t-name="quick_record_preview.ListRenderer" t-inherit="web.ListRenderer" t-inherit-mode="extension">
+        <!-- Insert preview header after selector (if exists) -->
+        <xpath expr="//thead//th[@t-if='hasSelectors']" position="after">
+            <th t-if="hasSelectors and hasPreviewColumn" class="o_list_preview_header text-center" style="width: 70px !important; min-width: 70px !important; max-width: 70px !important; padding: 4px 2px; overflow: hidden; table-layout: fixed;">
+                <span style="font-size: 12px; line-height: 1.2; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;">Quick View</span>
+            </th>
+        </xpath>
+        <!-- If no selector, insert before columns loop -->
+        <xpath expr="//thead//tr/t[@t-foreach='columns']" position="before">
+            <th t-if="!hasSelectors and hasPreviewColumn" class="o_list_preview_header text-center" style="width: 70px !important; min-width: 70px !important; max-width: 70px !important; padding: 4px 2px; overflow: hidden; table-layout: fixed;">
+                <span style="font-size: 12px; line-height: 1.2; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;">Quick View</span>
+            </th>
+        </xpath>
+    </t>
+
+    <!-- Extend SectionAndNoteListRenderer header (uses primary mode, inherits from web.ListRenderer) -->
+    <t t-name="quick_record_preview.SectionAndNoteListRenderer" t-inherit="account.sectionAndNoteListRenderer" t-inherit-mode="extension">
+        <!-- Insert preview header after selector (if exists) -->
+        <xpath expr="//thead//th[@t-if='hasSelectors']" position="after">
+            <th t-if="hasSelectors and hasPreviewColumn" class="o_list_preview_header text-center" style="width: 70px !important; min-width: 70px !important; max-width: 70px !important; padding: 4px 2px; overflow: hidden; table-layout: fixed;">
+                <span style="font-size: 12px; line-height: 1.2; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;">Quick View</span>
+            </th>
+        </xpath>
+        <!-- If no selector, insert before columns loop -->
+        <xpath expr="//thead//tr/t[@t-foreach='columns']" position="before">
+            <th t-if="!hasSelectors and hasPreviewColumn" class="o_list_preview_header text-center" style="width: 70px !important; min-width: 70px !important; max-width: 70px !important; padding: 4px 2px; overflow: hidden; table-layout: fixed;">
+                <span style="font-size: 12px; line-height: 1.2; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;">Quick View</span>
+            </th>
+        </xpath>
+    </t>
+
+    <!-- Extend RecordRow to add preview button cell -->
+    <!-- This template is used by both ListRenderer and SectionAndNoteListRenderer -->
+    <t t-name="quick_record_preview.ListRenderer.RecordRow" t-inherit="web.ListRenderer.RecordRow" t-inherit-mode="extension">
+        <!-- Insert preview cell after selector (if exists) -->
+        <xpath expr="//td[@t-if='hasSelectors']" position="after">
+            <td t-if="hasSelectors and hasPreviewColumn" class="o_list_preview_cell text-center" 
+                t-on-keydown="(ev) => this.onCellKeydown(ev, group, record)"
+                t-on-click.stop.prevent="(ev) => this.onPreviewClick(record, ev)"
+                t-on-mousedown.stop="(ev) => ev.stopPropagation()"
+                tabindex="-1"
+                style="width: 70px !important; min-width: 70px !important; max-width: 70px !important; padding: 2px; overflow: hidden;">
+                <button type="button" 
+                    class="btn btn-sm btn-link o_preview_btn p-0" 
+                    title="Quick View"
+                    aria-label="Quick View"
+                    tabindex="-1">
+                    <i class="fa fa-eye"></i>
+                </button>
+            </td>
+        </xpath>
+        <!-- If no selector, insert before columns loop -->
+        <xpath expr="//tr[@class='o_data_row']/t[@t-foreach='getColumns(record)']" position="before">
+            <td t-if="!hasSelectors and hasPreviewColumn" class="o_list_preview_cell text-center" 
+                t-on-keydown="(ev) => this.onCellKeydown(ev, group, record)"
+                t-on-click.stop.prevent="(ev) => this.onPreviewClick(record, ev)"
+                t-on-mousedown.stop="(ev) => ev.stopPropagation()"
+                tabindex="-1"
+                style="width: 70px !important; min-width: 70px !important; max-width: 70px !important; padding: 2px; overflow: hidden;">
+                <button type="button" 
+                    class="btn btn-sm btn-link o_preview_btn p-0" 
+                    title="Quick View"
+                    aria-label="Quick View"
+                    tabindex="-1">
+                    <i class="fa fa-eye"></i>
+                </button>
+            </td>
+        </xpath>
+    </t>
+
+</templates>

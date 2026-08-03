@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Quick Record Preview</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #714B67;
+            border-bottom: 3px solid #714B67;
+            padding-bottom: 10px;
+            margin-bottom: 30px;
+        }
+        h2 {
+            color: #714B67;
+            margin-top: 40px;
+            margin-bottom: 20px;
+            padding-left: 20px;
+            border-left: 4px solid #714B67;
+        }
+        h3 {
+            color: #8B6B7D;
+            margin-top: 30px;
+            margin-bottom: 15px;
+            padding-left: 15px;
+            border-left: 3px solid #8B6B7D;
+            list-style: none;
+        }
+        h3::before {
+            content: "• ";
+            color: #714B67;
+            font-weight: bold;
+            margin-right: 5px;
+        }
+        p {
+            margin-bottom: 15px;
+            text-align: justify;
+        }
+        ul {
+            margin-left: 20px;
+            margin-bottom: 20px;
+        }
+        li {
+            margin-bottom: 10px;
+        }
+        .feature-box {
+            background: #f9f9f9;
+            border-left: 4px solid #714B67;
+            padding: 15px 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .screenshot-placeholder {
+            background: linear-gradient(to bottom, #f8f9fa, #ffffff);
+            border: 2px solid #dee2e6;
+            padding: 20px;
+            margin: 25px auto;
+            text-align: center;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+            max-width: 95%;
+        }
+        .screenshot-placeholder strong {
+            display: block;
+            margin-bottom: 10px;
+            color: #714B67;
+            font-size: 1.1em;
+            font-weight: 600;
+        }
+        .screenshot-placeholder p {
+            color: #555;
+            font-style: italic;
+            margin: 10px 0 15px 0;
+            font-size: 0.95em;
+            line-height: 1.5;
+        }
+        /* Force maximum image sizes - 1.5x current size */
+        img[src*="screenshot"] {
+            max-width: 1200px !important;
+            max-height: 900px !important;
+            width: auto !important;
+            height: auto !important;
+        }
+        .screenshot-placeholder img {
+            max-width: 1200px !important;
+            max-height: 900px !important;
+            width: auto !important;
+            height: auto !important;
+            border: 3px solid #714B67;
+            border-radius: 8px;
+            margin-top: 10px;
+            padding: 5px;
+            background-color: #fff;
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
+            box-shadow: 0 4px 12px rgba(113, 75, 103, 0.2);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            object-fit: contain;
+        }
+        .screenshot-placeholder img:hover {
+            transform: scale(1.02);
+            box-shadow: 0 6px 16px rgba(113, 75, 103, 0.3);
+            border-color: #5a3d52;
+        }
+        /* Responsive image sizing - 1.5x sizes */
+        @media (max-width: 767px) {
+            img[src*="screenshot"],
+            .screenshot-placeholder img {
+                max-width: 100% !important;
+                max-height: 750px !important;
+            }
+        }
+        @media (min-width: 768px) {
+            img[src*="screenshot"],
+            .screenshot-placeholder img {
+                max-width: 1050px !important;
+                max-height: 789px !important;
+            }
+        }
+        @media (min-width: 992px) {
+            img[src*="screenshot"],
+            .screenshot-placeholder img {
+                max-width: 1200px !important;
+                max-height: 900px !important;
+            }
+        }
+        @media (min-width: 1200px) {
+            img[src*="screenshot"],
+            .screenshot-placeholder img {
+                max-width: 1350px !important;
+                max-height: 1014px !important;
+            }
+        }
+        .highlight {
+            background-color: #fff3cd;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-weight: 500;
+        }
+        .note {
+            background: #e7f3ff;
+            border-left: 4px solid #2196F3;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .note strong {
+            color: #1976D2;
+        }
+    </style>
+</head>
+<body>
+<div class="container-fluid cmpad">
+    <div class="supports my-3 py-3" style="    border: 2px solid #3776AB22;
+    padding: 0 35px;
+    border-radius: 10px;    border: 2px solid #e9ecef;background-color: white;">
+        <div class="row justify-content-between align-items-center">
+            <div class="col-lg-3">
+                <div class="my-3 mx-auto mx-sm-0" style="width: 250px; ">
+                    <img src="./icon.png" style="width: 100%;">
+                </div>
+            </div>
+            <div class="col-lg-9">
+                <div class="row">
+                    <div class="my-3 d-flex align-items-center justify-content-center justify-content-sm-end">
+                        <span class="me-3"><b>Supports: </b></span>
+                        <div class="text-center" style="
+                    background-color: #3776AB !important;
+                    font-size: 1rem !important;
+                    color: #fff !important;
+                    font-weight: 500 !important;
+                    padding: 8px !important;
+                    margin: 0 3px !important;
+                    border-radius: 50px !important;
+                    min-width: 130px !important;
+                  ">
+                            Community
+                        </div>
+                        <div class="text-center" style="
+                                            background-color: #9e6390 !important;
+                                            font-size: 1rem !important;
+                                            color: #fff !important;
+                                            font-weight: 500 !important;
+                                            padding: 8px !important;
+                                            margin: 0 3px !important;
+                                            border-radius: 50px !important;
+                                            min-width: 130px !important;
+                                          ">
+                            Enterprise
+                        </div>
+                    </div>
+                </div>
+                <div class="row" style="margin-top: 10px;display: flex;justify-content: end;float: right;">
+                    <div class="d-flex align-items-center justify-content-end flex-wrap gap-2">
+                        <span class="me-3"><b>Availability: </b></span>
+                        <div class="d-flex align-items-center justify-content-center gap-2 text-center col" style="
+                    border: 2px solid #ebebeb;
+    font-size: 1rem !important;
+    color: #333 !important;
+    font-weight: 500 !important;
+    padding: 8px !important;
+    margin: 0 3px !important;
+    border-radius: 20px !important;
+    min-width: 150px !important;
+
+                  ">
+
+                            <i class="fa fa-xmark" style="color:#ef4444;"></i>
+                            Odoo Online
+                        </div>
+                        <div class="d-flex align-items-center justify-content-center gap-2 text-center col" style="
+                    border: 2px solid #ebebeb;
+    font-size: 1rem !important;
+    color: #333 !important;
+    font-weight: 500 !important;
+    padding: 8px !important;
+    margin: 0 3px !important;
+    border-radius: 20px !important;
+    min-width: 150px !important;
+
+                  ">
+
+                            <i class="fa fa-xmark" style="color:#ef4444;"></i>
+                            Odoo.sh
+                        </div>
+                        <div class="d-flex align-items-center justify-content-center gap-2 text-center col" style="
+                   border: 2px solid #ebebeb;
+    font-size: 1rem !important;
+    color: #333 !important;
+    font-weight: 500 !important;
+    padding: 8px !important;
+    margin: 0 3px !important;
+    border-radius: 20px !important;
+    min-width: 150px !important;
+
+                  ">
+
+                            <i class="fa fa-check" style="color:#2ea043;"></i>
+                            On Premise
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="container">
+    <h1>Quick Record Preview</h1>
+
+    <p>
+        <strong>Quick Record Preview</strong> is a powerful Odoo module that enhances your productivity by providing
+        instant access to record details without leaving your current view. With a simple click on the preview button,
+        you can view comprehensive record information in a popup, eliminating the need to navigate away from your
+        current context.
+    </p>
+
+    <h2>Key Features</h2>
+
+    <div class="feature-box">
+        <h3>One-Click Preview</h3>
+        <p>
+            Click the preview button in any list or Kanban view to instantly view record details in a popup window. No
+            need to open the full form view or navigate away from your current context.
+        </p>
+    </div>
+
+    <div class="feature-box">
+        <h3>Works Everywhere</h3>
+        <p>
+            The preview functionality is available in:
+        </p>
+        <ul>
+            <li><strong>List Views:</strong> Preview any record directly from the list</li>
+            <li><strong>Kanban Views:</strong> Preview cards without opening them</li>
+            <li><strong>X2Many Fields:</strong> Preview records within form views (e.g., order lines, invoice lines)
+            </li>
+        </ul>
+    </div>
+
+    <div class="feature-box">
+        <h3>Smart Field Display</h3>
+        <p>
+            The preview intelligently displays:
+        </p>
+        <ul>
+            <li>Record images (product images, customer avatars, etc.) at the top</li>
+            <li>All relevant fields in a clean, organized layout</li>
+            <li>Only fields with actual values (no empty fields cluttering the view)</li>
+            <li>Properly formatted field values (dates, currencies, relational fields, etc.)</li>
+        </ul>
+    </div>
+
+    <div class="feature-box">
+        <h3>Customizable Configuration</h3>
+        <p>
+            Configure which fields to display for each model:
+        </p>
+        <ul>
+            <li>Select specific fields to show in the preview</li>
+            <li>Toggle image display on/off</li>
+            <li>Toggle display_name field on/off</li>
+            <li>Set defaults per model for consistent previews</li>
+        </ul>
+    </div>
+
+    <div class="feature-box">
+        <h3>Clean and Organized</h3>
+        <p>
+            The preview popup features:
+        </p>
+        <ul>
+            <li>Two-column layout for efficient space usage</li>
+            <li>Scrollable content area for long records</li>
+            <li>Fixed header with record name</li>
+            <li>Quick "Open" button to access the full form view</li>
+            <li>Automatic exclusion of mixin fields (followers, activities, messages)</li>
+        </ul>
+    </div>
+
+    <h2>Screenshots</h2>
+
+    <h3>Preview Button in List View</h3>
+    <div class="screenshot-placeholder">
+        <strong>Screenshot: Preview button in list view</strong>
+        <p>Add screenshot showing the preview button in a list view. The screenshot should show the preview button next
+            to records in the list.</p>
+        <img src="screenshot1.png" alt="Preview button in list view"
+             style="max-width: 1200px; max-height: 900px; width: auto; height: auto; border: 3px solid #714B67; border-radius: 8px; padding: 5px; background-color: #fff; box-shadow: 0 4px 12px rgba(113, 75, 103, 0.2);"/>
+    </div>
+    <p>This screenshot demonstrates how the preview button appears in list views, allowing users to quickly preview
+        record details.</p>
+
+    <h3>Preview Popup</h3>
+    <div class="screenshot-placeholder">
+        <strong>Screenshot: Preview popup showing record details</strong>
+        <img src="screenshot2.png" alt="Preview popup showing record details"
+             style="max-width: 1200px; max-height: 900px; width: auto; height: auto; border: 3px solid #714B67; border-radius: 8px; padding: 5px; background-color: #fff; box-shadow: 0 4px 12px rgba(113, 75, 103, 0.2);"/>
+    </div>
+    <p>This screenshot shows the preview popup displaying comprehensive record information without leaving the current
+        view.</p>
+
+    <h3>Preview in Kanban View</h3>
+    <div class="screenshot-placeholder">
+        <strong>Screenshot: Preview in Kanban view</strong>
+        <img src="screenshot3.png" alt="Preview in Kanban view"
+             style="max-width: 1200px; max-height: 900px; width: auto; height: auto; border: 3px solid #714B67; border-radius: 8px; padding: 5px; background-color: #fff; box-shadow: 0 4px 12px rgba(113, 75, 103, 0.2);"/>
+    </div>
+    <p>This screenshot demonstrates the preview functionality in Kanban views, allowing users to preview cards directly
+        from the board.</p>
+
+    <h3>Preview in X2Many Fields</h3>
+    <div class="screenshot-placeholder">
+        <strong>Screenshot: Preview in x2many fields</strong>
+        <img src="screenshot4.png" alt="Preview in x2many fields"
+             style="max-width: 1200px; max-height: 900px; width: auto; height: auto; border: 3px solid #714B67; border-radius: 8px; padding: 5px; background-color: #fff; box-shadow: 0 4px 12px rgba(113, 75, 103, 0.2);"/>
+    </div>
+    <p>This screenshot illustrates how the preview functionality works within x2many fields, allowing users to preview
+        related records without leaving the form.</p>
+
+    <h3>Configuration Interface</h3>
+    <div class="screenshot-placeholder">
+        <strong>Screenshot: Configuration interface</strong>
+        <img src="screenshot5.png" alt="Configuration interface"
+             style="max-width: 1200px; max-height: 900px; width: auto; height: auto; border: 3px solid #714B67; border-radius: 8px; padding: 5px; background-color: #fff; box-shadow: 0 4px 12px rgba(113, 75, 103, 0.2);"/>
+    </div>
+    <p>This screenshot shows the configuration interface where users can customize which fields appear in previews for
+        each model.</p>
+
+    <h3>Configured Preview Display</h3>
+    <div class="screenshot-placeholder">
+        <strong>Screenshot: View only fields selected in the Preview configuration</strong>
+        <img src="screenshot6.png" alt="Configured preview display"
+             style="max-width: 1200px; max-height: 900px; width: auto; height: auto; border: 3px solid #714B67; border-radius: 8px; padding: 5px; background-color: #fff; box-shadow: 0 4px 12px rgba(113, 75, 103, 0.2);"/>
+    </div>
+    <p>This screenshot demonstrates how the preview displays only the fields that were configured for the model,
+        providing a customized viewing experience.</p>
+
+    <h2>How to Use</h2>
+
+    <ol>
+        <li><strong>Enable Preview:</strong> After installing the module, you'll see a preview button in list and Kanban
+            views
+        </li>
+        <li><strong>Click to Preview:</strong> Click the preview button next to any record to view its details</li>
+        <li><strong>View Information:</strong> The popup displays all relevant fields in a clean, organized format</li>
+        <li><strong>Open Full View:</strong> Click the "Open" button in the preview popup to access the complete form
+            view
+        </li>
+        <li><strong>Configure Fields:</strong> Go to Settings → Preview Configuration to customize which fields appear
+            in previews
+        </li>
+    </ol>
+
+    <div class="note">
+        <strong>Tip:</strong> The preview automatically excludes empty fields, mixin fields (like followers and
+        activities), and image fields from the field list (images are shown separately at the top). This keeps the
+        preview clean and focused on relevant information.
+    </div>
+
+    <h2>Technical Details</h2>
+
+    <ul>
+        <li><strong>Compatibility:</strong> Odoo 17, 18, and 19</li>
+        <li><strong>Performance:</strong> Optimized for fast loading with efficient field fetching</li>
+        <li><strong>Integration:</strong> Works seamlessly with all standard Odoo views and custom modules</li>
+        <li><strong>Customization:</strong> Fully configurable per model through the Settings menu</li>
+    </ul>
+
+    <h2>Benefits</h2>
+
+    <ul>
+        <li><strong>Save Time:</strong> View record details without navigating away</li>
+        <li><strong>Improve Productivity:</strong> Quick access to information reduces clicks</li>
+        <li><strong>Better UX:</strong> Clean, organized preview with all relevant information</li>
+        <li><strong>Flexible:</strong> Customize previews to match your workflow</li>
+        <li><strong>Universal:</strong> Works in list views, Kanban views, and x2many fields</li>
+    </ul>
+
+</div>
+</body>
+</html>
+
