@@ -24,12 +24,12 @@
                             widget="statusbar"
                             statusbar_visible="new,ftlt,main_customer,old_ftlt,dormant"
                     />
-<!--                    <field-->
-<!--                            name="customer_lifecycle_status"-->
-<!--                            widget="statusbar"-->
-<!--                            invisible="customer_lifecycle_status not in ['inactive','cancelled','closed']"-->
-<!--                            statusbar_visible="inactive,cancelled_ftlt,closed"-->
-<!--                    />-->
+                    <!--                    <field-->
+                    <!--                            name="customer_lifecycle_status"-->
+                    <!--                            widget="statusbar"-->
+                    <!--                            invisible="customer_lifecycle_status not in ['inactive','cancelled','closed']"-->
+                    <!--                            statusbar_visible="inactive,cancelled_ftlt,closed"-->
+                    <!--                    />-->
                 </header>
             </xpath>
 
@@ -50,11 +50,14 @@
             <xpath expr="//field[@name='company_type']" position="before">
                 <group>
                     <group>
-                        <field name="customer_code" readonly="id and customer_code"/>
-
+                        <label for="customer_code"/>
+                        <div class="o_row">
+                            <field name="customer_code" readonly="not lock_code"/>
+                            <field name="lock_code" widget="boolean_toggle"/>
+                            <span>Edit Code</span>
+                        </div>
                     </group>
                 </group>
-
 
             </xpath>
             <xpath expr="//page[@name='internal_notes']" position="after">

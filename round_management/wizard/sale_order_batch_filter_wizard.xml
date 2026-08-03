@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo>
+    <data>
+        <record id="view_sale_order_batch_filter_wizard_form" model="ir.ui.view">
+            <field name="name">sale.order.batch.filter.wizard.form</field>
+            <field name="model">sale.order.batch.filter.wizard</field>
+            <field name="arch" type="xml">
+                <form string="Filter by Batch">
+                    <group>
+                        <field name="batch_id"/>
+                    </group>
+
+                    <footer>
+                        <button name="action_confirm"
+                                type="object"
+                                string="Apply"
+                                class="btn-primary"/>
+
+                        <button string="Cancel"
+                                special="cancel"/>
+                    </footer>
+                </form>
+            </field>
+
+        </record>
+        <record id="action_sale_order_batch_filter_wizard"
+                model="ir.actions.act_window">
+            <field name="name">Filter Batch</field>
+            <field name="res_model">sale.order.batch.filter.wizard</field>
+            <field name="view_mode">form</field>
+            <field name="target">new</field>
+        </record>
+        <record id="view_sale_order_search_inherit_batch" model="ir.ui.view">
+            <field name="name">sale.order.search.inherit.batch</field>
+            <field name="model">sale.order</field>
+            <field name="inherit_id" ref="sale.sale_order_view_search_inherit_sale"/>
+            <field name="arch" type="xml">
+
+                <xpath expr="//search" position="inside">
+                    <field name="batch_id"/>
+                </xpath>
+
+            </field>
+        </record>
+        <record id="sale_order_list_batch_filter" model="ir.ui.view">
+            <field name="name">sale.order.list.batch.filter</field>
+            <field name="model">sale.order</field>
+            <field name="inherit_id" ref="sale.sale_order_tree"/>
+            <field name="arch" type="xml">
+
+                <xpath expr="//header" position="inside">
+                    <button
+                            name="%(action_sale_order_batch_filter_wizard)d"
+                            type="action"
+                            display="always"
+                            string="Filter Batch"
+                            class="btn-primary"/>
+                </xpath>
+
+            </field>
+        </record>
+    </data>
+</odoo>
+

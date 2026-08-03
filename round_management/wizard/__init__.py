@@ -4,3 +4,4 @@ from . import select_alt_round_wizard
 #from . import round_batch_manager
 from . import update_status_wizard
 from . import bulk_batch_change_wizard
+from . import sale_order_batch_filter_wizard

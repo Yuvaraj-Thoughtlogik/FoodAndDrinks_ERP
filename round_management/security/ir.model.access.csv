@@ -17,3 +17,4 @@ access_wizard_bulk_batch_summary,access_wizard_bulk_batch_summary,model_wizard_b
 
 access_round_region_user,round.region.user,model_round_region,base.group_user,1,1,1,1
 access_round_region_pincode_user,round.region.pincode.user,model_round_region_pincode,base.group_user,1,1,1,1
+access_sale_order_batch_filter_wizard,sale.order.batch.filter.wizard,model_sale_order_batch_filter_wizard,base.group_user,1,1,1,1

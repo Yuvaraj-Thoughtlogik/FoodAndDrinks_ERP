@@ -19,15 +19,15 @@
                 <notebook>
                     <page string="Target Customers">
                         <div class="mb-2">
-                            <button string="Select All" 
-                                    name="action_select_all" 
-                                    type="object" 
-                                    class="btn btn-secondary btn-sm me-2" 
+                            <button string="Select All"
+                                    name="action_select_all"
+                                    type="object"
+                                    class="btn btn-secondary btn-sm me-2"
                                     icon="fa-check-square-o"/>
-                            <button string="Deselect All" 
-                                    name="action_deselect_all" 
-                                    type="object" 
-                                    class="btn btn-secondary btn-sm" 
+                            <button string="Deselect All"
+                                    name="action_deselect_all"
+                                    type="object"
+                                    class="btn btn-secondary btn-sm"
                                     icon="fa-square-o"/>
                         </div>
 
@@ -65,11 +65,15 @@
         <field name="model">wizard.bulk.round.summary</field>
         <field name="arch" type="xml">
             <form string="Transfer Summary">
-                <div class="alert alert-success text-center mb-3" role="alert">
-                    <h4 class="alert-heading mb-1"><i class="fa fa-check-circle me-1"/> Transfer Successful!</h4>
-                    <field name="message" class="fw-bold mb-0" style="font-size: 14px;"/>
-                </div>
+                <div class="oe_title text-center mb-3">
+                    <h2 class="text-success">
+                        <i class="fa fa-check-circle"/>
+                        Transfer Successful!
+                    </h2>
 
+                    <field name="message"
+                           class="fw-bold"/>
+                </div>
                 <group>
                     <group>
                         <field name="old_round_name" string="From Round"/>

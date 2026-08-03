@@ -30,6 +30,7 @@
         'wizard/bulk_round_change_views.xml',
         'wizard/update_status_wizard_views.xml',
         'wizard/bulk_batch_change_wizard_views.xml',
+        'wizard/sale_order_batch_filter_wizard.xml',
 
         'views/menus.xml',
         'views/round_region_view.xml',
