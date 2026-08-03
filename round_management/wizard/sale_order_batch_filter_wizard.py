@@ -22,7 +22,7 @@ class SaleOrderBatchFilterWizard(models.TransientModel):
         }
         domain = []
 
-        if self.batch_ids:
+        if self.batch_id:
             domain.append(("batch_id", "=", self.batch_id.id))
 
         action["domain"] = domain
