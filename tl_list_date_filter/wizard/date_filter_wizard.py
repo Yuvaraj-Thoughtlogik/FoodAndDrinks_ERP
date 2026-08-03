@@ -39,6 +39,7 @@ class ListDateFilterWizard(models.TransientModel):
             'type': 'ir.actions.act_window',
             'name': 'Filtered Records',
             'res_model': self.config_id.model_id.model,
+            'view_id':self.config_id.view_id.id,
             'view_mode': 'list,form',
             'domain': [
                 (field_name, '>=', fields.Datetime.to_string(start)),

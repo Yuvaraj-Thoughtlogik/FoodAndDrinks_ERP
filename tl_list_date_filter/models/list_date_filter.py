@@ -31,6 +31,7 @@ class ListFilterConfiguration(models.Model):
         string="Created View",
         readonly=True,
         ondelete='cascade',
+        copy =False,
     )
 
     date_field_id = fields.Many2one(
