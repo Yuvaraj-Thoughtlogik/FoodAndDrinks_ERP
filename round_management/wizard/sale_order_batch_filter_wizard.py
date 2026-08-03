@@ -5,7 +5,7 @@ class SaleOrderBatchFilterWizard(models.TransientModel):
     _name = 'sale.order.batch.filter.wizard'
     _description = 'Sale Order Batch Filter'
 
-    batch_ids = fields.Many2many(
+    batch_id = fields.Many2one(
         'round.management.batch',
         string='Round Batches',
     )
@@ -18,12 +18,12 @@ class SaleOrderBatchFilterWizard(models.TransientModel):
         )
         action["context"] = {
             **self.env.context,
-            "search_default_batch_id": self.batch_ids.ids,
+            "search_default_batch_id": self.batch_id.id,
         }
         domain = []
 
         if self.batch_ids:
-            domain.append(("batch_id", "in", self.batch_ids.ids))
+            domain.append(("batch_id", "=", self.batch_id.id))
 
         action["domain"] = domain
 

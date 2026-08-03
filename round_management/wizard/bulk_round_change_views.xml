@@ -57,14 +57,14 @@
         <field name="model">wizard.bulk.round.summary</field>
         <field name="arch" type="xml">
             <form string="Transfer Summary">
-                <div class="alert alert-success text-center mb-3" role="status">
-                    <h4 class="alert-heading mb-1">
-                        <i class="fa fa-check-circle me-1"/>
+                <div class="oe_title text-center mb-3">
+                    <h2 class="text-success">
+                        <i class="fa fa-check-circle"/>
                         Transfer Successful!
-                    </h4>
+                    </h2>
+
                     <field name="message"
-                           class="fw-bold mb-0"
-                           style="font-size: 14px;"/>
+                           class="fw-bold"/>
                 </div>
                 <group>
                     <group>
