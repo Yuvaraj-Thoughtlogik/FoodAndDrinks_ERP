@@ -85,6 +85,9 @@ class ResPartner(models.Model):
         "UNIQUE(customer_code)",
         "Customer Code must be unique.",
     )
+    lock_code = fields.Boolean()
+
+
 
     @api.constrains("customer_code")
     def _check_customer_code(self):
@@ -105,6 +108,8 @@ class ResPartner(models.Model):
                 vals["customer_code"] = sequence.next_by_code(
                     "res.partner.customer.code"
                 )
+                if not vals.get("lock_code"):
+                    vals['lock_code'] = False
 
         partners = super().create(vals_list)
 
@@ -127,6 +132,8 @@ class ResPartner(models.Model):
             partner.id: html2plaintext(partner.comment or "").strip()
             for partner in self
         }
+        if not vals.get("lock_code"):
+            vals['lock_code'] = False
 
         res = super().write(vals)
 
