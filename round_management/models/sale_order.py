@@ -51,7 +51,7 @@ class SaleOrder(models.Model):
         readonly=True
     )
 
-    @api.depends('partner_id', 'partner_shipping_id')
+    @api.depends('partner_id', 'partner_shipping_id','partner_id.comment')
     def _compute_permanent_notes(self):
         for order in self:
             partner = order.partner_shipping_id or order.partner_id
