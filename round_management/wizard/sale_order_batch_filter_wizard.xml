@@ -7,7 +7,13 @@
             <field name="arch" type="xml">
                 <form string="Filter by Batch">
                     <group>
-                        <field name="batch_id"/>
+                        <div class="o_row">
+                            <label for="round_id"/>
+                            <field name="round_id" class="oe_inline"/>
+                            <label for="batch_id"/>
+                            <field name="batch_id" class="oe_inline" />
+
+                        </div>
                     </group>
 
                     <footer>

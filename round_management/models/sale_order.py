@@ -96,10 +96,14 @@ class SaleOrder(models.Model):
     def action_select_alt_delivery_round(self):
         """Populates wizard lines with Round Batches and opens the modal."""
         self.ensure_one()
-        
-        # Fetch active batches
-        batches = self.env['round.management.batch'].search([])
-        
+
+        alt_round_ids = self.round_id.alt_round_ids.mapped('alt_round_id').ids if self.round_id else []
+
+        batches = self.env['round.management.batch'].search([
+            ('round_id', 'in', alt_round_ids),
+            ('state', 'in', ['act', 'pln']),
+        ])
+
         lines = [(0, 0, {
             'batch_id': batch_rec.id,
             'selected': (batch_rec.id == getattr(self, 'batch_id', self.env['round.management.batch']).id)
