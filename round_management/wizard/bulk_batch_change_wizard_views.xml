@@ -86,13 +86,12 @@
         <field name="model">sale.order</field>
         <field name="inherit_id" ref="sale.view_order_tree"/>
         <field name="arch" type="xml">
-            <xpath expr="//list" position="inside">
-                <header>
-                    <button name="%(action_bulk_batch_change_wizard)d" 
+            <xpath expr="//list//header" position="inside">
+                    <button name="%(action_bulk_batch_change_wizard)d"
                             string="Bulk Batch Change" 
                             type="action" 
                             class="btn-secondary"/>
-                </header>
+
             </xpath>
         </field>
     </record>
