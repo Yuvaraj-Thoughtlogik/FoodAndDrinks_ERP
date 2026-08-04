@@ -77,7 +77,7 @@
                 </div>
 
                 <!-- Delivery Times -->
-                <field name="delivery_time_slot" string="Delivery Times" placeholder="e.g. 08:00 to 12:00"/>
+                <field name="delivery_times" string="Delivery Times" placeholder="e.g. 08:00 to 12:00"/>
 
 
             </xpath>
@@ -124,7 +124,7 @@
                 <field name="round_code" optional="show"/>
                 <field name="batch_id" optional="show"/>
                 <field name="commitment_date" string="Delivery Date" widget="date" optional="show"/>
-                <field name="delivery_time_slot" optional="show"/>
+                <field name="delivery_times" optional="show"/>
                 <field name="week_number" optional="show"/>
 
 
@@ -147,7 +147,7 @@
                 <field name="round_code" optional="show"/>
                 <field name="batch_id" optional="show"/>
                 <field name="commitment_date" string="Delivery Date" widget="date" optional="show"/>
-                <field name="delivery_time_slot" optional="show"/>
+                <field name="delivery_times" optional="show"/>
                 <field name="week_number" optional="show"/>
 
 
