@@ -122,3 +122,15 @@ class SaleOrder(models.Model):
             'view_mode': 'form',
             'target': 'new',
         }
+
+    def action_duplicate(self):
+        self.ensure_one()
+        new_record = self.copy()
+
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': self._name,
+            'res_id': new_record.id,
+            'view_mode': 'form',
+            'target': 'current',
+        }

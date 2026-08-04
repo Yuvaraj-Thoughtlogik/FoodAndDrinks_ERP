@@ -6,8 +6,11 @@
             <field name="model">sale.order</field>
             <field name="inherit_id" ref="sale.view_order_form"/>
             <field name="arch" type="xml">
-                 <xpath expr="//field[@name='date_order']" position="before">
-                  <field name="source_id" string="Customer Source"/>
+                 <xpath expr="//field[@name='validity_date']" position="before">
+                  <field name="source_id" string="Customer Source" readonly="True"/>
+              </xpath>
+                <xpath expr="//group[@name='sale_header']//group[@name='partner_details']//field[@name='partner_id']" position="after">
+                  <field name="order_channel_id" string="Order Channel" readonly="create_date"/>
               </xpath>
             </field>
         </record>

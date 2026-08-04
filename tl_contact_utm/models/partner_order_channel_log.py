@@ -2,8 +2,8 @@ from odoo import fields, models, api
 
 
 class PartnerCustomerSourceLog(models.Model):
-    _name = "partner.customer.source.log"
-    _description = "Customer Source Audit Log"
+    _name = "partner.order.channel.log"
+    _description = "Order Channel Audit Log"
     _order = "create_date desc"
 
     partner_id = fields.Many2one(
@@ -21,16 +21,16 @@ class PartnerCustomerSourceLog(models.Model):
 
     previous_source_id = fields.Many2one(
         "utm.source",
-        string="Previous Source",
+        string="Previous Order Channel",
     )
 
     current_source_id = fields.Many2one(
         "utm.source",
-        string="Current Source",
+        string="Current Order Channel",
     )
     source_ref = fields.Reference(
         selection="_selection_models",
-        string="Source Record",
+        string="Source Order",
     )
 
 
