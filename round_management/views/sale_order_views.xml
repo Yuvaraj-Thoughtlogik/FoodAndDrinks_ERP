@@ -20,7 +20,7 @@
                 <div class="o_row">
                     <field name="batch_id" string="Batch Code" domain="[('round_id', '=', round_id)]"/>
                     <button name="action_select_alt_delivery_round"
-                            string="Alternative Delivery Round"
+                            string="Alt Delivery Round"
                             type="object"
                             icon="fa-truck"
                             class="oe_highlight o_alt_round_btn ms-1"/>
