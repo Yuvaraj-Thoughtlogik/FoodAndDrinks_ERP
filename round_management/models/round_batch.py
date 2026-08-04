@@ -114,8 +114,8 @@ class RoundManagementBatch(models.Model):
             date_str = batch.delivery_date.strftime('%d-%m-%Y') if batch.delivery_date else ''
             # Collect active name components
             parts = []
-            if batch.code:
-                parts.append(batch.code)
+            # if batch.code:
+            #     parts.append(batch.code)
             if batch.reference:
                 parts.append(batch.reference)
             if date_str:
