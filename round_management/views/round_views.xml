@@ -125,16 +125,7 @@
                             </group>
                         </page>
 
-                        <page string="Round Batches" name="batches">
-                            <field name="batch_ids" readonly="1">
-                                <list>
-                                    <field name="code"/>
-                                    <field name="week_number"/>
-                                    <field name="delivery_date"/>
-                                    <field name="state"/>
-                                </list>
-                            </field>
-                        </page>
+
 
                         <!-- Tab 2: Alternative Rounds (Matches your legacy UI) -->
                         <page string="Alternative Rounds" name="alternative_rounds">
@@ -145,6 +136,16 @@
                                     <field name="before_time" string="Before"/>
                                     <field name="after_time" string="After"/>
                                     <field name="active" string="Active"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Round Batches" name="batches">
+                            <field name="batch_ids" readonly="1">
+                                <list>
+                                    <field name="code"/>
+                                    <field name="week_number"/>
+                                    <field name="delivery_date"/>
+                                    <field name="state"/>
                                 </list>
                             </field>
                         </page>

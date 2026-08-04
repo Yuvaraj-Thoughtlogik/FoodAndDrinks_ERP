@@ -44,8 +44,18 @@ class SaleOrder(models.Model):
         readonly=False,
         help="Calculated week and year format (e.g. 202631)"
     )
-    permanent_notes = fields.Html(string='Permanent Notes',readonly=True)
+    permanent_notes = fields.Html(
+        string='Permanent Notes',
+        compute='_compute_permanent_notes',
+        store=True,
+        readonly=True
+    )
 
+    @api.depends('partner_id', 'partner_shipping_id')
+    def _compute_permanent_notes(self):
+        for order in self:
+            partner = order.partner_shipping_id or order.partner_id
+            order.permanent_notes = partner.comment if partner and partner.Comment else False
     
     requested_delivery_after = fields.Float(string="Requested Delivery After")
     requested_delivery_before = fields.Float(string="Requested Delivery Before")
@@ -143,19 +153,7 @@ class SaleOrder(models.Model):
             else:
                 order.delivery_day_name = ""
 
-    @api.onchange('partner_shipping_id', 'partner_id')
-    def _onchange_partner_update_address_notes(self):
 
-        """Pulls the internal notes of the selected customer/delivery contact."""
-
-        # Focus on Delivery Address first, fall back to Main Customer
-
-        partner = self.partner_shipping_id or self.partner_id
-        if partner and partner.comment:
-            # Fetch internal notes from res.partner 'comment' field
-            self.permanent_notes = partner.comment
-        else:
-            self.permanent_notes = False
 
 
     @api.depends('batch_id', 'batch_id.delivery_date', 'batch_id.week_number')
