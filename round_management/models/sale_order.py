@@ -55,7 +55,7 @@ class SaleOrder(models.Model):
     def _compute_permanent_notes(self):
         for order in self:
             partner = order.partner_shipping_id or order.partner_id
-            order.permanent_notes = partner.comment if partner and partner.Comment else False
+            order.permanent_notes = partner.comment if partner and partner.comment else False
     
     requested_delivery_after = fields.Float(string="Requested Delivery After")
     requested_delivery_before = fields.Float(string="Requested Delivery Before")
