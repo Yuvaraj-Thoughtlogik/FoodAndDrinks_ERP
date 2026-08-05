@@ -23,7 +23,7 @@ class ListFilterConfiguration(models.Model):
     view_id = fields.Many2one(
         'ir.ui.view',
         string="List View",
-        domain="[('model', '=', model_name), ('type', '=', 'list'),('inherit_id', '=', False)]",
+        domain="[('model', '=', model_name), ('type', '=', 'list')]",
     )
 
     created_view_id = fields.Many2one(
