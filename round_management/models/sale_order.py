@@ -1,4 +1,7 @@
-from odoo import models, api, fields, _
+from odoo import models, api, fields
+from odoo.tools import _
+from datetime import datetime, time
+
 
 class SaleOrder(models.Model):
     _inherit = 'sale.order'
@@ -29,6 +32,7 @@ class SaleOrder(models.Model):
         store=True, 
         readonly=False
     )
+    delivery_date = fields.Date(string="Delivery Date",compute='_compute_batch_delivery_info',store=True, readonly=False)
     # delivery_time_slot = fields.Selection([
     #     ('08:00_12:00', '08:00 to 12:00'),
     #     ('12:00_16:00', '12:00 to 16:00'),
@@ -153,17 +157,30 @@ class SaleOrder(models.Model):
             else:
                 order.delivery_day_name = ""
 
-
-
+    from datetime import datetime, time
+    from odoo import api, fields, models
 
     @api.depends('batch_id', 'batch_id.delivery_date', 'batch_id.week_number')
     def _compute_batch_delivery_info(self):
         for order in self:
             if order.batch_id:
-               
-                if order.batch_id.delivery_date:
-                    order.commitment_date = fields.Datetime.to_datetime(order.batch_id.delivery_date)
+                order.delivery_date = order.batch_id.delivery_date
                 order.week_number = order.batch_id.week_number
+
+                if order.batch_id.delivery_date:
+                    order.commitment_date = datetime.combine(
+                        order.batch_id.delivery_date,
+                        time.min
+                    )
+                else:
+                    order.commitment_date = False
+            else:
+                order.delivery_date = False
+                order.week_number = False
+                order.commitment_date = False
+
+
+
     @api.onchange('partner_id')
     def _onchange_partner_id_set_round(self):
         if self.partner_id and self.partner_id.round_id:

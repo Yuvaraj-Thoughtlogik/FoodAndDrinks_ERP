@@ -2,12 +2,6 @@
 <odoo>
 
 
-    <menuitem id="menu_contacts_utm_source"
-              name="Sources"
-              parent="contacts.res_partner_menu_config"
-              action="utm.utm_source_action"
-              sequence="20"/>
-
 
     <record id="utm_source_view_search_custom" model="ir.ui.view">
         <field name="name">utm.source.view.search.custom</field>
@@ -42,7 +36,7 @@
 
 
     <menuitem id="menu_contacts_utm_source"
-              name="Customer Sources"
+              name="Order Channels"
               parent="contacts.res_partner_menu_config"
               action="utm.utm_source_action"
               sequence="4"/>
