@@ -60,7 +60,7 @@ class ResPartner(models.Model):
             previous = previous_sources.get(partner.id)
             after = partner.order_channel_id
 
-            if previous == after:
+            if previous and previous == after:
                 continue
 
             log_vals = {

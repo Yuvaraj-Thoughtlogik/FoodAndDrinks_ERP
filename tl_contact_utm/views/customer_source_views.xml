@@ -17,6 +17,7 @@
 
     <record id="utm.utm_source_action" model="ir.actions.act_window">
         <field name="search_view_id" ref="utm_source_view_search_custom"/>
+        <field name="name">Order Channel</field>
     </record>
 
 
@@ -30,6 +31,10 @@
             <xpath expr="//field[@name='name']" position="before">
                 <field name="sequence" widget="handle"/>
             </xpath>
+            <xpath expr="//list" position="attributes">
+                <attribute name="string">Order Channel</attribute>
+            </xpath>
+
 
         </field>
     </record>
