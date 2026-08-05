@@ -5,7 +5,7 @@
         <field name="name">bulk.batch.change.wizard.form</field>
         <field name="model">bulk.batch.change.wizard</field>
         <field name="arch" type="xml">
-            <form string="Delivery Batch Change">
+            <form string="Bulk Delivery Batch Change">
 
                 <!-- CUSTOM DESIGNED BANNER -->
                 <div class="bg-info-subtle border rounded-3 shadow-sm p-3 mb-4"
@@ -72,7 +72,7 @@
     </record>
     <!-- ACTION TO OPEN WIZARD -->
     <record id="action_bulk_batch_change_wizard" model="ir.actions.act_window">
-        <field name="name">Delivery Batch Change</field>
+        <field name="name">Bulk Delivery Batch Change</field>
         <field name="res_model">bulk.batch.change.wizard</field>
         <field name="view_mode">form</field>
         <field name="target">new</field>
@@ -88,7 +88,7 @@
         <field name="arch" type="xml">
             <xpath expr="//list//header" position="inside">
                 <button name="%(action_bulk_batch_change_wizard)d"
-                        string="Delivery Batch Change"
+                        string="Bulk Delivery Batch Change"
                         type="action"
                         class="btn-secondary"/>
 
