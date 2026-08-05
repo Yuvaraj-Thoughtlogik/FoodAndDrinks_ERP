@@ -135,6 +135,10 @@ class RoundManagementBatch(models.Model):
         else:
             self.driver_id = False
 
+    @api.onchange('round_id')
+    def _onchange_round_id_fetch_depot(self):
+        for record in self:
+            record.depot_id = record.round_id.depot_id.id
    
     @api.constrains('driver_id', 'helper_id')
     def _check_partner_employee_designation(self):
