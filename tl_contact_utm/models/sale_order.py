@@ -46,7 +46,7 @@ class SaleOrder(models.Model):
     def action_confirm(self):
         res = super().action_confirm()
         for order in self:
-            if order.partner_id and order.source_id:
+            if order.partner_id and order.order_channel_id:
                 order.partner_id.with_context(
                     active_model=order._name,
                     active_id=order.id,
