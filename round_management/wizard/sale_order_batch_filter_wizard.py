@@ -10,6 +10,7 @@ class SaleOrderBatchFilterWizard(models.TransientModel):
         'round.management.batch',
         string='Round Batches',
         domain="[('round_id', '=?', round_id), ('state', 'in', ['act', 'pln'])]",
+        required=True,
     )
 
     def action_confirm(self):
@@ -22,11 +23,5 @@ class SaleOrderBatchFilterWizard(models.TransientModel):
             **self.env.context,
             "search_default_batch_id": self.batch_id.id,
         }
-        domain = []
-
-        # if self.batch_id:
-        #     domain.append(("batch_id", "=", self.batch_id.id))
-        #
-        # action["domain"] = domain
 
         return action

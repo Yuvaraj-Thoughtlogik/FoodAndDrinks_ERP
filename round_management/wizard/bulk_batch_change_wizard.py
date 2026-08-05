@@ -5,6 +5,7 @@ class BulkBatchChangeWizard(models.TransientModel):
     _name = 'bulk.batch.change.wizard'
     _description = 'Bulk Change Batch Wizard for Sale Orders'
 
+    round_id = fields.Many2one(comodel_name='round.management.round', string='Round Code')
     batch_id = fields.Many2one(
         'round.management.batch', 
         string='New Batch Code', 
@@ -20,7 +21,7 @@ class BulkBatchChangeWizard(models.TransientModel):
     delivery_dates_str = fields.Char(string='Delivery Dates', compute='_compute_wizard_details')
     current_batches_str = fields.Char(string='Current Batches', compute='_compute_wizard_details')
 
-    @api.depends()
+    @api.depends('round_id')
     def _compute_wizard_details(self):
         """Computes count, delivery dates, and current batches for the banner display."""
         active_ids = self.env.context.get('active_ids', [])
@@ -36,6 +37,7 @@ class BulkBatchChangeWizard(models.TransientModel):
         current_batches = {
             order.batch_id.display_name for order in orders if order.batch_id
         }
+        BATCH = self.env['round.management.batch']
 
         for wizard in self:
             wizard.order_count = len(orders)
@@ -43,13 +45,11 @@ class BulkBatchChangeWizard(models.TransientModel):
             wizard.current_batches_str = ", ".join(sorted(current_batches)) if current_batches else "Unassigned"
 
             # Filter matching batches by delivery date
+            domain = [('round_id', '=', wizard.round_id.id)] if wizard.round_id else []
             if delivery_dates:
-                batches = self.env['round.management.batch'].search([
-                    ('delivery_date', 'in', list(delivery_dates))
-                ])
-                wizard.available_batch_ids = batches
-            else:
-                wizard.available_batch_ids = self.env['round.management.batch']
+                domain.append(('delivery_date', '=', list(sorted(delivery_dates))))
+
+            wizard.available_batch_ids = BATCH.search(domain)
 
     def action_apply_batch_change(self):
         """Applies batch to sale orders and opens summary popup."""

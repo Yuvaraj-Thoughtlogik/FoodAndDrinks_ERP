@@ -37,10 +37,21 @@
                 <!-- FORM FIELDS -->
                 <group>
                     <field name="available_batch_ids" invisible="1"/>
-                    <field name="batch_id"
-                           domain="[('id', 'in', available_batch_ids)]"
-                           options="{'no_create': True, 'no_open': True}"/>
+                    <div class="o_row">
+                        <label for="round_id"/>
+                        <field name="round_id"
+                               options="{'no_create': True, 'no_open': True}"/>
+
+                        <label for="batch_id"/>
+                        <field name="batch_id"
+                               domain="[('id', 'in', available_batch_ids)]"
+                               options="{'no_create': True, 'no_open': True}"
+                               context="{'list_view_ref': 'round_management.view_round_batch_tree'}"
+                        />
+                    </div>
+
                 </group>
+
 
                 <!-- FOOTER BUTTONS -->
                 <footer>
