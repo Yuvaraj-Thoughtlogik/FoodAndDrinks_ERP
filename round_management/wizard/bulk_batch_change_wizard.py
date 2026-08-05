@@ -45,7 +45,9 @@ class BulkBatchChangeWizard(models.TransientModel):
             wizard.current_batches_str = ", ".join(sorted(current_batches)) if current_batches else "Unassigned"
 
             # Filter matching batches by delivery date
-            domain = [('round_id', '=', wizard.round_id.id)] if wizard.round_id else []
+            domain =[("state", "in", ["act", "pln"])]
+            if wizard.round_id:
+                domain.append(("round_id", "=", wizard.round_id.id))
             if delivery_dates:
                 domain.append(('delivery_date', '=', list(sorted(delivery_dates))))
 
