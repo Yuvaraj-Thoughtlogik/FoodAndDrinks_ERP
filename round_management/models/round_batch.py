@@ -100,16 +100,30 @@ class RoundManagementBatch(models.Model):
     end_odometer = fields.Float(string='End Odometer (km)')
     distance_run = fields.Float(string='Distance (km)', compute='_compute_distance', store=True)
     
+    _code_unique = models.Constraint(
+        "UNIQUE(code)",
+        "The Round Code must be unique!"
+    )
     
-    @api.depends('code', 'reference')
+    @api.depends('code', 'reference', 'delivery_date')
     def _compute_display_name(self):
+        """Computes display name using Batch Code, Reference, and Delivery Date."""
         for batch in self:
-            if batch.code and batch.reference:
-                batch.display_name = f"{batch.code} - {batch.reference}"
-            elif batch.code:
-                batch.display_name = batch.code
-            elif batch.reference:
-                batch.display_name = batch.reference
+            # Format delivery date string if present
+            date_str = batch.delivery_date.strftime('%d-%m-%Y') if batch.delivery_date else ''
+
+            # Collect active name components
+            parts = []
+            if batch.code:
+                parts.append(batch.code)
+            if batch.reference:
+                parts.append(batch.reference)
+            if date_str:
+                parts.append(date_str)
+
+            # Combine parts with ' - ' or fall back to 'New Batch'
+            if parts:
+                batch.display_name = " - ".join(parts)
             else:
                 batch.display_name = _('New Batch')
     

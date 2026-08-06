@@ -1,8 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates id="template" xml:space="preserve">
-<t t-inherit="web.ListRenderer.RecordRow" t-inherit-mode="extension" owl="1">
-    <xpath expr="//t[@t-set='useUnlink']" position="before">
-            <td t-on-click="(ev) => this.onEyeCellClicked(record, column, ev)"><a class="fa fa-eye"/></td>
+
+    <t t-inherit="web.ListRenderer.RecordRow"
+       t-inherit-mode="extension"
+       owl="1">
+
+        <!-- Add eye icon as the first column -->
+        <xpath expr="//td[1]" position="after">
+            <td class="o_list_eye_cell"
+                t-on-click="(ev) => this.onEyeCellClicked(record, column, ev)">
+                <a class="fa fa-eye"/>
+            </td>
         </xpath>
+
     </t>
+
 </templates>

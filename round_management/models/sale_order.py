@@ -68,14 +68,13 @@ class SaleOrder(models.Model):
     
     @api.onchange('partner_shipping_id', 'partner_id')
     def _onchange_partner_update_address_notes(self):
-        """Pulls and formats the full address of the selected customer/delivery address."""
-       
+        """Pulls the internal notes of the selected customer/delivery contact."""
+        # Focus on Delivery Address first, fall back to Main Customer
         partner = self.partner_shipping_id or self.partner_id
         
-        if partner:
-           
-            self.permanent_notes = partner._display_address(without_company=True)
-            # self.permanent_notes = partner.contact_address
+        if partner and partner.comment:
+            # Fetch internal notes from res.partner 'comment' field
+            self.permanent_notes = partner.comment
         else:
             self.permanent_notes = False
 
