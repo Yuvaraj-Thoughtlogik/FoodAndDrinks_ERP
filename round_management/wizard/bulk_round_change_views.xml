@@ -19,35 +19,35 @@
                 <notebook>
                     <page string="Target Customers">
                         <div class="mb-2">
-                            <button string="Select All" 
-                                    name="action_select_all" 
-                                    type="object" 
-                                    class="btn btn-secondary btn-sm me-2" 
+                            <button string="Select All"
+                                    name="action_select_all"
+                                    type="object"
+                                    class="btn btn-secondary btn-sm me-2"
                                     icon="fa-check-square-o"/>
-                            <button string="Deselect All" 
-                                    name="action_deselect_all" 
-                                    type="object" 
-                                    class="btn btn-secondary btn-sm" 
+                            <button string="Deselect All"
+                                    name="action_deselect_all"
+                                    type="object"
+                                    class="btn btn-secondary btn-sm"
                                     icon="fa-square-o"/>
                         </div>
 
-                        
+
                         <field name="line_ids">
-                          <list editable="bottom" create="false" delete="true">
-                              <field name="selected" widget="boolean_toggle"/>
-                              
-                              
-                              <field name="customer_code" string="Customer Code" readonly="1" force_save="1"/>
-                              <field name="partner_id" string="Customer Name" readonly="1" force_save="1"/>
-                              <!--<field name="customer_lifecycle_status" string="Customer Status" readonly="1" force_save="1"/>-->
-                              <field name="house_no" string="House No" readonly="1" force_save="1"/>
-                              <field name="street" string="Street" readonly="1" force_save="1"/>
-                              <field name="city" string="City" readonly="1" force_save="1"/>
-                              <field name="zip" string="Postcode" readonly="1" force_save="1"/>
-                              <field name="phone" string="Phone" readonly="1" force_save="1"/>
-                              <field name="status_code" string="Customer Status" readonly="1" force_save="1"/>
-                          </list>
-    </field>
+                            <list editable="bottom" create="false" delete="true">
+                                <field name="selected" widget="boolean_toggle"/>
+
+
+                                <field name="customer_code" string="Customer Code" readonly="1" force_save="1"/>
+                                <field name="partner_id" string="Customer Name" readonly="1" force_save="1"/>
+                                <!--<field name="customer_lifecycle_status" string="Customer Status" readonly="1" force_save="1"/>-->
+                                <field name="house_no" string="House No" readonly="1" force_save="1"/>
+                                <field name="street" string="Street" readonly="1" force_save="1"/>
+                                <field name="city" string="City" readonly="1" force_save="1"/>
+                                <field name="zip" string="Postcode" readonly="1" force_save="1"/>
+                                <field name="phone" string="Phone" readonly="1" force_save="1"/>
+                                <field name="status_code" string="Customer Status" readonly="1" force_save="1"/>
+                            </list>
+                        </field>
                     </page>
                 </notebook>
 
@@ -65,9 +65,12 @@
         <field name="model">wizard.bulk.round.summary</field>
         <field name="arch" type="xml">
             <form string="Transfer Summary">
-                <div class="alert alert-success text-center mb-3" role="alert">
-                    <h4 class="alert-heading mb-1"><i class="fa fa-check-circle me-1"/> Transfer Successful!</h4>
-                    <field name="message" class="fw-bold mb-0" style="font-size: 14px;"/>
+                <div class="bg-success-subtle border border-success rounded text-center p-3 mb-3">
+                    <h4 class="mb-1">
+                        <i class="fa fa-check-circle me-1" title="Success"/>
+                        Transfer Successful!
+                    </h4>
+                    <field name="message" nolabel="1" class="fw-bold"/>
                 </div>
 
                 <group>

@@ -1,4 +1,4 @@
 from . import res_partner
-from . import customer_source_log
+from . import partner_order_channel_log
 from . import sale_order
-from . import customer_source
+from . import utm_source

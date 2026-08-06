@@ -2,12 +2,6 @@
 <odoo>
 
 
-    <menuitem id="menu_contacts_utm_source"
-              name="Sources"
-              parent="contacts.res_partner_menu_config"
-              action="utm.utm_source_action"
-              sequence="20"/>
-
 
     <record id="utm_source_view_search_custom" model="ir.ui.view">
         <field name="name">utm.source.view.search.custom</field>
@@ -23,6 +17,7 @@
 
     <record id="utm.utm_source_action" model="ir.actions.act_window">
         <field name="search_view_id" ref="utm_source_view_search_custom"/>
+        <field name="name">Order Channel</field>
     </record>
 
 
@@ -36,13 +31,17 @@
             <xpath expr="//field[@name='name']" position="before">
                 <field name="sequence" widget="handle"/>
             </xpath>
+            <xpath expr="//list" position="attributes">
+                <attribute name="string">Order Channel</attribute>
+            </xpath>
+
 
         </field>
     </record>
 
 
     <menuitem id="menu_contacts_utm_source"
-              name="Customer Sources"
+              name="Order Channels"
               parent="contacts.res_partner_menu_config"
               action="utm.utm_source_action"
               sequence="4"/>

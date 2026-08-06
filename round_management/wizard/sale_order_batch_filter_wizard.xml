@@ -7,7 +7,13 @@
             <field name="arch" type="xml">
                 <form string="Filter by Batch">
                     <group>
-                        <field name="batch_id"/>
+                        <div class="o_row">
+                            <label for="round_id"/>
+                            <field name="round_id" class="oe_inline"/>
+                            <label for="batch_id"/>
+                            <field name="batch_id"
+                                   context="{'list_view_ref': 'round_management.view_round_batch_tree'}"/>
+                        </div>
                     </group>
 
                     <footer>
@@ -53,7 +59,7 @@
                             name="%(action_sale_order_batch_filter_wizard)d"
                             type="action"
                             display="always"
-                            string="Filter Batch"
+                            string="Delivery Batch Filter"
                             class="btn-primary"/>
                 </xpath>
 

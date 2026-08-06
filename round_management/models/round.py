@@ -3,8 +3,7 @@ from odoo import models, fields, api
 class RoundManagementRound(models.Model):
     _name = 'round.management.round'
     _description = 'Round Details'
-    _rec_name = 'name'
-    
+
     @api.model
     def _default_round_code(self):
         """Generate sequence automatically as soon as the form opens/Create is clicked."""
@@ -131,6 +130,10 @@ class RoundManagementRound(models.Model):
                 'default_state': 'pln',
             }
         }
+
+    def _compute_display_name(self):
+        for rec in self:
+            rec.display_name = f'{rec.code}-{rec.name}'
 
     #@api.model_create_multi
     #def create(self, vals_list):

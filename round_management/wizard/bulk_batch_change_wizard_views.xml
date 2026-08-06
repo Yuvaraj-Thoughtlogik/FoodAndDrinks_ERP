@@ -5,30 +5,30 @@
         <field name="name">bulk.batch.change.wizard.form</field>
         <field name="model">bulk.batch.change.wizard</field>
         <field name="arch" type="xml">
-            <form string="Bulk Batch Change">
-                
+            <form string="Bulk Delivery Batch Change">
+
                 <!-- CUSTOM DESIGNED BANNER -->
-                <div class="alert alert-info border-0 shadow-sm rounded-3 p-3 mb-4" 
-                     style="background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%); border-left: 5px solid #6366f1 !important; color: #3730a3;">
-                    
+                <div class="bg-info-subtle border rounded-3 shadow-sm p-3 mb-4"
+                     style="border-left: 5px solid #6366f1 !important;
+                            color: #3730a3;">
                     <div class="d-flex align-items-center mb-2">
-                        <i class="fa fa-info-circle fa-lg me-2" style="color: #4f46e5;"/>
+                        <i class="fa fa-info-circle fa-lg me-2" title="Orders" style="color: #4f46e5;"/>
                         <strong class="fs-6">Selected Orders Summary</strong>
                     </div>
 
                     <div class="row text-muted fs-7 g-2">
                         <div class="col-6">
-                            <strong>Total Selected:</strong> 
+                            <strong>Total Selected:</strong>
                             <span class="badge rounded-pill bg-success px-2 ms-1">
                                 <field name="order_count" readonly="1"/> order(s)
                             </span>
                         </div>
                         <div class="col-6">
-                            <strong>Delivery Date(s):</strong> 
+                            <strong>Delivery Date(s):</strong>
                             <field name="delivery_dates_str" readonly="1" class="fw-bold text-dark"/>
                         </div>
                         <div class="col-12 mt-1">
-                            <strong>Current Batch(es):</strong> 
+                            <strong>Current Batch(es):</strong>
                             <field name="current_batches_str" readonly="1" class="text-dark"/>
                         </div>
                     </div>
@@ -37,10 +37,21 @@
                 <!-- FORM FIELDS -->
                 <group>
                     <field name="available_batch_ids" invisible="1"/>
-                    <field name="batch_id" 
-                           domain="[('id', 'in', available_batch_ids)]" 
-                           options="{'no_create': True, 'no_open': True}"/>
+                    <div class="o_row">
+                        <label for="round_id"/>
+                        <field name="round_id"
+                               options="{'no_create': True, 'no_open': True}"/>
+
+                        <label for="batch_id"/>
+                        <field name="batch_id"
+                               domain="[('id', 'in', available_batch_ids)]"
+                               options="{'no_create': True, 'no_open': True}"
+                               context="{'list_view_ref': 'round_management.view_round_batch_tree'}"
+                        />
+                    </div>
+
                 </group>
+
 
                 <!-- FOOTER BUTTONS -->
                 <footer>
@@ -51,13 +62,13 @@
         </field>
     </record>
 
-   <record id="view_wizard_bulk_batch_summary_form" model="ir.ui.view">
+    <record id="view_wizard_bulk_batch_summary_form" model="ir.ui.view">
         <field name="name">wizard.bulk.batch.summary.form</field>
         <field name="model">wizard.bulk.batch.summary</field>
         <field name="arch" type="xml">
             <form string="Batch Transfer Summary">
-                <div class="alert alert-success text-center mb-3" role="alert">
-                    <field name="message" readonly="1"/>
+                <div class="alert alert-success text-center mb-3" role="status">
+                    <field name="message" widget="html" readonly="1" nolabel="1"/>
                 </div>
                 <group>
                     <field name="transferred_count" string="Orders Updated" readonly="1"/>
@@ -72,7 +83,7 @@
     </record>
     <!-- ACTION TO OPEN WIZARD -->
     <record id="action_bulk_batch_change_wizard" model="ir.actions.act_window">
-        <field name="name">Bulk Batch Change</field>
+        <field name="name">Bulk Delivery Batch Change</field>
         <field name="res_model">bulk.batch.change.wizard</field>
         <field name="view_mode">form</field>
         <field name="target">new</field>
@@ -86,13 +97,12 @@
         <field name="model">sale.order</field>
         <field name="inherit_id" ref="sale.view_order_tree"/>
         <field name="arch" type="xml">
-            <xpath expr="//list" position="inside">
-                <header>
-                    <button name="%(action_bulk_batch_change_wizard)d" 
-                            string="Bulk Batch Change" 
-                            type="action" 
-                            class="btn-secondary"/>
-                </header>
+            <xpath expr="//list//header" position="inside">
+                <button name="%(action_bulk_batch_change_wizard)d"
+                        string="Bulk Delivery Batch Change"
+                        type="action"
+                        class="btn-secondary"/>
+
             </xpath>
         </field>
     </record>

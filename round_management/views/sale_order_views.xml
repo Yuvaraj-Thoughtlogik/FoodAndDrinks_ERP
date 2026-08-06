@@ -20,7 +20,7 @@
                 <div class="o_row">
                     <field name="batch_id" string="Batch Code" domain="[('round_id', '=', round_id)]"/>
                     <button name="action_select_alt_delivery_round"
-                            string="Alternative Delivery Round"
+                            string="Alt Delivery Rnd"
                             type="object"
                             icon="fa-truck"
                             class="oe_highlight o_alt_round_btn ms-1"/>
@@ -29,7 +29,8 @@
                 <!-- Delivery Date + Day Name -->
                 <label for="commitment_date" string="Delivery Date"/>
                 <div class="o_row">
-                    <field name="commitment_date"/>
+                    <field name="commitment_date" invisible="1"/>
+                    <field name="delivery_date"/>
                     <field name="delivery_day_name" readonly="1" class="fw-bold text-primary ms-2"/>
                 </div>
 
@@ -77,7 +78,7 @@
                 </div>
 
                 <!-- Delivery Times -->
-                <field name="delivery_time_slot" string="Delivery Times" placeholder="e.g. 08:00 to 12:00"/>
+                <field name="delivery_times" string="Delivery Times" placeholder="e.g. 08:00 to 12:00"/>
 
 
             </xpath>
@@ -102,6 +103,13 @@
                 </div>
             </xpath>
 
+            <xpath expr="//header" position="inside">
+                <button name="action_duplicate"
+                        type="object"
+                        string="Duplicate"
+                        class="btn-secondary"/>
+            </xpath>
+
         </field>
     </record>
 
@@ -116,8 +124,8 @@
                 <field name="round_id" optional="show"/>
                 <field name="round_code" optional="show"/>
                 <field name="batch_id" optional="show"/>
-                <field name="commitment_date" string="Delivery Date" widget="date" optional="show"/>
-                <field name="delivery_time_slot" optional="show"/>
+                <field name="delivery_date" string="Delivery Date" widget="date" optional="show"/>
+                <field name="delivery_times" optional="show"/>
                 <field name="week_number" optional="show"/>
 
 
@@ -139,8 +147,8 @@
                 <field name="round_id" optional="show"/>
                 <field name="round_code" optional="show"/>
                 <field name="batch_id" optional="show"/>
-                <field name="commitment_date" string="Delivery Date" widget="date" optional="show"/>
-                <field name="delivery_time_slot" optional="show"/>
+                <field name="delivery_date" string="Delivery Date" widget="date" optional="show"/>
+                <field name="delivery_times" optional="show"/>
                 <field name="week_number" optional="show"/>
 
 
