@@ -7,6 +7,46 @@ class WizardBulkRoundChange(models.TransientModel):
 
     old_round_id = fields.Many2one('round.management.round', string='Old Round')
     new_round_id = fields.Many2one('round.management.round', string='New Round')
+    include_inactive = fields.Boolean(
+        string='Include Inactive/Closed Customers (I/X)',
+        default=False,
+        help="Check to include customers marked as inactive or flagged with 'I' or 'X'."
+    )
+
+    partner_ids = fields.Many2many(
+        'res.partner',
+        string='Customers',
+        domain="[('id', 'in', available_partner_ids)]"
+    )
+
+    available_partner_ids = fields.Many2many(
+        'res.partner',
+        string='Available Customers',
+        compute='_compute_available_partners'
+    )
+
+    @api.depends('include_inactive')
+    def _compute_available_partners(self):
+        """Filters available customers based on the checkbox selection."""
+        for wizard in self:
+            if wizard.include_inactive:
+                # Search for inactive customers OR customers with flag 'I' or 'X'
+                # Adjust 'customer_flag' to match your actual custom field name on res.partner
+                domain = ['|', '|', 
+                    ('active', '=', False), 
+                    ('customer_flag', 'in', ['I', 'X']),
+                    ('active', '=', True)
+                ]
+            else:
+                # Default: Show active customers excluding 'I' and 'X' flags
+                domain = [
+                    ('active', '=', True), 
+                    ('customer_flag', 'not in', ['I', 'X'])
+                ]
+
+            # Use active_test=False to allow Odoo ORM to search unactive/archived records
+            partners = self.env['res.partner'].with_context(active_test=False).search(domain)
+            wizard.available_partner_ids = partners
 
     line_ids = fields.One2many(
         'wizard.bulk.round.change.line',
