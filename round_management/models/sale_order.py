@@ -156,9 +156,24 @@ class SaleOrder(models.Model):
                 order.delivery_day_name = f"({order.commitment_date.strftime('%a')})"
             else:
                 order.delivery_day_name = ""
+<<<<<<< HEAD
+    
+    @api.onchange('partner_shipping_id', 'partner_id')
+    def _onchange_partner_update_address_notes(self):
+        """Pulls the internal notes of the selected customer/delivery contact."""
+        # Focus on Delivery Address first, fall back to Main Customer
+        partner = self.partner_shipping_id or self.partner_id
+        
+        if partner and partner.comment:
+            # Fetch internal notes from res.partner 'comment' field
+            self.permanent_notes = partner.comment
+        else:
+            self.permanent_notes = False
+=======
 
     from datetime import datetime, time
     from odoo import api, fields, models
+>>>>>>> a4b231569c40ade2efe91db83f02a24882d06850
 
     @api.depends('batch_id', 'batch_id.delivery_date', 'batch_id.week_number')
     def _compute_batch_delivery_info(self):
