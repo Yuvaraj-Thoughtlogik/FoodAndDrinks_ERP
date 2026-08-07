@@ -15,6 +15,13 @@
                         <field name="reference"/>
                         <field name="depot_id"/>
                         <field name="delivery_date"/>
+                        <field name="state"
+                               widget="badge"
+                               decoration-info="state == 'pln'"
+                               decoration-warning="state == 'act'"
+                               decoration-primary="state == 'prt'"
+                               decoration-success="state == 'com'"
+                               decoration-danger="state == 'cancel'"/>
                     </list>
                 </field>
 
