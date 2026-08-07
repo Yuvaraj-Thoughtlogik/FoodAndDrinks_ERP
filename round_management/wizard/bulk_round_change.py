@@ -8,9 +8,8 @@ class WizardBulkRoundChange(models.TransientModel):
     old_round_id = fields.Many2one('round.management.round', string='Old Round')
     new_round_id = fields.Many2one('round.management.round', string='New Round')
     include_inactive = fields.Boolean(
-        string='Include Inactive/Closed Customers (I/X)',
-        default=False,
-        help="Check to include customers marked as inactive or flagged with 'I' or 'X'."
+        string='Include Inactive & Closed Customers', 
+        default=False
     )
 
     partner_ids = fields.Many2many(
@@ -54,18 +53,39 @@ class WizardBulkRoundChange(models.TransientModel):
         string='Customers to Move'
     )
 
-    @api.onchange('old_round_id')
+    @api.onchange('old_round_id', 'include_inactive')
     def _onchange_old_round_id(self):
-        """Loads partners from old round with selected=False by default."""
-        if self.old_round_id:
-            partners = self.env['res.partner'].search([('round_id', '=', self.old_round_id.id)])
-            lines = [(0, 0, {
-                'selected': False,
-                'partner_id': partner.id,
-            }) for partner in partners]
-            self.line_ids = [(5, 0, 0)] + lines
+        """
+        UNCHECKED: Excludes Inactive (I) and Closed (X) customers. Shows normal active list only.
+        CHECKED:   Includes ALL customers, adding Inactive (I) and Closed (X) to the list.
+        """
+        
+        self.line_ids = [(5, 0, 0)]
+ 
+        if not self.old_round_id:
+            return
+ 
+        base_domain = [('round_id', '=', self.old_round_id.id)]
+ 
+        if self.include_inactive:
+           
+            Partner = self.env['res.partner'].with_context(active_test=False)
+            domain = base_domain
         else:
-            self.line_ids = [(5, 0, 0)]
+            
+            Partner = self.env['res.partner']
+            domain = base_domain + [
+                ('customer_lifecycle_status', 'not in', ['inactive', 'closed'])
+            ]
+ 
+        partners = Partner.search(domain)
+ 
+        lines = [(0, 0, {
+            'selected': False,
+            'partner_id': partner.id,
+        }) for partner in partners]
+ 
+        self.line_ids = lines
 
     def action_select_all(self):
         """Selects all target lines and keeps the wizard open with populated data."""
@@ -188,7 +208,6 @@ class WizardBulkRoundChangeLine(models.TransientModel):
 
     @api.depends('partner_id')
     def _compute_partner_details(self):
-        """Safely fetch customer code, status, and status code from partner."""
         mapping = {
             'new': 'N',
             'ftlt': 'F',
@@ -200,19 +219,21 @@ class WizardBulkRoundChangeLine(models.TransientModel):
             'closed': 'X',
         }
         for line in self:
-            partner = line.partner_id
-            if partner:
-                # Safely get customer_code
+            if line.partner_id:
+                # Force context to read archived/inactive partner fields
+                partner = line.partner_id.with_context(active_test=False)
                 line.customer_code = getattr(partner, 'customer_code', partner.ref or '')
-                
-                # Safely get status details
-                if hasattr(partner, 'customer_lifecycle_status'):
-                    status = partner.customer_lifecycle_status
+                status = getattr(partner, 'customer_lifecycle_status', False)
+
+                if status == 'closed':
+                    line.customer_lifecycle_status = 'closed'
+                    line.status_code = 'X'
+                elif not partner.active or status == 'inactive':
+                    line.customer_lifecycle_status = 'inactive'
+                    line.status_code = 'I'
+                else:
                     line.customer_lifecycle_status = status
                     line.status_code = mapping.get(status, '')
-                else:
-                    line.customer_lifecycle_status = False
-                    line.status_code = ''
             else:
                 line.customer_code = ''
                 line.customer_lifecycle_status = False

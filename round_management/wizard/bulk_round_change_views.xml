@@ -10,6 +10,7 @@
                 <group>
                     <group>
                         <field name="old_round_id" options="{'no_create': True}"/>
+                        <field name="include_inactive"/>
                     </group>
                     <group>
                         <field name="new_round_id" options="{'no_create': True}"/>
