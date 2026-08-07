@@ -11,7 +11,8 @@ class SaleOrder(models.Model):
         'round.management.batch', 
         string='Round Batch', 
         ondelete='set null',
-        index=True
+        index=True,
+        domain="[('round_id', '=?', round_id), ('state', 'in', ['act', 'prt'])]",
     )
     
     round_id = fields.Many2one(
@@ -193,7 +194,7 @@ class SaleOrder(models.Model):
 
         batches = self.env['round.management.batch'].search([
             ('round_id', 'in', alt_round_ids),
-            ('state', 'in', ['act', 'pln']),
+            ('state', 'in', ['act', 'prt', 'pln']),
         ])
 
         lines = [(0, 0, {
