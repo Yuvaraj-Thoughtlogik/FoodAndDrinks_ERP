@@ -194,7 +194,7 @@ class SaleOrder(models.Model):
 
         batches = self.env['round.management.batch'].search([
             ('round_id', 'in', alt_round_ids),
-            ('state', 'in', ['act', 'prt']),
+            ('state', 'in', ['act', 'prt', 'pln']),
         ])
 
         lines = [(0, 0, {

@@ -9,7 +9,7 @@
 
                 <field name="line_ids">
                     <list editable="bottom" create="false" delete="false">
-                        <field name="selected" string="" widget="boolean_toggle"/>
+                        <field name="selected" string="" widget="boolean_toggle" readonly="state == 'pln'"/>
                         <field name="code" string="Batch Code"/>
                         <field name="round_id"/>
                         <field name="reference"/>
