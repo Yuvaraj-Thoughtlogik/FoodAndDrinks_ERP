@@ -53,6 +53,7 @@ class SelectAltRoundLine(models.TransientModel):
     batch_id = fields.Many2one('round.management.batch', string='Batch', required=True)
     
     code = fields.Char(related='batch_id.code', string='Batch Code', readonly=True)
+    state = fields.Selection(related='batch_id.state', string='Status', readonly=True)
     round_id = fields.Many2one(related='batch_id.round_id', string='Round', readonly=True)
     reference = fields.Char(related='batch_id.reference', string='Reference', readonly=True)
     depot_id = fields.Many2one(related='batch_id.depot_id', string='Depot', readonly=True)
