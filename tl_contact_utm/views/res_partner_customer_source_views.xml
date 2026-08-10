@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_res_partner_customer_source_list" model="ir.ui.view">
+        <field name="name">res.partner.customer.source.list</field>
+        <field name="model">res.partner.customer.source</field>
+        <field name="arch" type="xml">
+            <list string="Customer Sources" editable="top" create="1" edit="1" delete="1" default_order="sequence,name">
+                <field name="sequence" widget="handle"/>
+                <field name="name"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_res_partner_customer_source_form" model="ir.ui.view">
+        <field name="name">res.partner.customer.source.form</field>
+        <field name="model">res.partner.customer.source</field>
+        <field name="arch" type="xml">
+            <form string="Customer Source">
+                <sheet>
+                    <group>
+                        <field name="sequence" widget="handle"/>
+                        <field name="name"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_res_partner_customer_source" model="ir.actions.act_window">
+        <field name="name">Customer Sources</field>
+        <field name="res_model">res.partner.customer.source</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Create your first customer source
+            </p>
+        </field>
+    </record>
+
+    <menuitem
+        id="menu_res_partner_customer_source"
+        name="Customer Sources"
+        parent="contacts.res_partner_menu_config"
+        action="action_res_partner_customer_source"
+        sequence="4"
+    />
+
+</odoo>

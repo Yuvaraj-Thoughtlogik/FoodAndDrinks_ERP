@@ -41,7 +41,7 @@
                                'no_create': True,
                                'no_create_edit': True
                            }" string="Current Order Channel" readonly="True"/>
-                        <field name="customer_source_id" />
+                        <field name="partner_customer_source_id" />
                         <field name="customer_type"/>
                         <field name="user_id"/>
                     </group>

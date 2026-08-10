@@ -22,7 +22,7 @@
 
                 </xpath>
                 <xpath expr="//page[@name='sales_purchases']//group[@name='sale']" position="inside">
-                    <field name="customer_source_id"  options="{
+                    <field name="partner_customer_source_id"  options="{
                                'no_open': True,
                                'no_create': True,
                                'no_create_edit': True
