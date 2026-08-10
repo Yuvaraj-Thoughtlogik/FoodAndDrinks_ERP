@@ -17,19 +17,16 @@
                     </group>
                 </group>
                  <group>
-                    <group>
-                        <!-- CHECKBOX FOR INACTIVE/CLOSED CUSTOMERS -->
-                        <field name="include_inactive" widget="boolean_toggle"/>
-                    </group>
+
                 </group>
 
                 <group>
                     <field name="available_partner_ids" invisible="1"/>
                     <!-- CUSTOMER SELECTION FILTERED BY COMPUTED DOMAIN -->
-                    <field name="partner_ids" 
-                           domain="[('id', 'in', available_partner_ids)]" 
+                    <field name="partner_ids"
+                           domain="[('id', 'in', available_partner_ids)]"
                            context="{'active_test': False}"
-                           options="{'no_create': True}"/>
+                           options="{'no_create': True}" invisible="1"/>
                 </group>
                 <notebook>
                     <page string="Target Customers">
