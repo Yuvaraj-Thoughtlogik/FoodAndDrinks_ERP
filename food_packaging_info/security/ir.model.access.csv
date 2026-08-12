@@ -1,3 +1,3 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-access_product_sales_performance_user,product.sales.performance.user,model_product_sales_performance,sales_team.group_sale_salesman,1,0,0,0
-
+access_fish_species_user,access.fish.species.user,model_fish_species,base.group_user,1,1,1,1
+access_fish_cut_user,access.fish.cut.user,model_fish_cut,base.group_user,1,1,1,1
