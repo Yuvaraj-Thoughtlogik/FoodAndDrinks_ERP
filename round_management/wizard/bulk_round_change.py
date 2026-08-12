@@ -24,66 +24,62 @@ class WizardBulkRoundChange(models.TransientModel):
         compute='_compute_available_partners'
     )
 
-    @api.depends('include_inactive')
-    def _compute_available_partners(self):
-        """Filters available customers based on the checkbox selection."""
-        for wizard in self:
-            if wizard.include_inactive:
-               
-                domain = ['|', '|', 
-                    ('active', '=', False), 
-                    ('customer_flag', 'in', ['I', 'X']),
-                    ('active', '=', True)
-                ]
-            else:
-                # Default: Show active customers excluding 'I' and 'X' flags
-                domain = [
-                    ('active', '=', True), 
-                    ('customer_flag', 'not in', ['I', 'X'])
-                ]
-
-            # Use active_test=False to allow Odoo ORM to search unactive/archived records
-            partners = self.env['res.partner'].with_context(active_test=False).search(domain)
-            wizard.available_partner_ids = partners
-
     line_ids = fields.One2many(
         'wizard.bulk.round.change.line',
         'wizard_id',
         string='Customers to Move'
     )
 
+    @api.depends('include_inactive')
+    def _compute_available_partners(self):
+        """Filters available customers based on lifecycle status instead of non-existent customer_flag."""
+        for wizard in self:
+            if wizard.include_inactive:
+                # Include inactive partners or partners with inactive/closed statuses
+                domain = ['|', '|',
+                    ('active', '=', False),
+                    ('customer_lifecycle_status', 'in', ['inactive', 'closed']),
+                    ('active', '=', True)
+                ]
+            else:
+                # Default: Active partners excluding inactive/closed status
+                domain = [
+                    ('active', '=', True),
+                    ('customer_lifecycle_status', 'not in', ['inactive', 'closed'])
+                ]
+
+            partners = self.env['res.partner'].with_context(active_test=False).search(domain)
+            wizard.available_partner_ids = partners
+
     @api.onchange('old_round_id', 'include_inactive')
     def _onchange_old_round_id(self):
         """
-        UNCHECKED: Excludes Inactive (I) and Closed (X) customers. Shows normal active list only.
-        CHECKED:   Includes ALL customers, adding Inactive (I) and Closed (X) to the list.
+        UNCHECKED: Excludes Inactive and Closed customers. Shows normal active list only.
+        CHECKED:   Includes ALL customers, adding Inactive and Closed to the list.
         """
-        
         self.line_ids = [(5, 0, 0)]
- 
+
         if not self.old_round_id:
             return
- 
+
         base_domain = [('round_id', '=', self.old_round_id.id)]
- 
+
         if self.include_inactive:
-           
             Partner = self.env['res.partner'].with_context(active_test=False)
             domain = base_domain
         else:
-            
             Partner = self.env['res.partner']
             domain = base_domain + [
                 ('customer_lifecycle_status', 'not in', ['inactive', 'closed'])
             ]
- 
+
         partners = Partner.search(domain)
- 
+
         lines = [(0, 0, {
             'selected': False,
             'partner_id': partner.id,
         }) for partner in partners]
- 
+
         self.line_ids = lines
 
     def action_select_all(self):
@@ -91,7 +87,7 @@ class WizardBulkRoundChange(models.TransientModel):
         self.ensure_one()
         for line in self.line_ids:
             line.selected = True
-        
+
         return {
             'type': 'ir.actions.act_window',
             'res_model': self._name,
@@ -124,10 +120,8 @@ class WizardBulkRoundChange(models.TransientModel):
             old_name = self.old_round_id.display_name or 'Old Round'
             new_name = self.new_round_id.display_name or 'New Round'
 
-            
             selected_partners.write({'round_id': self.new_round_id.id})
 
-            
             summary = self.env['wizard.bulk.round.summary'].sudo().create({
                 'transferred_count': count,
                 'old_round_name': old_name,
@@ -135,7 +129,6 @@ class WizardBulkRoundChange(models.TransientModel):
                 'message': f"Successfully transferred {count} customer(s) from '{old_name}' to '{new_name}'."
             })
 
-            # Open Summary Popup
             return {
                 'name': 'Transfer Summary',
                 'type': 'ir.actions.act_window',
@@ -145,7 +138,6 @@ class WizardBulkRoundChange(models.TransientModel):
                 'target': 'new',
             }
 
-        # Warning notification if no customers selected
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
@@ -166,19 +158,16 @@ class WizardBulkRoundChangeLine(models.TransientModel):
     partner_id = fields.Many2one('res.partner', string='Customer', required=True)
 
     selected = fields.Boolean(string='Selected', default=False)
-    
-    
+
     customer_code = fields.Char(string='Customer Code', compute='_compute_partner_details', store=True)
-    
+
     phone = fields.Char(related='partner_id.phone', string='Phone', store=True, readonly=True)
     city = fields.Char(related='partner_id.city', string='City', store=True, readonly=True)
-    
-   
+
     house_no = fields.Char(related='partner_id.street2', string='House No', store=True, readonly=True)
     street = fields.Char(related='partner_id.street', string='Street', store=True, readonly=True)
     zip = fields.Char(related='partner_id.zip', string='Postcode', store=True, readonly=True)
 
-    # Full Customer Status Description
     customer_lifecycle_status = fields.Selection([
         ("new", "New"),
         ("ftlt", "FTLT"),
@@ -190,17 +179,13 @@ class WizardBulkRoundChangeLine(models.TransientModel):
         ("closed", "Closed"),
     ], string="Customer Status", compute="_compute_partner_details", store=True)
 
-    
     status_code = fields.Char(string='Status', compute='_compute_partner_details', store=True)
-    
-    
+
     @api.onchange('partner_id')
     def _onchange_partner_id(self):
         """Fetch customer code automatically when partner is selected."""
         for line in self:
             if line.partner_id:
-                # 1. First check custom 'customer_code' field on partner
-                # 2. Fall back to native 'ref' field if 'customer_code' is empty
                 line.customer_code = getattr(line.partner_id, 'customer_code', False) or line.partner_id.ref or ''
             else:
                 line.customer_code = ''
@@ -219,7 +204,6 @@ class WizardBulkRoundChangeLine(models.TransientModel):
         }
         for line in self:
             if line.partner_id:
-                # Force context to read archived/inactive partner fields
                 partner = line.partner_id.with_context(active_test=False)
                 line.customer_code = getattr(partner, 'customer_code', partner.ref or '')
                 status = getattr(partner, 'customer_lifecycle_status', False)
@@ -237,7 +221,6 @@ class WizardBulkRoundChangeLine(models.TransientModel):
                 line.customer_code = ''
                 line.customer_lifecycle_status = False
                 line.status_code = ''
-
 
 
 class WizardBulkRoundSummary(models.TransientModel):

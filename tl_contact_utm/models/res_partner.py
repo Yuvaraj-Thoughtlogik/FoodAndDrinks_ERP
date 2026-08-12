@@ -9,6 +9,11 @@ class ResPartner(models.Model):
         string="Customer Source",
         tracking=True,
     )
+    partner_customer_source_id = fields.Many2one(
+        "res.partner.customer.source",
+        string="Customer Source",
+        tracking=True,
+    )
     order_channel_id = fields.Many2one(
         "utm.source",
         string="Order Channel",

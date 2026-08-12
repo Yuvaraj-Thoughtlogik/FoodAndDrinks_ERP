@@ -7,7 +7,7 @@
         <field name="arch" type="xml">
             <xpath expr="//field[@name='street']" position="before">
                 <div class="o_row" groups="base.group_user">
-                    <field name="lookup_postcode_input" placeholder="UK Postcode e.g. SW1A 1AA"/>
+                    <field name="lookup_postcode_input" placeholder="UK Postcode e.g. SW1A 1AA" invisible="1"/>
                     <button name="action_lookup_uk_address" 
                             type="object" 
                             string="Lookup Address" 

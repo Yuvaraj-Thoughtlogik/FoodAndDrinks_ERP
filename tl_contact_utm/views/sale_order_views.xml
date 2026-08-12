@@ -7,7 +7,7 @@
             <field name="inherit_id" ref="sale.view_order_form"/>
             <field name="arch" type="xml">
                 <xpath expr="//field[@name='validity_date']" position="before">
-                    <field name="source_id" string="Customer Source" options="{
+                    <field name="customer_source_id" string="Customer Source" options="{
                                'no_open': True,
                                'no_create': True,
                                'no_create_edit': True

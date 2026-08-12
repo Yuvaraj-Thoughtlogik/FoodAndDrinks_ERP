@@ -41,7 +41,7 @@
                                'no_create': True,
                                'no_create_edit': True
                            }" string="Current Order Channel" readonly="True"/>
-                        <field name="customer_source_id" />
+                        <field name="partner_customer_source_id" />
                         <field name="customer_type"/>
                         <field name="user_id"/>
                     </group>
@@ -65,6 +65,7 @@
                 </group>
 
             </xpath>
+
             <xpath expr="//page[@name='internal_notes']" position="after">
                 <page name="Closed &amp; Reopen Details" invisible="not is_closed and not is_reopened">
                     <group>
@@ -79,6 +80,19 @@
                         </group>
                     </group>
                 </page>
+            </xpath>
+
+            <xpath expr="//group//div[contains(@class,'o_address_format')]//field[@name='street']" position="attributes">
+                <attribute name="placeholder">Door No...</attribute>
+            </xpath>
+            <xpath expr="//group[@name='other_info']//div[contains(@class,'o_address_format')]//field[@name='street']" position="attributes">
+                <attribute name="placeholder">Door No...</attribute>
+            </xpath>
+             <xpath expr="//group//div[contains(@class,'o_address_format')]//field[@name='street2']" position="attributes">
+                <attribute name="placeholder">Street...</attribute>
+            </xpath>
+            <xpath expr="//group[@name='other_info']//div[contains(@class,'o_address_format')]//field[@name='street2']" position="attributes">
+                <attribute name="placeholder">Street...</attribute>
             </xpath>
 
         </field>

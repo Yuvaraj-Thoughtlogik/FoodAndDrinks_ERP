@@ -8,6 +8,7 @@
         <field name="arch" type="xml">
             <list string="Driver Rounds Dispatch Grid" editable="bottom">
                 <field name="delivery_date" string="Del Date"/>
+                <field name="delivery_times"/>
                 <field name="code"/>
                 <field name="round_code" string="Code"/>
                 <field name="round_id" string="Round" readonly="1" options="{'no_open': True}"/>
@@ -41,6 +42,7 @@
                 <field name="round_id"/>
                 <field name="depot_id"/>
                 <field name="delivery_date"/>
+                <field name="delivery_times"/>
                 <field name="week_number" readonly="1" optional="hide"/>
                 <field name="driver_id"/>
                 <field name="vehicle_id"/>
@@ -111,6 +113,7 @@
                             <field name="reference"/>
                             <field name="depot_id"/>
                             <field name="delivery_date"/>
+                            <field name="delivery_times"/>
                             <field name="week_number" readonly="1"/>
                         </group>
 

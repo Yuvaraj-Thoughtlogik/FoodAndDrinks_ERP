@@ -48,8 +48,8 @@ class BulkBatchChangeWizard(models.TransientModel):
             domain =[("state", "in", ["act", "prt"])]
             if wizard.round_id:
                 domain.append(("round_id", "=", wizard.round_id.id))
-            if delivery_dates:
-                domain.append(('delivery_date', '=', list(sorted(delivery_dates))))
+            # if delivery_dates:
+            #     domain.append(('delivery_date', '=', list(sorted(delivery_dates))))
 
             wizard.available_batch_ids = BATCH.search(domain)
 
