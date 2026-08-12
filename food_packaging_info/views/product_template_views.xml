@@ -1,6 +1,46 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <data>
+    
+       <record id="product_template_form_view_inherit_fish_specs" model="ir.ui.view">
+            <field name="name">product.template.form.inherit.fish.specs</field>
+            <field name="model">product.template</field>
+            <field name="inherit_id" ref="product.product_template_form_view"/>
+            <field name="priority">99</field>
+            <field name="arch" type="xml">
+
+               
+                <xpath expr="//field[@name='qty_available']/.." position="after">
+                    <field name="is_assembly"/>
+                    <field name="is_component"/>
+                    <field name="species_id" options="{'no_create_edit': False}"/>
+                    <field name="cut_id" options="{'no_create_edit': False}"/>
+                    <field name="origin_country" placeholder="e.g. Salmon / FARMED in Norway"/>
+                </xpath>
+
+            </field>
+        </record>
+    
+        <record id="product_template_form_view_inherit_bingo_tagon" model="ir.ui.view">
+            <field name="name">product.template.form.inherit.bingo.tagon</field>
+            <field name="model">product.template</field>
+            <field name="inherit_id" ref="product.product_template_form_view"/>
+            <field name="arch" type="xml">
+
+               
+                <xpath expr="//div[@name='options']" position="inside">
+                    <span class="d-inline-block">
+                        <field name="bingo"/>
+                        <label for="bingo"/>
+                    </span>
+                    <span class="d-inline-block">
+                        <field name="tagon"/>
+                        <label for="tagon"/>
+                    </span>
+                </xpath>
+
+            </field>
+        </record>
         <record id="product_template_form_view_legacy_goldmine" model="ir.ui.view">
             <field name="name">product.template.form.legacy.goldmine</field>
             <field name="model">product.template</field>
@@ -62,11 +102,11 @@
                             </div>
 
                             
-                            <div class="col-lg-4 ps-lg-3 border-start">
+                           <!-- <div class="col-lg-4 ps-lg-3 border-start">
                                 <group string="Dynamic Properties">
                                     <field name="food_spec_properties" widget="properties" nolabel="1"/>
                                 </group>
-                            </div>
+                            </div>-->
 
                         </div>
                     </page>

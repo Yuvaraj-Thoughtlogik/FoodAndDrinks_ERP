@@ -6,15 +6,36 @@ from odoo.exceptions import ValidationError
 class ProductCategory(models.Model):
     _inherit = 'product.category'
 
-    product_properties_definition = fields.PropertiesDefinition(
-        string="Product Properties Definition"
-    )
+    #product_properties_definition = fields.PropertiesDefinition(
+        #string="Product Properties Definition"
+    #)
 
+class FishSpecies(models.Model):
+    _name = 'fish.species'
+    _description = 'Fish Species'
+
+    name = fields.Char(string="Species Name", required=True)
+
+
+class FishCut(models.Model):
+    _name = 'fish.cut'
+    _description = 'Fish Cut Type'
+
+    name = fields.Char(string="Cut Name", required=True)
 
 class ProductTemplate(models.Model):
     _inherit = 'product.template'
 
-   
+    bingo = fields.Boolean(
+        string="Bingo",
+        default=False,
+        help="Check if this product is tagged for Bingo."
+    )
+    tagon = fields.Boolean(
+        string="Tagon",
+        default=False,
+        help="Check if this product is tagged for Tagon."
+    )
     
     staff_price = fields.Monetary(string="Staff Price", currency_field='currency_id')
     offer_saving = fields.Monetary(string="Offer Saving", compute='_compute_offer_saving', store=True, readonly=False)
@@ -36,7 +57,7 @@ class ProductTemplate(models.Model):
     allergens_notice = fields.Char(string="Allergens")
 
     ingredients_html = fields.Html(string="Ingredients", sanitize=True)
-    sales_line_html = fields.Html(string="Sales Line", sanitize=True)
+    sales_line_html = fields.Html(string="Internal Sales Line", sanitize=True)
     notes_html = fields.Html(string="Notes", sanitize=True)
     cooking_instructions_html = fields.Html(string="Cooking", sanitize=True)
     nutritional_info_html = fields.Html(string="Nutrition", sanitize=True)
@@ -49,12 +70,32 @@ class ProductTemplate(models.Model):
     #avail_from_date = fields.Date(string="Avail From")
     #avail_to_date = fields.Date(string="Avail To")
 
-    
-    food_spec_properties = fields.Properties(
-        string="Food Specifications",
-        definition_record='categ_id',
-        definition_record_field='product_properties_definition'
+    is_assembly = fields.Boolean(
+        string="Is Assembly",
+        default=False
     )
+    is_component = fields.Boolean(
+        string="Is Component",
+        default=False
+    )
+
+    species_id = fields.Many2one(
+        'fish.species',
+        string="Species"
+    )
+    cut_id = fields.Many2one(
+        'fish.cut',
+        string="Cut"
+    )
+    origin_country = fields.Char(
+        string="Origin",
+        help="Country of origin. Example: Salmon (Salmo salar)/FARMED in Norway"
+    )
+    #food_spec_properties = fields.Properties(
+        #string="Food Specifications",
+        #definition_record='categ_id',
+        #definition_record_field='product_properties_definition'
+    #)
 
                 
     @api.depends('list_price', 'staff_price')

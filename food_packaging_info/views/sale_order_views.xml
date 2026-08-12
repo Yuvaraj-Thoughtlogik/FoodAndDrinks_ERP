@@ -2,36 +2,44 @@
 <odoo>
     <data>
 
-        <!-- 1. Modal Popup View for Sale Order Line Specifications -->
+        
         <record id="view_sale_order_line_food_specs_popup" model="ir.ui.view">
             <field name="name">sale.order.line.food.specs.popup</field>
             <field name="model">sale.order.line</field>
             <field name="arch" type="xml">
                 <form string="Line Item Specifications">
                     <sheet>
+                        <group>
+                            <group string="Quantities &amp; Weights">
+                                <field name="min_qty"/>
+                                <field name="min_weight"/>
+                                <field name="gross_net_weight"/>
+                                <field name="avg_serving"/>
+                                <field name="use_frozen"/>
+                                <field name="use_fresh"/>
+                            </group>
+                        </group>
+
                         <notebook>
-                            <!-- TAB 1: General Details -->
-                            <page string="General Details" name="tab_modal_general_details">
+                            <page string="Packaging &amp; Metadata">
                                 <group>
-                                    <group string="Serving &amp; Weight Specifications">
-                                        <field name="avg_serving"/>
-                                        <field name="min_weight"/>
-                                        <field name="gross_net_weight"/>
-                                        <field name="as_supplied"/>
-                                        <field name="bingo_flag"/>
+                                    <group>
+                                        <field name="packing_info"/>
+                                        <field name="allergens_notice"/>
                                         <field name="check_notes"/>
-                                        <field name="allergens_notice" class="fw-bold text-danger"/>
                                     </group>
-                                    <group string="Fish Information">
+                                    <group>
+                                        <field name="mix_code"/>
+                                        <field name="sort_seq"/>
                                         <field name="fish_info"/>
                                     </group>
                                 </group>
                             </page>
-
-                            <!-- TAB 2: Ingredients / Cooking Info -->
-                            <page string="Ingredients / Cooking Info" name="tab_modal_ingredients_cooking">
+                            <page string="Product Packaging &amp; Cooking Details">
                                 <group>
+                                    <field name="sales_line_html" widget="html"/>
                                     <field name="ingredients_html" widget="html"/>
+                                    <field name="notes_html" widget="html"/>
                                     <field name="cooking_instructions_html" widget="html"/>
                                     <field name="nutritional_info_html" widget="html"/>
                                 </group>
@@ -39,25 +47,53 @@
                         </notebook>
                     </sheet>
                     <footer>
-                        <button string="Save &amp; Close" class="btn-primary" special="save" data-hotkey="v"/>
-                        <button string="Discard" class="btn-secondary" special="cancel" data-hotkey="z"/>
+                        <button string="Save &amp; Close" class="btn-primary" special="save"/>
+                        <button string="Discard" class="btn-secondary" special="cancel"/>
                     </footer>
                 </form>
             </field>
         </record>
 
-        <!-- 2. Sales Order Form View Inherit (Adds Popup Button to Line Row) -->
-        <record id="view_order_form_inherit_line_popup_btn" model="ir.ui.view">
-            <field name="name">sale.order.form.inherit.line.popup.btn</field>
+        
+        <record id="action_sale_order_line_food_specs_popup" model="ir.actions.act_window">
+            <field name="name">Food Packaging Specifications</field>
+            <field name="res_model">sale.order.line</field>
+            <field name="view_mode">form</field>
+            <field name="target">new</field>
+            <field name="view_id" ref="view_sale_order_line_food_specs_popup"/>
+        </record>
+
+        
+        <record id="view_order_form_inherit_food_specs" model="ir.ui.view">
+            <field name="name">sale.order.form.inherit.food.specs</field>
             <field name="model">sale.order</field>
             <field name="inherit_id" ref="sale.view_order_form"/>
             <field name="priority">99</field>
             <field name="arch" type="xml">
 
-                <!-- Inject button on each order line row in the grid -->
                 <xpath expr="//field[@name='order_line']/list/field[@name='name']" position="after">
-                    <button name="action_open_food_specs_modal" 
-                            type="object" 
+                   
+                    <field name="min_qty" column_invisible="1"/>
+                    <field name="min_weight" column_invisible="1"/>
+                    <field name="gross_net_weight" column_invisible="1"/>
+                    <field name="avg_serving" column_invisible="1"/>
+                    <field name="use_frozen" column_invisible="1"/>
+                    <field name="use_fresh" column_invisible="1"/>
+                    <field name="packing_info" column_invisible="1"/>
+                    <field name="allergens_notice" column_invisible="1"/>
+                    <field name="check_notes" column_invisible="1"/>
+                    <field name="mix_code" column_invisible="1"/>
+                    <field name="sort_seq" column_invisible="1"/>
+                    <field name="sales_line_html" column_invisible="1"/>
+                    <field name="fish_info" column_invisible="1"/>
+                    <field name="ingredients_html" column_invisible="1"/>
+                    <field name="notes_html" column_invisible="1"/>
+                    <field name="cooking_instructions_html" column_invisible="1"/>
+                    <field name="nutritional_info_html" column_invisible="1"/>
+
+                   
+                    <button name="%(action_sale_order_line_food_specs_popup)d" 
+                            type="action" 
                             icon="fa-list-alt" 
                             title="Open Food Specifications Modal" 
                             class="btn-link"/>
