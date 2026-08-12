@@ -111,6 +111,7 @@
                             <field name="reference"/>
                             <field name="depot_id"/>
                             <field name="delivery_date"/>
+                            <field name="delivery_times"/>
                             <field name="week_number" readonly="1"/>
                         </group>
 

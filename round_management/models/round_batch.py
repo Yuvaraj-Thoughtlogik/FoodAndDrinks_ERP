@@ -20,6 +20,7 @@ class RoundManagementBatch(models.Model):
     reference = fields.Char(string='Reference')
     depot_id = fields.Many2one('stock.warehouse', string='Depot')
     delivery_date = fields.Date(string='Delivery Date', default=fields.Date.context_today)
+    delivery_times = fields.Char(string='Delivery Times', compute='_compute_delivery_times', store=True)
     week_number = fields.Char(string='ISO Week No.', compute='_compute_week_number', store=True)
     state = fields.Selection([
         ('pln', 'Planned'),
@@ -108,12 +109,81 @@ class RoundManagementBatch(models.Model):
         "The Round Code must be unique!"
     )
 
-    @api.depends('code', 'reference', 'delivery_date')
-    def _compute_display_name(self):
-        """Computes display name using Batch Code, Reference, and Delivery Date."""
-        for batch in self:
-            # Format delivery date string if present
-            date_str = batch.delivery_date.strftime('%d-%m-%Y') if batch.delivery_date else ''
+    _DAY_FIELDS = {
+        0: ('mon_active', 'mon_from', 'mon_to'),  # Monday
+        1: ('tue_active', 'tue_from', 'tue_to'),  # Tuesday
+        2: ('wed_active', 'wed_from', 'wed_to'),  # Wednesday
+        3: ('thu_active', 'thu_from', 'thu_to'),  # Thursday
+        4: ('fri_active', 'fri_from', 'fri_to'),  # Friday
+        5: ('sat_active', 'sat_from', 'sat_to'),  # Saturday
+        6: ('sun_active', 'sun_from', 'sun_to'),  # Sunday
+    }
+
+
+    @api.depends(
+        'delivery_date', 'round_id',
+        'round_id.mon_active', 'round_id.mon_from', 'round_id.mon_to',
+        'round_id.tue_active', 'round_id.tue_from', 'round_id.tue_to',
+        'round_id.wed_active', 'round_id.wed_from', 'round_id.wed_to',
+        'round_id.thu_active', 'round_id.thu_from', 'round_id.thu_to',
+        'round_id.fri_active', 'round_id.fri_from', 'round_id.fri_to',
+        'round_id.sat_active', 'round_id.sat_from', 'round_id.sat_to',
+        'round_id.sun_active', 'round_id.sun_from', 'round_id.sun_to',
+    )
+    def _compute_delivery_times(self):
+        for rec in self:
+            if rec.delivery_date and rec.round_id:
+                weekday = rec.delivery_date.weekday()
+
+                active_field, from_field, to_field = rec._DAY_FIELDS[weekday]
+                round_rec = rec.round_id
+
+                if round_rec[active_field]:
+                    from_val = round_rec[from_field]
+                    to_val = round_rec[to_field]
+
+                    from_str = rec._format_time(from_val)
+                    to_str = rec._format_time(to_val)
+
+                    rec.delivery_times = "%s to %s" % (from_str, to_str)
+                else:
+                    rec.delivery_times = "Not Available"
+            else:
+                rec.delivery_times = False
+
+    @staticmethod
+    def _format_time(value):
+        if value in (False, None, ''):
+            return ""
+
+        # Normalize to a float number of hours first
+        if isinstance(value, str):
+            value = value.strip()
+            if ':' in value:
+                # e.g. "5:00", "05:30"
+                h_str, m_str = value.split(':', 1)
+                try:
+                    hours = int(h_str)
+                    minutes = int(m_str)
+                except ValueError:
+                    return value  # fallback: unparseable, show as-is
+            else:
+                # e.g. "5", "5.5"
+                try:
+                    float_val = float(value)
+                    hours = int(float_val)
+                    minutes = int(round((float_val - hours) * 60))
+                except ValueError:
+                    return value  # fallback: unparseable, show as-is
+        elif isinstance(value, (int, float)):
+            hours = int(value)
+            minutes = int(round((value - hours) * 60))
+        else:
+            return ""
+
+        return "%02d:%02d" % (hours, minutes)
+
+
 
 
     @api.depends('code', 'reference', 'delivery_date')
@@ -131,7 +201,8 @@ class RoundManagementBatch(models.Model):
                 parts.append(batch.reference)
             if date_str:
                 parts.append(date_str)
-            # Combine parts with ' - ' or fall back to 'New Batch'
+            if batch.delivery_times:
+                parts.append(batch.delivery_times)
             if parts:
                 batch.display_name = " - ".join(parts)
             else:
