@@ -1,0 +1,3 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_product_sales_performance_user,product.sales.performance.user,model_product_sales_performance,sales_team.group_sale_salesman,1,0,0,0
+

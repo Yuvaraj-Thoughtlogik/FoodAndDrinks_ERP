@@ -1,0 +1,107 @@
+import re
+from datetime import datetime, timedelta
+from odoo import api, fields, models
+from odoo.exceptions import ValidationError 
+
+class ProductCategory(models.Model):
+    _inherit = 'product.category'
+
+    product_properties_definition = fields.PropertiesDefinition(
+        string="Product Properties Definition"
+    )
+
+
+class ProductTemplate(models.Model):
+    _inherit = 'product.template'
+
+   
+    
+    staff_price = fields.Monetary(string="Staff Price", currency_field='currency_id')
+    offer_saving = fields.Monetary(string="Offer Saving", compute='_compute_offer_saving', store=True, readonly=False)
+
+   
+    stock_available = fields.Float(string="Stock Available", compute='_compute_stock_available')
+
+    min_qty = fields.Float(string="Min Qty", default=1.0)
+    gross_net_weight = fields.Char(string="Weight (Gross/Net)")
+    packing_info = fields.Char(string="Packing")
+    avg_serving = fields.Char(string="Average Serving")
+    use_frozen = fields.Char(string="Use Frozen")
+    use_fresh = fields.Char(string="Use Fresh")
+ 
+    fish_info = fields.Text(string="Fish Information")
+    check_notes = fields.Char(string="Check Notes")
+    mix_code = fields.Char(string="Mix Code")
+    sort_seq = fields.Integer(string="Sort Seq")
+    allergens_notice = fields.Char(string="Allergens")
+
+    ingredients_html = fields.Html(string="Ingredients", sanitize=True)
+    sales_line_html = fields.Html(string="Sales Line", sanitize=True)
+    notes_html = fields.Html(string="Notes", sanitize=True)
+    cooking_instructions_html = fields.Html(string="Cooking", sanitize=True)
+    nutritional_info_html = fields.Html(string="Nutrition", sanitize=True)
+
+    #avail_traditional = fields.Boolean(string="Traditional Customers", default=True)
+    #avail_web = fields.Boolean(string="Web")
+    #avail_staff = fields.Boolean(string="Staff")
+    #avail_farm_shops = fields.Boolean(string="Farm Shop's")
+    #avail_food_service = fields.Boolean(string="Food Service")
+    #avail_from_date = fields.Date(string="Avail From")
+    #avail_to_date = fields.Date(string="Avail To")
+
+    
+    food_spec_properties = fields.Properties(
+        string="Food Specifications",
+        definition_record='categ_id',
+        definition_record_field='product_properties_definition'
+    )
+
+                
+    @api.depends('list_price', 'staff_price')
+    def _compute_offer_saving(self):
+        """Calculates discount difference automatically between list price and staff price."""
+        for record in self:
+            if record.list_price and record.staff_price:
+                record.offer_saving = max(0.0, record.list_price - record.staff_price)
+            else:
+                record.offer_saving = 0.0
+
+    def _compute_stock_available(self):
+        """Pulls total virtual available stock directly across warehouses."""
+        for record in self:
+            record.stock_available = record.virtual_available
+
+    @api.onchange('ingredients_html', 'sales_line_html')
+    def _onchange_highlight_allergens(self):
+        """Auto-bolds key allergens in UPPERCASE text matching legacy system rules."""
+        allergens = [
+            'WHEAT', 'FISH', 'MILK', 'MUSTARD', 'SOY', 
+            'SOYA', 'EGGS', 'PEANUTS', 'CELERY', 'SULPHITES', 'HADDOCK'
+        ]
+        for field_name in ['ingredients_html', 'sales_line_html']:
+            content = getattr(self, field_name)
+            if content:
+                for allergen in allergens:
+                    pattern = re.compile(rf'(?<!<b>)(?<!<strong>)\b({allergen})\b(?!</b>)(?!</strong>)', re.IGNORECASE)
+                    content = pattern.sub(r'<strong>\1</strong>', content)
+                setattr(self, field_name, content)
+                
+    @api.onchange('gross_net_weight')
+    def _onchange_gross_net_weight_sync(self):
+        """Extracts numerical weight (e.g., '1Kg' -> 1.0) into native weight field."""
+        if self.gross_net_weight:
+            
+            import re
+            match = re.search(r"[-+]?\d*\.\d+|\d+", str(self.gross_net_weight))
+            if match:
+                self.weight = float(match.group())
+
+    def action_alternative_fish(self):
+        """Button Logic: Opens alternative fish products within the same category."""
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Alternative Fish Options',
+            'res_model': 'product.template',
+            'view_mode': 'list,form',
+            'domain': [('categ_id', '=', self.categ_id.id), ('id', '!=', self.id)],
+        }

@@ -29,8 +29,7 @@ class WizardBulkRoundChange(models.TransientModel):
         """Filters available customers based on the checkbox selection."""
         for wizard in self:
             if wizard.include_inactive:
-                # Search for inactive customers OR customers with flag 'I' or 'X'
-                # Adjust 'customer_flag' to match your actual custom field name on res.partner
+               
                 domain = ['|', '|', 
                     ('active', '=', False), 
                     ('customer_flag', 'in', ['I', 'X']),
@@ -125,10 +124,10 @@ class WizardBulkRoundChange(models.TransientModel):
             old_name = self.old_round_id.display_name or 'Old Round'
             new_name = self.new_round_id.display_name or 'New Round'
 
-            # Update round on selected customers
+            
             selected_partners.write({'round_id': self.new_round_id.id})
 
-            # Create summary dialog record using .sudo() to avoid Access Error
+            
             summary = self.env['wizard.bulk.round.summary'].sudo().create({
                 'transferred_count': count,
                 'old_round_name': old_name,
@@ -168,13 +167,13 @@ class WizardBulkRoundChangeLine(models.TransientModel):
 
     selected = fields.Boolean(string='Selected', default=False)
     
-    # Safe computed field instead of related
+    
     customer_code = fields.Char(string='Customer Code', compute='_compute_partner_details', store=True)
     
     phone = fields.Char(related='partner_id.phone', string='Phone', store=True, readonly=True)
     city = fields.Char(related='partner_id.city', string='City', store=True, readonly=True)
     
-    # Address Details
+   
     house_no = fields.Char(related='partner_id.street2', string='House No', store=True, readonly=True)
     street = fields.Char(related='partner_id.street', string='Street', store=True, readonly=True)
     zip = fields.Char(related='partner_id.zip', string='Postcode', store=True, readonly=True)
@@ -191,7 +190,7 @@ class WizardBulkRoundChangeLine(models.TransientModel):
         ("closed", "Closed"),
     ], string="Customer Status", compute="_compute_partner_details", store=True)
 
-    # Single-letter code string
+    
     status_code = fields.Char(string='Status', compute='_compute_partner_details', store=True)
     
     
