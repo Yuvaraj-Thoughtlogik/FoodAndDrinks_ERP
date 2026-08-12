@@ -119,7 +119,7 @@ class SaleOrder(models.Model):
                     to_str = order._format_time(to_val)
                     order.delivery_times = "%s to %s" % (from_str, to_str)
                 else:
-                    order.delivery_times = "Not Available"
+                    order.delivery_times = "N/A"
             else:
                 order.delivery_times = False
 

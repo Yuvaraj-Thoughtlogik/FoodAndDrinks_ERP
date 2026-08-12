@@ -88,6 +88,12 @@
             <xpath expr="//group[@name='other_info']//div[contains(@class,'o_address_format')]//field[@name='street']" position="attributes">
                 <attribute name="placeholder">Door No...</attribute>
             </xpath>
+             <xpath expr="//group//div[contains(@class,'o_address_format')]//field[@name='street2']" position="attributes">
+                <attribute name="placeholder">Street...</attribute>
+            </xpath>
+            <xpath expr="//group[@name='other_info']//div[contains(@class,'o_address_format')]//field[@name='street2']" position="attributes">
+                <attribute name="placeholder">Street...</attribute>
+            </xpath>
 
         </field>
     </record>
