@@ -11,4 +11,12 @@ patch(ListRenderer.prototype, {
             target: 'new'
         });
     },
+
+    getGroupNameCellColSpan(group) {
+        return super.getGroupNameCellColSpan(group) + 1;
+    },
+
+    get nbCols() {
+        return super.nbCols + 1;
+    },
 });
