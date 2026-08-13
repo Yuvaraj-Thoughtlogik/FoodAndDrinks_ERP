@@ -11,8 +11,7 @@
 
                
                 <xpath expr="//field[@name='qty_available']/.." position="after">
-                    <field name="is_assembly"/>
-                    <field name="is_component"/>
+                    <field name="assembly_type" widget="radio" options="{'horizontal': true}"/>
                     <field name="species_id" options="{'no_create_edit': False}"/>
                     <field name="cut_id" options="{'no_create_edit': False}"/>
                     <field name="origin_country" placeholder="e.g. Salmon / FARMED in Norway"/>
