@@ -106,7 +106,7 @@
                                 <group string="Dynamic Properties">
                                     <field name="food_spec_properties" widget="properties" nolabel="1"/>
                                 </group>
-                            </div>-->
+                            </div>
 
                         </div>
                     </page>

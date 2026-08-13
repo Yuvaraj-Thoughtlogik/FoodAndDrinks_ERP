@@ -37,7 +37,7 @@
                             </page>
                             <page string="Product Packaging &amp; Cooking Details">
                                 <group>
-                                    <field name="sales_line_html" widget="html"/>
+                                    <field name="description_sale" widget="html"/>
                                     <field name="ingredients_html" widget="html"/>
                                     <field name="notes_html" widget="html"/>
                                     <field name="cooking_instructions_html" widget="html"/>
