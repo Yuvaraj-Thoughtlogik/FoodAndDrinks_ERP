@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        
+        <record id="view_sale_order_line_food_specs_popup" model="ir.ui.view">
+            <field name="name">sale.order.line.food.specs.popup</field>
+            <field name="model">sale.order.line</field>
+            <field name="arch" type="xml">
+                <form string="Food Packaging Specifications">
+                    <sheet>
+                        <group>
+                            <group string="Storage &amp; Serving">
+                                <field name="min_qty"/>
+                                <field name="min_weight"/>
+                                <field name="gross_net_weight"/>
+                                <field name="avg_serving"/>
+                                <field name="use_frozen"/>
+                                <field name="use_fresh"/>
+                            </group>
+                            <group string="Packaging &amp; Metadata">
+                                <field name="packing_info"/>
+                                <field name="allergens_notice"/>
+                                <field name="check_notes"/>
+                                <field name="mix_code"/>
+                                <field name="sort_seq"/>
+                            </group>
+                        </group>
+
+                        <group string="Fish Information">
+                            <field name="fish_info" nolabel="1"/>
+                        </group>
+
+                        <group string="Packaging &amp; Cooking Details">
+                            <!-- ✅ CHANGED FROM description_sale TO name -->
+                            <field name="name" string="Internal Sales Line"/>
+                            <field name="ingredients_html" widget="html"/>
+                            <field name="notes_html" widget="html"/>
+                            <field name="cooking_instructions_html" widget="html"/>
+                            <field name="nutritional_info_html" widget="html"/>
+                        </group>
+                    </sheet>
+                    <footer>
+                        <button string="Save &amp; Close" special="save" class="btn-primary"/>
+                        <button string="Discard" special="cancel" class="btn-secondary"/>
+                    </footer>
+                </form>
+            </field>
+        </record>
+        
+        <record id="action_sale_order_line_food_specs_popup" model="ir.actions.act_window">
+            <field name="name">Food Packaging Specifications</field>
+            <field name="res_model">sale.order.line</field>
+            <field name="view_mode">form</field>
+            <field name="target">new</field>
+            <field name="view_id" ref="view_sale_order_line_food_specs_popup"/>
+        </record>
+
+        
+        <record id="view_order_form_inherit_food_specs" model="ir.ui.view">
+            <field name="name">sale.order.form.inherit.food.specs</field>
+            <field name="model">sale.order</field>
+            <field name="inherit_id" ref="sale.view_order_form"/>
+            <field name="priority">99</field>
+            <field name="arch" type="xml">
+
+                <xpath expr="//field[@name='order_line']/list/field[@name='name']" position="after">
+                   
+                    <field name="min_qty" column_invisible="1"/>
+                    <field name="min_weight" column_invisible="1"/>
+                    <field name="gross_net_weight" column_invisible="1"/>
+                    <field name="avg_serving" column_invisible="1"/>
+                    <field name="use_frozen" column_invisible="1"/>
+                    <field name="use_fresh" column_invisible="1"/>
+                    <field name="packing_info" column_invisible="1"/>
+                    <field name="allergens_notice" column_invisible="1"/>
+                    <field name="check_notes" column_invisible="1"/>
+                    <field name="mix_code" column_invisible="1"/>
+                    <field name="sort_seq" column_invisible="1"/>
+                    <!--<field name="sales_line_html" column_invisible="1"/>-->
+                    <field name="fish_info" column_invisible="1"/>
+                    <field name="ingredients_html" column_invisible="1"/>
+                    <field name="notes_html" column_invisible="1"/>
+                    <field name="cooking_instructions_html" column_invisible="1"/>
+                    <field name="nutritional_info_html" column_invisible="1"/>
+
+                   
+                    <button name="%(action_sale_order_line_food_specs_popup)d" 
+                            type="action" 
+                            icon="fa-list-alt" 
+                            title="Open Food Specifications Modal" 
+                            class="btn-link"/>
+                </xpath>
+
+            </field>
+        </record>
+
+    </data>
+</odoo>

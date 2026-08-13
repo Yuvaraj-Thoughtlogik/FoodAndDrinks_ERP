@@ -154,24 +154,25 @@
 
 
                     <notebook>
-                        <page string="Linked Orders" name="orders">
-                            <field name="order_ids"
-                                   domain="[('round_id', '=', round_id)]"
-                                   context="{'default_round_id': round_id, 'default_batch_id': id}">
-                                <list editable="bottom">
-                                    <field name="name" string="Order Ref"/>
-                                    <field name="partner_id" string="Customer"/>
-                                    <field name="round_id" column_invisible="1"/>
+                       <page string="Linked Orders" name="orders">
+                          <field name="order_ids"
+                                 readonly="1"
+                                 domain="[('round_id', '=', round_id)]"
+                                 context="{'default_round_id': round_id, 'default_batch_id': id}">
+                              <list create="false" delete="false" edit="false">
+                                  <field name="name" string="Order Ref"/>
+                                  <field name="partner_id" string="Customer"/>
+                                  <field name="round_id" column_invisible="1"/>
 
-                                    <field name="is_late_order" string="Late?"/>
-                                    <field name="is_pickup" string="Pickup?"/>
-                                    <!-- <field name="has_card_reader" string="Card Reader?"/>-->
-                                    <field name="is_b2b" string="B2B?"/>
-                                    <field name="amount_total" sum="Total Revenue"/>
-                                    <field name="state" widget="badge"/>
-                                </list>
-                            </field>
-                        </page>
+                                  <field name="is_late_order" string="Late?"/>
+                                  <field name="is_pickup" string="Pickup?"/>
+                                  <!-- <field name="has_card_reader" string="Card Reader?"/>-->
+                                  <field name="is_b2b" string="B2B?"/>
+                                  <field name="amount_total" sum="Total Revenue"/>
+                                  <field name="state" widget="badge"/>
+                              </list>
+                          </field>
+                      </page>
                     </notebook>
                 </sheet>
             </form>

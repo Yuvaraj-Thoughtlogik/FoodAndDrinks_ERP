@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+    
+       <record id="product_template_form_view_inherit_fish_specs" model="ir.ui.view">
+            <field name="name">product.template.form.inherit.fish.specs</field>
+            <field name="model">product.template</field>
+            <field name="inherit_id" ref="product.product_template_form_view"/>
+            <field name="priority">99</field>
+            <field name="arch" type="xml">
+
+               
+                <xpath expr="//field[@name='qty_available']/.." position="after">
+                    <field name="is_assembly"/>
+                    <field name="is_component"/>
+                    <field name="species_id" options="{'no_create_edit': False}"/>
+                    <field name="cut_id" options="{'no_create_edit': False}"/>
+                    <field name="origin_country" placeholder="e.g. Salmon / FARMED in Norway"/>
+                </xpath>
+
+            </field>
+        </record>
+    
+        <record id="product_template_form_view_inherit_bingo_tagon" model="ir.ui.view">
+            <field name="name">product.template.form.inherit.bingo.tagon</field>
+            <field name="model">product.template</field>
+            <field name="inherit_id" ref="product.product_template_form_view"/>
+            <field name="arch" type="xml">
+
+               
+                <xpath expr="//div[@name='options']" position="inside">
+                    <span class="d-inline-block">
+                        <field name="bingo"/>
+                        <label for="bingo"/>
+                    </span>
+                    <span class="d-inline-block">
+                        <field name="tagon"/>
+                        <label for="tagon"/>
+                    </span>
+                </xpath>
+
+            </field>
+        </record>
+        <record id="product_template_form_view_legacy_goldmine" model="ir.ui.view">
+            <field name="name">product.template.form.legacy.goldmine</field>
+            <field name="model">product.template</field>
+            <field name="inherit_id" ref="product.product_template_form_view"/>
+            <field name="arch" type="xml">
+                
+                
+                <xpath expr="//sheet" position="before">
+                    <header>
+                        <button name="action_alternative_fish" type="object" string="Alternative Fish" class="btn-primary"/>
+                    </header>
+                </xpath>
+
+                
+                <xpath expr="//field[@name='categ_id']" position="after">
+                    <field name="staff_price"/>
+                    <field name="offer_saving"/>
+                    <field name="stock_available" string="Stock Available" class="oe_subtotal_footer_separator"/>
+                </xpath>
+
+                
+                <xpath expr="//notebook" position="inside">
+                    <page string="Ingredients &amp; Product Specs" name="legacy_current_item">
+                        <div class="row">
+                            
+                            
+                            <div class="col-lg-8 pe-lg-4">
+                                <group>
+                                    <group string="Storage &amp; Serving">
+                                        <field name="min_qty"/>
+                                        <field name="weight" string="Weight (Kg)"/>
+                                        <field name="avg_serving"/>
+                                        <field name="use_frozen"/>
+                                        <field name="use_fresh"/>
+                                    </group>
+                                    <group string="Packaging &amp; Metadata">
+                                        <field name="packing_info"/>
+                                        <field name="allergens_notice"/>
+                                        <field name="check_notes"/>
+                                        <field name="mix_code"/>
+                                        <field name="sort_seq"/>
+                                    </group>
+                                </group>
+
+                                <!--<group string="Sales Description (Quotation Line)">
+                                    <field name="description_sale" nolabel="1" placeholder="Sales line text printed on Quotations and Invoices..."/>
+                                </group>-->
+
+                                <group string="Fish Information">
+                                    <field name="fish_info" nolabel="1" placeholder="Enter fish origin, species, or catch data..."/>
+                                </group>
+
+                                <group string="Product Packaging &amp; Cooking Details">
+                                    <field name="ingredients_html" widget="html" class="oe_memo"/>
+                                    <field name="notes_html" widget="html" class="oe_memo"/>
+                                    <field name="cooking_instructions_html" widget="html" class="oe_memo"/>
+                                    <field name="nutritional_info_html" widget="html" class="oe_memo"/>
+                                </group>
+                            </div>
+
+                            
+                           <!-- <div class="col-lg-4 ps-lg-3 border-start">
+                                <group string="Dynamic Properties">
+                                    <field name="food_spec_properties" widget="properties" nolabel="1"/>
+                                </group>
+                            </div>-->
+
+                        </div>
+                    </page>
+                </xpath>
+
+            </field>
+        </record>
+    </data>
+</odoo>

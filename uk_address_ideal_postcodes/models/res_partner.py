@@ -6,9 +6,17 @@ from odoo.exceptions import UserError
 
 class ResPartner(models.Model):
     _inherit = "res.partner"
-
+    
     lookup_postcode_input = fields.Char(string="Lookup Postcode")
-
+    
+    company_type = fields.Selection(
+        selection=[
+            ('person', 'Individual'),
+            ('company', 'Company'),
+        ],
+        string='Company Type',
+        default='person',
+    )
     def action_lookup_uk_address(self):
         """Called when clicking the Lookup Address button."""
         self.ensure_one()

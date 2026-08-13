@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="product_template_form_view_inherit_availability" model="ir.ui.view">
+        <field name="name">product.template.form.inherit.availability</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_form_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//notebook/page[@name='sales']" position="inside">
+                <group string="Availability Controls" name="availability_controls">
+                    <group string="Validity Period">
+                        <field name="available_from_date"/>
+                        <field name="available_to_date"/>
+                    </group>
+                    <group string="Access Eligibility">
+                        <field name="available_for_b2b"/>
+                        <field name="available_for_staff"/>
+                    </group>
+                </group>
+            </xpath>
+        </field>
+    </record>
+</odoo>
