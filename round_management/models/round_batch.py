@@ -147,7 +147,7 @@ class RoundManagementBatch(models.Model):
 
                     rec.delivery_times = "%s to %s" % (from_str, to_str)
                 else:
-                    rec.delivery_times = "Not Available"
+                    rec.delivery_times = "N/A"
             else:
                 rec.delivery_times = False
 

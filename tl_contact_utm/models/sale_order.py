@@ -13,6 +13,13 @@ class SaleOrder(models.Model):
         # store=True,
         compute='_compute_customer_source_id',
     )
+    delivery_channel = fields.Selection(
+        selection=[
+            ('regal_van', 'Regal Van Delivery'),
+            ('courier', 'Courier Delivery'),
+        ],
+        string='Delivery Channel',
+    )
 
     # @api.onchange('partner_id')
     # def _onchange_partner_id_for_utm(self):

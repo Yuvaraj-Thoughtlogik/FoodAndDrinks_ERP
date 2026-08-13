@@ -6,6 +6,7 @@ class BulkBatchChangeWizard(models.TransientModel):
     _description = 'Bulk Change Batch Wizard for Sale Orders'
 
     round_id = fields.Many2one(comodel_name='round.management.round', string='Round Code')
+    delivery_date = fields.Date(string='Delivery Date')
     batch_id = fields.Many2one(
         'round.management.batch', 
         string='New Batch Code', 
@@ -21,7 +22,7 @@ class BulkBatchChangeWizard(models.TransientModel):
     delivery_dates_str = fields.Char(string='Delivery Dates', compute='_compute_wizard_details')
     current_batches_str = fields.Char(string='Current Batches', compute='_compute_wizard_details')
 
-    @api.depends('round_id')
+    @api.depends('round_id', 'delivery_date')
     def _compute_wizard_details(self):
         """Computes count, delivery dates, and current batches for the banner display."""
         active_ids = self.env.context.get('active_ids', [])
@@ -50,6 +51,8 @@ class BulkBatchChangeWizard(models.TransientModel):
                 domain.append(("round_id", "=", wizard.round_id.id))
             # if delivery_dates:
             #     domain.append(('delivery_date', '=', list(sorted(delivery_dates))))
+            if wizard.delivery_date:
+                domain.append(("delivery_date", "=", wizard.delivery_date))
 
             wizard.available_batch_ids = BATCH.search(domain)
 
