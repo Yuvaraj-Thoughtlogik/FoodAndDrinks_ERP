@@ -1,23 +1,35 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+
+    <!-- 1. UK Address Partner Form Inheritance -->
     <record id="view_partner_form_uk_address" model="ir.ui.view">
-        <field name="name">res.partner.form.uk.address</field>
-        <field name="model">res.partner</field>
-        <field name="inherit_id" ref="base.view_partner_form"/>
-        <field name="arch" type="xml">
-            <xpath expr="//field[@name='street']" position="before">
-                <div class="o_row" groups="base.group_user">
-                    <field name="lookup_postcode_input" placeholder="UK Postcode e.g. SW1A 1AA" invisible="1"/>
+            <field name="name">res.partner.form.uk.address</field>
+            <field name="model">res.partner</field>
+            <field name="inherit_id" ref="base.view_partner_form"/>
+            <field name="priority">99</field>
+            <field name="arch" type="xml">
+
+                
+                <xpath expr="//div[hasclass('o_address_format')]/field[@name='zip']" position="attributes">
+                    <attribute name="style">width: 30% !important; display: inline-block !important; vertical-align: middle !important;</attribute>
+                    <attribute name="class">o_address_zip me-1</attribute>
+                </xpath>
+
+                
+                <xpath expr="//div[hasclass('o_address_format')]/field[@name='zip']" position="after">
                     <button name="action_lookup_uk_address" 
                             type="object" 
                             string="Lookup Address" 
-                            class="btn-primary ms-2" 
-                            icon="fa-search"/>
-                </div>
-            </xpath>
-        </field>
-    </record>
+                            class="btn-primary btn-sm align-middle me-1" 
+                            style="vertical-align: middle !important; margin-top: -3px;"
+                            icon="fa-search"
+                            title="Lookup UK Address"/>
+                </xpath>
 
+            </field>
+        </record>
+
+   
     <record id="view_uk_address_lookup_wizard_form" model="ir.ui.view">
         <field name="name">uk.address.lookup.wizard.form</field>
         <field name="model">uk.address.lookup.wizard</field>
@@ -31,14 +43,6 @@
                                options="{'no_create': True}" 
                                string="Choose Address"/>
                     </group>
-                    <field name="line_ids" readonly="1">
-                        <list decoration-info="1">
-                            <field name="line_1"/>
-                            <field name="line_2"/>
-                            <field name="post_town"/>
-                            <field name="postcode"/>
-                        </list>
-                    </field>
                 </sheet>
                 <footer>
                     <button name="action_apply_address" string="Apply Address" type="object" class="btn-primary"/>
@@ -47,4 +51,5 @@
             </form>
         </field>
     </record>
+
 </odoo>
