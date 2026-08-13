@@ -120,6 +120,7 @@ class SaleOrderLine(models.Model):
             'views': [(view_id, 'form')],
             'target': 'new',
             'context': {
+                'default_name': line_description,
                 'default_min_qty': get_val('min_qty', 0.0),
                 'default_min_weight': get_val('min_weight', ''),
                 'default_gross_net_weight': get_val('gross_net_weight', ''),
