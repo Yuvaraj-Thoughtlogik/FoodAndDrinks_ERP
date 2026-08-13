@@ -85,8 +85,10 @@
                                     </group>
                                 </group>
 
-                                <group string="Sales Description (Quotation Line)">
-                                    <field name="description_sale" nolabel="1" placeholder="Sales line text printed on Quotations and Invoices..."/>
+                                
+                                <<!-- SINGLE MERGED FIELD (Base description_sale renamed to Internal Sales Line) -->
+                                <group string="Internal Sales Line">
+                                    <field name="description_sale" nolabel="1" placeholder="Internal sales line text..."/>
                                 </group>
 
                                 <group string="Fish Information">

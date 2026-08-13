@@ -31,7 +31,12 @@ class SaleOrder(models.Model):
 class SaleOrderLine(models.Model):
     _inherit = 'sale.order.line'
 
-    
+    from odoo import api, fields, models
+
+
+class SaleOrderLine(models.Model):
+    _inherit = 'sale.order.line'
+
     min_qty = fields.Float(string="Min Qty", compute="_compute_custom_specs", store=True, readonly=False)
     min_weight = fields.Char(string="Min Weight", compute="_compute_custom_specs", store=True, readonly=False)
     gross_net_weight = fields.Char(string="Weight (Gross/Net)", compute="_compute_custom_specs", store=True, readonly=False)
@@ -43,7 +48,7 @@ class SaleOrderLine(models.Model):
     check_notes = fields.Char(string="Check Notes", compute="_compute_custom_specs", store=True, readonly=False)
     mix_code = fields.Char(string="Mix Code", compute="_compute_custom_specs", store=True, readonly=False)
     sort_seq = fields.Integer(string="Sort Seq", compute="_compute_custom_specs", store=True, readonly=False)
-    sales_line_html = fields.Html(string="Sales Line", compute="_compute_custom_specs", store=True, readonly=False)
+
     fish_info = fields.Text(string="Fish Information", compute="_compute_custom_specs", store=True, readonly=False)
     ingredients_html = fields.Html(string="Ingredients", compute="_compute_custom_specs", store=True, readonly=False)
     notes_html = fields.Html(string="Notes", compute="_compute_custom_specs", store=True, readonly=False)
@@ -65,7 +70,6 @@ class SaleOrderLine(models.Model):
                 line.check_notes = ''
                 line.mix_code = ''
                 line.sort_seq = 0
-                line.sales_line_html = False
                 line.fish_info = ''
                 line.ingredients_html = False
                 line.notes_html = False
@@ -74,30 +78,38 @@ class SaleOrderLine(models.Model):
                 continue
 
             tmpl = line.product_id.product_tmpl_id
-            line.min_qty = getattr(tmpl, 'min_qty', 0.0)
-            line.min_weight = getattr(tmpl, 'min_weight', '')
-            line.gross_net_weight = getattr(tmpl, 'gross_net_weight', '')
-            line.avg_serving = getattr(tmpl, 'avg_serving', '')
-            line.use_frozen = getattr(tmpl, 'use_frozen', '')
-            line.use_fresh = getattr(tmpl, 'use_fresh', '')
-            line.packing_info = getattr(tmpl, 'packing_info', '')
-            line.allergens_notice = getattr(tmpl, 'allergens_notice', '')
-            line.check_notes = getattr(tmpl, 'check_notes', '')
-            line.mix_code = getattr(tmpl, 'mix_code', '')
-            line.sort_seq = getattr(tmpl, 'sort_seq', 0)
-            line.sales_line_html = getattr(tmpl, 'sales_line_html', False)
-            line.fish_info = getattr(tmpl, 'fish_info', '')
+            line.min_qty = getattr(tmpl, 'min_qty', 0.0) or 0.0
+            line.min_weight = getattr(tmpl, 'min_weight', '') or ''
+            line.gross_net_weight = getattr(tmpl, 'gross_net_weight', '') or ''
+            line.avg_serving = getattr(tmpl, 'avg_serving', '') or ''
+            line.use_frozen = getattr(tmpl, 'use_frozen', '') or ''
+            line.use_fresh = getattr(tmpl, 'use_fresh', '') or ''
+            line.packing_info = getattr(tmpl, 'packing_info', '') or ''
+            line.allergens_notice = getattr(tmpl, 'allergens_notice', '') or ''
+            line.check_notes = getattr(tmpl, 'check_notes', '') or ''
+            line.mix_code = getattr(tmpl, 'mix_code', '') or ''
+            line.sort_seq = getattr(tmpl, 'sort_seq', 0) or 0
+            line.fish_info = getattr(tmpl, 'fish_info', '') or ''
             line.ingredients_html = getattr(tmpl, 'ingredients_html', False)
             line.notes_html = getattr(tmpl, 'notes_html', False)
             line.cooking_instructions_html = getattr(tmpl, 'cooking_instructions_html', False)
             line.nutritional_info_html = getattr(tmpl, 'nutritional_info_html', False)
 
     def action_open_food_specs_modal(self):
-        """Opens popup modal for line specifications with fallback contexts."""
+        """Opens popup modal for line specifications with robust value retrieval."""
         self.ensure_one()
         view_id = self.env.ref('food_packaging_info.view_sale_order_line_food_specs_popup').id
         
         tmpl = self.product_id.product_tmpl_id if self.product_id else False
+
+        # Helper function to get value from line first, then product template
+        def get_val(field_name, default=''):
+            val = getattr(self, field_name, None)
+            if val:
+                return val
+            if tmpl:
+                return getattr(tmpl, field_name, default)
+            return default
 
         return {
             'name': 'Food Packaging Specifications',
@@ -108,22 +120,21 @@ class SaleOrderLine(models.Model):
             'views': [(view_id, 'form')],
             'target': 'new',
             'context': {
-                'default_min_qty': self.min_qty or (tmpl.min_qty if tmpl else 0.0),
-                'default_min_weight': self.min_weight or (tmpl.min_weight if tmpl else ''),
-                'default_gross_net_weight': self.gross_net_weight or (tmpl.gross_net_weight if tmpl else ''),
-                'default_avg_serving': self.avg_serving or (tmpl.avg_serving if tmpl else ''),
-                'default_use_frozen': self.use_frozen or (tmpl.use_frozen if tmpl else ''),
-                'default_use_fresh': self.use_fresh or (tmpl.use_fresh if tmpl else ''),
-                'default_packing_info': self.packing_info or (tmpl.packing_info if tmpl else ''),
-                'default_allergens_notice': self.allergens_notice or (tmpl.allergens_notice if tmpl else ''),
-                'default_check_notes': self.check_notes or (tmpl.check_notes if tmpl else ''),
-                'default_mix_code': self.mix_code or (tmpl.mix_code if tmpl else ''),
-                'default_sort_seq': self.sort_seq or (tmpl.sort_seq if tmpl else 0),
-                'default_sales_line_html': self.sales_line_html or (tmpl.sales_line_html if tmpl else False),
-                'default_fish_info': self.fish_info or (tmpl.fish_info if tmpl else ''),
-                'default_ingredients_html': self.ingredients_html or (tmpl.ingredients_html if tmpl else False),
-                'default_notes_html': self.notes_html or (tmpl.notes_html if tmpl else False),
-                'default_cooking_instructions_html': self.cooking_instructions_html or (tmpl.cooking_instructions_html if tmpl else False),
-                'default_nutritional_info_html': self.nutritional_info_html or (tmpl.nutritional_info_html if tmpl else False),
+                'default_min_qty': get_val('min_qty', 0.0),
+                'default_min_weight': get_val('min_weight', ''),
+                'default_gross_net_weight': get_val('gross_net_weight', ''),
+                'default_avg_serving': get_val('avg_serving', ''),
+                'default_use_frozen': get_val('use_frozen', ''),
+                'default_use_fresh': get_val('use_fresh', ''),
+                'default_packing_info': get_val('packing_info', ''),
+                'default_allergens_notice': get_val('allergens_notice', ''),
+                'default_check_notes': get_val('check_notes', ''),
+                'default_mix_code': get_val('mix_code', ''),
+                'default_sort_seq': get_val('sort_seq', 0),
+                'default_fish_info': get_val('fish_info', ''),
+                'default_ingredients_html': get_val('ingredients_html', False),
+                'default_notes_html': get_val('notes_html', False),
+                'default_cooking_instructions_html': get_val('cooking_instructions_html', False),
+                'default_nutritional_info_html': get_val('nutritional_info_html', False),
             }
         }
