@@ -23,10 +23,10 @@
                                 <field name="order_count" readonly="1"/> order(s)
                             </span>
                         </div>
-<!--                        <div class="col-6">-->
-<!--                            <strong>Delivery Date(s):</strong>-->
-<!--                            <field name="delivery_dates_str" readonly="1" class="fw-bold text-dark"/>-->
-<!--                        </div>-->
+                        <!--                        <div class="col-6">-->
+                        <!--                            <strong>Delivery Date(s):</strong>-->
+                        <!--                            <field name="delivery_dates_str" readonly="1" class="fw-bold text-dark"/>-->
+                        <!--                        </div>-->
                         <div class="col-12 mt-1">
                             <strong>Current Batch(es):</strong>
                             <field name="current_batches_str" readonly="1" class="text-dark"/>
@@ -37,19 +37,18 @@
                 <!-- FORM FIELDS -->
                 <group>
                     <field name="available_batch_ids" invisible="1"/>
-                    <div class="o_row">
-                        <label for="round_id"/>
-                        <field name="round_id"
-                               options="{'no_create': True, 'no_open': True}"/>
 
-                        <label for="batch_id"/>
+                    <group>
+                        <field name="round_id" options="{'no_create': True, 'no_open': True}"/>
+                        <field name="delivery_date"/>
+                    </group>
+
+                    <group col="4">
                         <field name="batch_id"
                                domain="[('id', 'in', available_batch_ids)]"
                                options="{'no_create': True, 'no_open': True}"
-                               context="{'list_view_ref': 'round_management.view_round_batch_tree'}"
-                        />
-                    </div>
-
+                               context="{'list_view_ref': 'round_management.view_round_batch_tree'}"/>
+                    </group>
                 </group>
 
 

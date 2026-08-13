@@ -22,6 +22,10 @@
                            }"
                            readonly="state == 'sale'"/>
                 </xpath>
+                <!-- Delivery Channel (after Order Channel) -->
+                <xpath expr="//field[@name='order_channel_id']" position="after">
+                    <field name="delivery_channel"/>
+                </xpath>
             </field>
         </record>
     </data>

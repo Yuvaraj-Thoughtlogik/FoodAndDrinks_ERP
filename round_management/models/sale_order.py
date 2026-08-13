@@ -1,7 +1,10 @@
 from odoo import models, api, fields
 from odoo.tools import _
 from datetime import datetime, time
+import pytz
 
+
+DEFAULT_DELIVERY_TIME = time(23, 0)  # 11:00 PM (local time)
 
 class SaleOrder(models.Model):
     _inherit = 'sale.order'
@@ -61,12 +64,7 @@ class SaleOrder(models.Model):
         readonly=True
     )
 
-    @api.depends('partner_id', 'partner_shipping_id','partner_id.comment')
-    def _compute_permanent_notes(self):
-        for order in self:
-            partner = order.partner_shipping_id or order.partner_id
-            order.permanent_notes = partner.comment if partner and partner.comment else False
-    
+
     requested_delivery_after = fields.Float(string="Requested Delivery After")
     requested_delivery_before = fields.Float(string="Requested Delivery Before")
     last_ring_date = fields.Date(string="Last Ring Date")
@@ -122,6 +120,26 @@ class SaleOrder(models.Model):
                     order.delivery_times = "N/A"
             else:
                 order.delivery_times = False
+
+    @api.depends('partner_id', 'partner_shipping_id','partner_id.comment')
+    def _compute_permanent_notes(self):
+        for order in self:
+            partner = order.partner_shipping_id or order.partner_id
+            order.permanent_notes = partner.comment if partner and partner.comment else False
+
+    def _local_time_to_utc_datetime(self, date_val, local_time):
+        """Combine a date with a local time and return the equivalent naive
+        UTC datetime, since commitment_date (Datetime field) is stored
+        internally in UTC but should represent a fixed local wall-clock time.
+        """
+        self.ensure_one()
+        tz_name = self.env.user.tz or 'UTC'
+        local_tz = pytz.timezone(tz_name)
+        naive_local_dt = datetime.combine(date_val, local_time)
+        localized_dt = local_tz.localize(naive_local_dt)
+        utc_dt = localized_dt.astimezone(pytz.UTC).replace(tzinfo=None)
+        return utc_dt
+
 
     @staticmethod
     def _format_time(value):
@@ -182,7 +200,7 @@ class SaleOrder(models.Model):
                 if order.batch_id.delivery_date:
                     order.commitment_date = datetime.combine(
                         order.batch_id.delivery_date,
-                        time.min
+                        DEFAULT_DELIVERY_TIME
                     )
                 else:
                     order.commitment_date = False
@@ -191,6 +209,49 @@ class SaleOrder(models.Model):
                 order.week_number = False
                 order.commitment_date = False
 
+    @api.onchange('commitment_date')
+    def _onchange_commitment_date_sync_delivery_date(self):
+        for order in self:
+            order.delivery_date = order.commitment_date.date() if order.commitment_date else False
+
+    @api.onchange('delivery_date')
+    def _onchange_delivery_date_sync_commitment_date(self):
+        for order in self:
+            if order.delivery_date:
+                order.commitment_date = order._local_time_to_utc_datetime(
+                    order.delivery_date, DEFAULT_DELIVERY_TIME
+                )
+            else:
+                order.commitment_date = False
+
+    def write(self, vals):
+        res = super().write(vals)
+
+        if self.env.context.get('skip_date_sync'):
+            return res
+
+        if 'commitment_date' in vals and 'delivery_date' not in vals:
+            for order in self:
+                new_delivery_date = order.commitment_date.date() if order.commitment_date else False
+                if order.delivery_date != new_delivery_date:
+                    order.with_context(skip_date_sync=True).write({
+                        'delivery_date': new_delivery_date
+                    })
+
+        elif 'delivery_date' in vals and 'commitment_date' not in vals:
+            for order in self:
+                if order.delivery_date:
+                    new_commitment_date = order._local_time_to_utc_datetime(
+                        order.delivery_date, DEFAULT_DELIVERY_TIME
+                    )
+                else:
+                    new_commitment_date = False
+                if order.commitment_date != new_commitment_date:
+                    order.with_context(skip_date_sync=True).write({
+                        'commitment_date': new_commitment_date
+                    })
+
+        return res
 
 
     @api.onchange('partner_id')
