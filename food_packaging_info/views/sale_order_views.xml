@@ -77,7 +77,7 @@
                     <field name="check_notes" column_invisible="1"/>
                     <field name="mix_code" column_invisible="1"/>
                     <field name="sort_seq" column_invisible="1"/>
-                    <field name="sales_line_html" column_invisible="1"/>
+                    <!--<field name="sales_line_html" column_invisible="1"/>-->
                     <field name="fish_info" column_invisible="1"/>
                     <field name="ingredients_html" column_invisible="1"/>
                     <field name="notes_html" column_invisible="1"/>
