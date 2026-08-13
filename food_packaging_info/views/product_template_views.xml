@@ -86,9 +86,8 @@
                                 </group>
 
                                 
-                                
                                 <group string="Internal Sales Line">
-                                    <field name="description_sale" nolabel="1" placeholder="Internal sales line text..."/>
+                                    <field name="description_sale" nolabel="1" string="Internal Sales Line" placeholder="Internal sales line details printed on Quotations and Invoices..."/>
                                 </group>
 
                                 <group string="Fish Information">
