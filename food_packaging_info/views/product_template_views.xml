@@ -85,9 +85,9 @@
                                     </group>
                                 </group>
 
-                                <group string="Sales Description (Quotation Line)">
+                                <!--<group string="Sales Description (Quotation Line)">
                                     <field name="description_sale" nolabel="1" placeholder="Sales line text printed on Quotations and Invoices..."/>
-                                </group>
+                                </group>-->
 
                                 <group string="Fish Information">
                                     <field name="fish_info" nolabel="1" placeholder="Enter fish origin, species, or catch data..."/>
