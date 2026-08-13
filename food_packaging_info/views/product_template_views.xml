@@ -86,7 +86,7 @@
                                 </group>
 
                                 
-                                <!-- SINGLE MERGED FIELD (Base description_sale renamed to Internal Sales Line) -->
+                                
                                 <group string="Internal Sales Line">
                                     <field name="description_sale" nolabel="1" placeholder="Internal sales line text..."/>
                                 </group>
