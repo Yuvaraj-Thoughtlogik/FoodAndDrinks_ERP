@@ -6,7 +6,7 @@ class BulkBatchChangeWizard(models.TransientModel):
     _description = 'Bulk Change Batch Wizard for Sale Orders'
 
     round_id = fields.Many2one(comodel_name='round.management.round', string='Round Code')
-    delivery_date = fields.Date(string='Delivery Date')
+    delivery_date = fields.Date(string='Delivery Date',default=fields.Date.today)
     batch_id = fields.Many2one(
         'round.management.batch', 
         string='New Batch Code', 

@@ -6,7 +6,7 @@ class SaleOrderBatchFilterWizard(models.TransientModel):
     _description = 'Sale Order Batch Filter'
 
     round_id = fields.Many2one(comodel_name='round.management.round', string='Round Code')
-    delivery_date = fields.Date(string='Delivery Date')
+    delivery_date = fields.Date(string='Delivery Date', default=fields.Date.today)
     batch_id = fields.Many2one(
         'round.management.batch',
         string='Round Batches',
