@@ -168,7 +168,7 @@
                                   <field name="is_pickup" string="Pickup?"/>
                                   <!-- <field name="has_card_reader" string="Card Reader?"/>-->
                                   <field name="is_b2b" string="B2B?"/>
-                                  <field name="amount_total" sum="Total Revenue"/>
+                                  <field name="amount_total"/>
                                   <field name="state" widget="badge"/>
                               </list>
                           </field>
