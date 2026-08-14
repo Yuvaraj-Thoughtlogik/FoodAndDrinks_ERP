@@ -4,7 +4,7 @@ from datetime import datetime, time
 import pytz
 
 
-DEFAULT_DELIVERY_TIME = time(23, 0)  # 11:00 PM (local time)
+DEFAULT_DELIVERY_TIME = time(23, 59)  # 11:00 PM (local time)
 
 class SaleOrder(models.Model):
     _inherit = 'sale.order'

@@ -6,10 +6,11 @@ class SaleOrderBatchFilterWizard(models.TransientModel):
     _description = 'Sale Order Batch Filter'
 
     round_id = fields.Many2one(comodel_name='round.management.round', string='Round Code')
+    delivery_date = fields.Date(string='Delivery Date')
     batch_id = fields.Many2one(
         'round.management.batch',
         string='Round Batches',
-        domain="[('round_id', '=?', round_id), ('state', 'in', ['act', 'prt'])]",
+        domain="[('round_id', '=?', round_id), ('delivery_date', '=?', delivery_date), ('state', 'in', ['act', 'prt'])]",
         required=True,
     )
 

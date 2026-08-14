@@ -7,13 +7,15 @@
             <field name="arch" type="xml">
                 <form string="Filter by Batch">
                     <group>
-                        <div class="o_row">
-                            <label for="round_id"/>
-                            <field name="round_id" class="oe_inline"/>
-                            <label for="batch_id"/>
+                        <group>
+                            <field name="round_id" options="{'no_create': True, 'no_open': True}"/>
+                            <field name="delivery_date"/>
+                        </group>
+
+                        <group>
                             <field name="batch_id"
                                    context="{'list_view_ref': 'round_management.view_round_batch_tree'}"/>
-                        </div>
+                        </group>
                     </group>
 
                     <footer>
