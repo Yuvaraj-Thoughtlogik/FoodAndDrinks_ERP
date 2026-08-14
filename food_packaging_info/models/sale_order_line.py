@@ -4,10 +4,7 @@ from odoo import api, fields, models
 class SaleOrder(models.Model):
     _inherit = 'sale.order'
 
-    
-    selected_line_id = fields.Many2one('sale.order.line', string="Selected Line Item")
-
-   
+    selected_line_id = fields.Many2one('sale.order.line', string="Selected Line Item") 
     line_avg_serving = fields.Char(related='selected_line_id.avg_serving', string="Average Serving", readonly=False)
     line_min_weight = fields.Char(related='selected_line_id.min_weight', string="Min. Weight", readonly=False)
     line_gross_net_weight = fields.Char(related='selected_line_id.gross_net_weight', string="Gross / Net Weight", readonly=False)
@@ -28,114 +25,227 @@ class SaleOrder(models.Model):
             self.selected_line_id = False
 
 
-class SaleOrderLine(models.Model):
-    _inherit = 'sale.order.line'
 
-    from odoo import api, fields, models
 
 
 class SaleOrderLine(models.Model):
     _inherit = 'sale.order.line'
+  
 
-    min_qty = fields.Float(string="Min Qty", compute="_compute_custom_specs", store=True, readonly=False)
-    min_weight = fields.Char(string="Min Weight", compute="_compute_custom_specs", store=True, readonly=False)
-    gross_net_weight = fields.Char(string="Weight (Gross/Net)", compute="_compute_custom_specs", store=True, readonly=False)
-    avg_serving = fields.Char(string="Average Serving", compute="_compute_custom_specs", store=True, readonly=False)
-    use_frozen = fields.Char(string="Use Frozen", compute="_compute_custom_specs", store=True, readonly=False)
-    use_fresh = fields.Char(string="Use Fresh", compute="_compute_custom_specs", store=True, readonly=False)
-    packing_info = fields.Char(string="Packing", compute="_compute_custom_specs", store=True, readonly=False)
-    allergens_notice = fields.Char(string="Allergens", compute="_compute_custom_specs", store=True, readonly=False)
-    check_notes = fields.Char(string="Check Notes", compute="_compute_custom_specs", store=True, readonly=False)
-    mix_code = fields.Char(string="Mix Code", compute="_compute_custom_specs", store=True, readonly=False)
-    sort_seq = fields.Integer(string="Sort Seq", compute="_compute_custom_specs", store=True, readonly=False)
+    min_qty = fields.Float(string='Min Qty')
+    min_weight = fields.Char(string='Min Weight')
+    gross_net_weight = fields.Char(string='Weight (Gross/Net)')
+    avg_serving = fields.Char(string='Average Serving')
 
-    fish_info = fields.Text(string="Fish Information", compute="_compute_custom_specs", store=True, readonly=False)
-    ingredients_html = fields.Html(string="Ingredients", compute="_compute_custom_specs", store=True, readonly=False)
-    notes_html = fields.Html(string="Notes", compute="_compute_custom_specs", store=True, readonly=False)
-    cooking_instructions_html = fields.Html(string="Cooking", compute="_compute_custom_specs", store=True, readonly=False)
-    nutritional_info_html = fields.Html(string="Nutrition", compute="_compute_custom_specs", store=True, readonly=False)
+    use_frozen = fields.Char(string='Use Frozen')
+    use_fresh = fields.Char(string='Use Fresh')
+    packing_info = fields.Char(string='Packing')
 
-    @api.depends('product_id')
-    def _compute_custom_specs(self):
+    allergens_notice = fields.Char(string='Allergens')
+    check_notes = fields.Char(string='Check Notes')
+    mix_code = fields.Char(string='Mix Code')
+    sort_seq = fields.Integer(string='Sort Seq')
+
+    fish_info = fields.Text(string='Fish Information')
+    ingredients_html = fields.Html(string='Ingredients')
+    notes_html = fields.Html(string='Notes')
+    cooking_instructions_html = fields.Html(string='Cooking')
+    nutritional_info_html = fields.Html(string='Nutrition')
+
+    
+
+    @api.onchange('product_id')
+    def _onchange_product_id_custom_specs(self):
         for line in self:
+    
             if not line.product_id:
                 line.min_qty = 0.0
-                line.min_weight = ''
-                line.gross_net_weight = ''
-                line.avg_serving = ''
-                line.use_frozen = ''
-                line.use_fresh = ''
-                line.packing_info = ''
-                line.allergens_notice = ''
-                line.check_notes = ''
-                line.mix_code = ''
+                line.min_weight = False
+                line.gross_net_weight = False
+                line.avg_serving = False
+                line.use_frozen = False
+                line.use_fresh = False
+                line.packing_info = False
+                line.allergens_notice = False
+                line.check_notes = False
+                line.mix_code = False
                 line.sort_seq = 0
-                line.fish_info = ''
+                line.fish_info = False
                 line.ingredients_html = False
                 line.notes_html = False
                 line.cooking_instructions_html = False
                 line.nutritional_info_html = False
                 continue
+    
+            product = line.product_id
+            template = product.product_tmpl_id
+    
+            
+            def get_product_value(field_name, default=False):
+                value = getattr(product, field_name, None)
+    
+                if value not in (None, False, ''):
+                    return value
+    
+                value = getattr(template, field_name, None)
+    
+                if value not in (None, False, ''):
+                    return value
+    
+                return default
+    
+           
+    
+            line.min_qty = get_product_value('min_qty', 0.0)
+            line.min_weight = get_product_value('min_weight')
+            line.gross_net_weight = get_product_value('gross_net_weight')
+            line.avg_serving = get_product_value('avg_serving')
+    
+            line.use_frozen = get_product_value('use_frozen')
+            line.use_fresh = get_product_value('use_fresh')
+            line.packing_info = get_product_value('packing_info')
+    
+            line.allergens_notice = get_product_value('allergens_notice')
+            line.check_notes = get_product_value('check_notes')
+            line.mix_code = get_product_value('mix_code')
+            line.sort_seq = get_product_value('sort_seq', 0)
+    
+            line.fish_info = get_product_value('fish_info')
+            line.ingredients_html = get_product_value('ingredients_html')
+            line.notes_html = get_product_value('notes_html')
+            line.cooking_instructions_html = get_product_value(
+                'cooking_instructions_html'
+            )
+            line.nutritional_info_html = get_product_value(
+                'nutritional_info_html'
+            )
+    
 
-            tmpl = line.product_id.product_tmpl_id
-            line.min_qty = getattr(tmpl, 'min_qty', 0.0) or 0.0
-            line.min_weight = getattr(tmpl, 'min_weight', '') or ''
-            line.gross_net_weight = getattr(tmpl, 'gross_net_weight', '') or ''
-            line.avg_serving = getattr(tmpl, 'avg_serving', '') or ''
-            line.use_frozen = getattr(tmpl, 'use_frozen', '') or ''
-            line.use_fresh = getattr(tmpl, 'use_fresh', '') or ''
-            line.packing_info = getattr(tmpl, 'packing_info', '') or ''
-            line.allergens_notice = getattr(tmpl, 'allergens_notice', '') or ''
-            line.check_notes = getattr(tmpl, 'check_notes', '') or ''
-            line.mix_code = getattr(tmpl, 'mix_code', '') or ''
-            line.sort_seq = getattr(tmpl, 'sort_seq', 0) or 0
-            line.fish_info = getattr(tmpl, 'fish_info', '') or ''
-            line.ingredients_html = getattr(tmpl, 'ingredients_html', False)
-            line.notes_html = getattr(tmpl, 'notes_html', False)
-            line.cooking_instructions_html = getattr(tmpl, 'cooking_instructions_html', False)
-            line.nutritional_info_html = getattr(tmpl, 'nutritional_info_html', False)
+    @api.model_create_multi
+    def create(self, vals_list):
+        for vals in vals_list:
+    
+            product_id = vals.get('product_id')
+    
+            if not product_id:
+                continue
+    
+            product = self.env['product.product'].browse(product_id)
+            template = product.product_tmpl_id
+    
+            def get_value(field_name, default=False):
+                # First check product.product
+                if hasattr(product, field_name):
+                    value = getattr(product, field_name)
+                    if value not in (None, False, ''):
+                        return value
+    
+                
+                if template and hasattr(template, field_name):
+                    value = getattr(template, field_name)
+                    if value not in (None, False, ''):
+                        return value
+    
+                return default
+    
+            vals.update({
+                'min_qty': get_value('min_qty', 0.0),
+                'min_weight': get_value('min_weight', False),
+                'gross_net_weight': get_value(
+                    'gross_net_weight', False
+                ),
+                'avg_serving': get_value('avg_serving', False),
+    
+                'use_frozen': get_value('use_frozen', False),
+                'use_fresh': get_value('use_fresh', False),
+                'packing_info': get_value('packing_info', False),
+    
+                'allergens_notice': get_value(
+                    'allergens_notice', False
+                ),
+                'check_notes': get_value(
+                    'check_notes', False
+                ),
+                'mix_code': get_value('mix_code', False),
+                'sort_seq': get_value('sort_seq', 0),
+    
+                'fish_info': get_value('fish_info', False),
+                'ingredients_html': get_value(
+                    'ingredients_html', False
+                ),
+                'notes_html': get_value(
+                    'notes_html', False
+                ),
+                'cooking_instructions_html': get_value(
+                    'cooking_instructions_html', False
+                ),
+                'nutritional_info_html': get_value(
+                    'nutritional_info_html', False
+                ),
+            })
+    
+        return super().create(vals_list)
+
+    
 
     def action_open_food_specs_modal(self):
-        """Opens popup modal for line specifications with robust value retrieval."""
         self.ensure_one()
-        view_id = self.env.ref('food_packaging_info.view_sale_order_line_food_specs_popup').id
-        
-        tmpl = self.product_id.product_tmpl_id if self.product_id else False
-
-        # Helper function to get value from line first, then product template
-        def get_val(field_name, default=''):
-            val = getattr(self, field_name, None)
-            if val:
-                return val
-            if tmpl:
-                return getattr(tmpl, field_name, default)
+    
+        product = self.product_id
+        template = product.product_tmpl_id if product else False
+    
+        def get_value(field_name, default=False):
+    
+            if product and hasattr(product, field_name):
+                value = getattr(product, field_name)
+    
+                if value not in (None, False, ''):
+                    return value
+    
+            if template and hasattr(template, field_name):
+                value = getattr(template, field_name)
+    
+                if value not in (None, False, ''):
+                    return value
+    
             return default
-
+    
+        self.write({
+            'min_qty': get_value('min_qty', 0.0),
+            'min_weight': get_value('min_weight'),
+            'gross_net_weight': get_value('gross_net_weight'),
+            'avg_serving': get_value('avg_serving'),
+    
+            'use_frozen': get_value('use_frozen'),
+            'use_fresh': get_value('use_fresh'),
+            'packing_info': get_value('packing_info'),
+    
+            'allergens_notice': get_value('allergens_notice'),
+            'check_notes': get_value('check_notes'),
+            'mix_code': get_value('mix_code'),
+            'sort_seq': get_value('sort_seq', 0),
+    
+            'fish_info': get_value('fish_info'),
+            'ingredients_html': get_value('ingredients_html'),
+            'notes_html': get_value('notes_html'),
+            'cooking_instructions_html': get_value(
+                'cooking_instructions_html'
+            ),
+            'nutritional_info_html': get_value(
+                'nutritional_info_html'
+            ),
+        })
+    
+        view_id = self.env.ref(
+            'food_packaging_info.view_sale_order_line_food_specs_popup'
+        ).id
+    
         return {
             'name': 'Food Packaging Specifications',
             'type': 'ir.actions.act_window',
             'res_model': 'sale.order.line',
-            'res_id': self.id if isinstance(self.id, int) else False,
+            'res_id': self.id,
             'view_mode': 'form',
             'views': [(view_id, 'form')],
             'target': 'new',
-            'context': {
-                'default_name': line_description,
-                'default_min_qty': get_val('min_qty', 0.0),
-                'default_min_weight': get_val('min_weight', ''),
-                'default_gross_net_weight': get_val('gross_net_weight', ''),
-                'default_avg_serving': get_val('avg_serving', ''),
-                'default_use_frozen': get_val('use_frozen', ''),
-                'default_use_fresh': get_val('use_fresh', ''),
-                'default_packing_info': get_val('packing_info', ''),
-                'default_allergens_notice': get_val('allergens_notice', ''),
-                'default_check_notes': get_val('check_notes', ''),
-                'default_mix_code': get_val('mix_code', ''),
-                'default_sort_seq': get_val('sort_seq', 0),
-                'default_fish_info': get_val('fish_info', ''),
-                'default_ingredients_html': get_val('ingredients_html', False),
-                'default_notes_html': get_val('notes_html', False),
-                'default_cooking_instructions_html': get_val('cooking_instructions_html', False),
-                'default_nutritional_info_html': get_val('nutritional_info_html', False),
-            }
         }

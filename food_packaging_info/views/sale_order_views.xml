@@ -32,7 +32,7 @@
                         </group>
 
                         <group string="Packaging &amp; Cooking Details">
-                            <!-- ✅ CHANGED FROM description_sale TO name -->
+                            
                             <field name="name" string="Internal Sales Line"/>
                             <field name="ingredients_html" widget="html"/>
                             <field name="notes_html" widget="html"/>
@@ -85,11 +85,11 @@
                     <field name="nutritional_info_html" column_invisible="1"/>
 
                    
-                    <button name="%(action_sale_order_line_food_specs_popup)d" 
-                            type="action" 
-                            icon="fa-list-alt" 
-                            title="Open Food Specifications Modal" 
-                            class="btn-link"/>
+                    <button name="action_open_food_specs_modal"
+                        type="object"
+                        icon="fa-list-alt"
+                        title="Open Food Specifications Modal"
+                        class="btn-link"/>
                 </xpath>
 
             </field>
@@ -97,3 +97,4 @@
 
     </data>
 </odoo>
+
