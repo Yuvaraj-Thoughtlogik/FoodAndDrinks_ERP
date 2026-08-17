@@ -8,6 +8,18 @@
             <field name="model">sale.order</field>
             <field name="inherit_id" ref="sale.view_sales_order_filter"/>
             <field name="arch" type="xml">
+                <xpath expr="//field[@name='name']" position="attributes">
+                    <attribute name="filter_domain">
+                        ['|', '|', '|', '|', '|', '|',
+                        ('name', 'ilike', self),
+                        ('client_order_ref', 'ilike', self),
+                        ('partner_id', 'child_of', self),
+                        ('round_id', 'ilike', self),
+                        ('round_full_name', 'ilike', self),
+                        ('round_code', 'ilike', self),
+                        ('batch_id', 'ilike', self)]
+                    </attribute>
+                </xpath>
                 <xpath expr="//search" position="inside">
                     <filter string="Delivery Date Today"
                             name="filter_delivery_today"
@@ -19,28 +31,28 @@
             </field>
         </record>
 
-<!--        &lt;!&ndash; Window Action for Sale Orders with Default Filter Context &ndash;&gt;-->
-<!--        <record id="action_round_management_sale_order" model="ir.actions.act_window">-->
-<!--            <field name="name">Sale Orders</field>-->
-<!--            <field name="res_model">sale.order</field>-->
-<!--            <field name="view_mode">list,kanban,form</field>-->
-<!--            <field name="search_view_id" ref="view_sales_order_filter_round_today"/>-->
-<!--            <field name="context">{-->
-<!--                'search_default_filter_delivery_today': 1-->
-<!--            }</field>-->
-<!--            <field name="help" type="html">-->
-<!--                <p class="o_view_nocontent_smiling_face">-->
-<!--                    Create a new Sale Order!-->
-<!--                </p>-->
-<!--            </field>-->
-<!--        </record>-->
+        <!--        &lt;!&ndash; Window Action for Sale Orders with Default Filter Context &ndash;&gt;-->
+        <!--        <record id="action_round_management_sale_order" model="ir.actions.act_window">-->
+        <!--            <field name="name">Sale Orders</field>-->
+        <!--            <field name="res_model">sale.order</field>-->
+        <!--            <field name="view_mode">list,kanban,form</field>-->
+        <!--            <field name="search_view_id" ref="view_sales_order_filter_round_today"/>-->
+        <!--            <field name="context">{-->
+        <!--                'search_default_filter_delivery_today': 1-->
+        <!--            }</field>-->
+        <!--            <field name="help" type="html">-->
+        <!--                <p class="o_view_nocontent_smiling_face">-->
+        <!--                    Create a new Sale Order!-->
+        <!--                </p>-->
+        <!--            </field>-->
+        <!--        </record>-->
 
-<!--        &lt;!&ndash; Sale Orders Menu Item (Positioned right after Operations) &ndash;&gt;-->
-<!--        <menuitem id="menu_round_management_sale_order"-->
-<!--                  name="Sale Orders"-->
-<!--                  parent="round_management.menu_round_management_root"-->
-<!--                  action="action_round_management_sale_order"-->
-<!--                  sequence="15"/>-->
+        <!--        &lt;!&ndash; Sale Orders Menu Item (Positioned right after Operations) &ndash;&gt;-->
+        <!--        <menuitem id="menu_round_management_sale_order"-->
+        <!--                  name="Sale Orders"-->
+        <!--                  parent="round_management.menu_round_management_root"-->
+        <!--                  action="action_round_management_sale_order"-->
+        <!--                  sequence="15"/>-->
 
     </data>
 </odoo>

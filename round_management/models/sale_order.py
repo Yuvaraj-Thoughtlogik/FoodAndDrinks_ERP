@@ -82,6 +82,15 @@ class SaleOrder(models.Model):
         readonly=True,
         help="Operating delivery times calculated from round configuration"
     )
+    round_full_name = fields.Char(compute='_compute_round_full_name', store=True)
+
+    @api.depends('round_id.code', 'round_id.name')
+    def _compute_round_full_name(self):
+        for rec in self:
+            if rec.round_id:
+                rec.round_full_name = f'{rec.round_id.code}-{rec.round_id.name}'
+            else:
+                rec.round_full_name = False
 
     _DAY_FIELDS = {
         0: ('mon_active', 'mon_from', 'mon_to'),  # Monday
