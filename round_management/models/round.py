@@ -40,6 +40,34 @@ class RoundManagementRound(models.Model):
     #pay_grade = fields.Char(string='Pay Grade')
     target_cust_rev = fields.Float(string='Target Cust. Rev.', default=0.0)
     max_alt_drops = fields.Integer(string='Max. Alt. Drops', default=0)
+    current_regular_drops = fields.Integer(
+        string="Current Regular Drops", compute="_compute_drop_counts", store=True
+    )
+    current_alt_drops = fields.Integer(
+        string="Current Alternative Drops", compute="_compute_drop_counts", store=True
+    )
+    balance_alt_drops = fields.Integer(
+        string="Balance Alternative Drops", compute="_compute_drop_counts", store=True
+    )
+
+    # Link to Sale Orders to calculate active drops
+    order_ids = fields.One2many('sale.order', 'round_id', string="Sales Orders")
+    
+    
+    @api.depends('max_alt_drops', 'order_ids', 'order_ids.state', 'order_ids.is_alternative_round')
+    def _compute_drop_counts(self):
+        for round_rec in self:
+            # Active/confirmed sale orders linked to this round
+            confirmed_orders = round_rec.order_ids.filtered(
+                lambda o: o.state in ['sale', 'done']
+            )
+            
+            alt_orders = confirmed_orders.filtered(lambda o: getattr(o, 'is_alternative_round', False))
+            reg_orders = confirmed_orders - alt_orders
+
+            round_rec.current_regular_drops = len(reg_orders)
+            round_rec.current_alt_drops = len(alt_orders)
+            round_rec.balance_alt_drops = round_rec.max_alt_drops - round_rec.current_alt_drops
 
     TIME_SELECTION_24H = [
         ('00:00', '00:00'), ('00:30', '00:30'),

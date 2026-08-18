@@ -92,6 +92,31 @@ class SaleOrder(models.Model):
         5: ('sat_active', 'sat_from', 'sat_to'),  # Saturday
         6: ('sun_active', 'sun_from', 'sun_to'),  # Sunday
     }
+    
+    is_alternative_round = fields.Boolean(string="Is Alternative Round", default=False)
+    
+
+    def action_confirm(self):
+        """Enforces Max. Alternative Drops limit during Sales Order confirmation."""
+        for order in self:
+            if order.is_alternative_round:
+                # Check Batch Limit if assigned
+                if order.batch_id and order.batch_id.max_alt_drops > 0:
+                    current_drops = len(order.batch_id.order_ids.filtered(
+                        lambda o: o.is_alternative_round and o.state in ['sale', 'done'] and o.id != order.id
+                    ))
+                    if current_drops >= order.batch_id.max_alt_drops:
+                        raise UserError(_("Max Alternative Drops have been reached."))
+
+                # Check Round Limit if assigned
+                elif order.round_id and order.round_id.max_alt_drops > 0:
+                    current_drops = len(order.round_id.order_ids.filtered(
+                        lambda o: o.is_alternative_round and o.state in ['sale', 'done'] and o.id != order.id
+                    ))
+                    if current_drops >= order.round_id.max_alt_drops:
+                        raise UserError(_("Max Alternative Drops have been reached."))
+
+        return super(SaleOrder, self).action_confirm()
 
     @api.depends(
         'commitment_date', 'round_id',

@@ -76,7 +76,20 @@ class RoundManagementBatch(models.Model):
     drops_count = fields.Integer(string='Drops', compute='_compute_order_metrics', store=True)
     late_orders_count = fields.Integer(string='Late Orders', compute='_compute_order_metrics', store=True)
     total_drops = fields.Integer(string='Total Drops', compute='_compute_order_metrics', store=True)
-    
+    current_regular_drops = fields.Integer(
+        string="Current Regular Drops", compute="_compute_batch_drops", store=True
+    )
+    current_alt_drops = fields.Integer(
+        string="Current Alternative Drops", compute="_compute_batch_drops", store=True
+    )
+    balance_alt_drops = fields.Integer(
+        string="Balance Alternative Drops", compute="_compute_batch_drops", store=True
+    )
+    is_alt_limit_reached = fields.Boolean(
+        string="Max Alt Drops Reached", compute="_compute_batch_drops", store=True
+    )
+
+    order_ids = fields.One2many('sale.order', 'batch_id', string="Linked Orders")
    
     #card_reader_count = fields.Selection([
         #('Y', 'Yes'),
@@ -119,6 +132,19 @@ class RoundManagementBatch(models.Model):
         6: ('sun_active', 'sun_from', 'sun_to'),  # Sunday
     }
 
+    @api.depends('max_alt_drops', 'order_ids', 'order_ids.state', 'order_ids.is_alternative_round')
+    def _compute_batch_drops(self):
+        for batch in self:
+            valid_orders = batch.order_ids.filtered(lambda o: o.state not in ['cancel', 'draft'])
+            alt_orders = valid_orders.filtered(lambda o: getattr(o, 'is_alternative_round', False))
+            reg_orders = valid_orders - alt_orders
+
+            batch.current_regular_drops = len(reg_orders)
+            batch.current_alt_drops = len(alt_orders)
+            batch.balance_alt_drops = batch.max_alt_drops - batch.current_alt_drops
+            
+            # Flag for Kanban/Tree visual color styling
+            batch.is_alt_limit_reached = (batch.max_alt_drops > 0) and (batch.current_alt_drops >= batch.max_alt_drops)
 
     @api.depends(
         'delivery_date', 'round_id',
