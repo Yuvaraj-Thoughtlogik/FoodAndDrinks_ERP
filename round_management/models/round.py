@@ -40,7 +40,7 @@ class RoundManagementRound(models.Model):
     depot_id = fields.Many2one('stock.warehouse', string='Default Depot') 
     #pay_grade = fields.Char(string='Pay Grade')
     target_cust_rev = fields.Float(string='Target Cust. Rev.', default=0.0)
-    max_alt_drops = fields.Integer(string='Max. Alt. Drops', default=0)
+    max_alt_drops = fields.Integer(string='Max. Alt. Drops', default=0,required=True)
     current_regular_drops = fields.Integer(
         string="Current Regular Drops", compute="_compute_drop_counts", store=True
     )
