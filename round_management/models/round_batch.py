@@ -8,6 +8,7 @@ class RoundManagementBatch(models.Model):
     _name = 'round.management.batch'
     _description = 'Round Execution Batch'
     _rec_name = 'code'
+    _rec_names_search = ['reference', 'code']
     
     @api.model
     def _default_batch_code(self):

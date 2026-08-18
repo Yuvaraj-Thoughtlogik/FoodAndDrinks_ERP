@@ -3,6 +3,7 @@ from odoo import models, fields, api
 class RoundManagementRound(models.Model):
     _name = 'round.management.round'
     _description = 'Round Details'
+    _rec_names_search = ['name', 'code']
 
     @api.model
     def _default_round_code(self):
