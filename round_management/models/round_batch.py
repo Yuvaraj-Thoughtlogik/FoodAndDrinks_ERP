@@ -16,7 +16,7 @@ class RoundManagementBatch(models.Model):
     
     code = fields.Char(string='Batch Code', required=True, copy=False, default=_default_batch_code)
     round_id = fields.Many2one('round.management.round', string='Round', required=True,domain="[('state', '=', 'active')]")
-    round_code = fields.Char(related='round_id.code', string='Round Code', readonly=True)
+    round_code = fields.Char(related='round_id.code', string='Round Code', readonly=True,store=True)
     reference = fields.Char(string='Reference')
     depot_id = fields.Many2one('stock.warehouse', string='Depot')
     delivery_date = fields.Date(string='Delivery Date', default=fields.Date.context_today)
@@ -103,11 +103,22 @@ class RoundManagementBatch(models.Model):
     end_odometer = fields.Float(string='End Odometer (km)')
     distance_run = fields.Float(string='Distance (km)', compute='_compute_distance', store=True)
 
+    round_full_name = fields.Char(compute='_compute_round_full_name', store=True)
+
+    @api.depends('round_id.code', 'round_id.name')
+    def _compute_round_full_name(self):
+        for rec in self:
+            if rec.round_id:
+                rec.round_full_name = f'{rec.round_id.code}-{rec.round_id.name}'
+            else:
+                rec.round_full_name = False
 
     _code_unique = models.Constraint(
         "UNIQUE(code)",
         "The Round Code must be unique!"
     )
+
+
 
     _DAY_FIELDS = {
         0: ('mon_active', 'mon_from', 'mon_to'),  # Monday

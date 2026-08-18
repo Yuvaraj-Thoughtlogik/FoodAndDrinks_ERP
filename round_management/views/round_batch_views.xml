@@ -235,6 +235,14 @@
         <field name="model">round.management.batch</field>
         <field name="arch" type="xml">
             <search string="Search Driver Rounds">
+                <field name="code" string="Search" filter_domain="[
+                    '|', '|', '|', '|',
+                    ('code','ilike',self),
+                    ('round_code','ilike',self),
+                    ('round_full_name','ilike',self),
+                    ('depot_id','ilike',self),
+                    ('driver_id','ilike',self),
+                ]"/>
                 <field name="delivery_date"/>
                 <field name="code"/>
                 <field name="round_id"/>

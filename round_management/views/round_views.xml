@@ -161,7 +161,12 @@
         <field name="arch" type="xml">
             <search string="Search Rounds">
                 <!-- Searchable fields -->
-                <field name="name" string="Round Name"/>
+                <field name="name" string="Search" filter_domain="[
+                    '|',
+                    ('name','ilike',self),
+                    ('code','ilike',self),
+                ]"/>
+                <field name="name"/>
                 <field name="code" string="Round Code"/>
 
                 <separator/>
