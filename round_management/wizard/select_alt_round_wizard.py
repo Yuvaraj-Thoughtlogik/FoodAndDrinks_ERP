@@ -20,6 +20,7 @@ class SelectAltRoundWizard(models.TransientModel):
 
 
 
+
     @api.model
     def default_get(self, fields_list):
         """Auto-populates the wizard lines with Round Batches when opened."""
