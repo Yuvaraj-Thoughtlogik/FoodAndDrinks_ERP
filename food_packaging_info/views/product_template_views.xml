@@ -1,32 +1,33 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <data>
-    
-       <record id="product_template_form_view_inherit_fish_specs" model="ir.ui.view">
+
+        <record id="product_template_form_view_inherit_fish_specs" model="ir.ui.view">
             <field name="name">product.template.form.inherit.fish.specs</field>
             <field name="model">product.template</field>
             <field name="inherit_id" ref="product.product_template_form_view"/>
             <field name="priority">99</field>
             <field name="arch" type="xml">
 
-               
+
                 <xpath expr="//field[@name='qty_available']/.." position="after">
                     <field name="assembly_type" widget="radio" options="{'horizontal': true}"/>
                     <field name="species_id" options="{'no_create_edit': False}"/>
+                    <field name="stk_type_id"/>
                     <field name="cut_id" options="{'no_create_edit': False}"/>
                     <field name="origin_country" placeholder="e.g. Salmon / FARMED in Norway"/>
                 </xpath>
 
             </field>
         </record>
-    
+
         <record id="product_template_form_view_inherit_bingo_tagon" model="ir.ui.view">
             <field name="name">product.template.form.inherit.bingo.tagon</field>
             <field name="model">product.template</field>
             <field name="inherit_id" ref="product.product_template_form_view"/>
             <field name="arch" type="xml">
 
-               
+
                 <xpath expr="//div[@name='options']" position="inside">
                     <span class="d-inline-block">
                         <field name="bingo"/>
@@ -45,27 +46,27 @@
             <field name="model">product.template</field>
             <field name="inherit_id" ref="product.product_template_form_view"/>
             <field name="arch" type="xml">
-                
-                
+
+
                 <xpath expr="//sheet" position="before">
                     <header>
                         <button name="action_alternative_fish" type="object" string="Alternative Fish" class="btn-primary"/>
                     </header>
                 </xpath>
 
-                
+
                 <xpath expr="//field[@name='categ_id']" position="after">
                     <field name="staff_price"/>
                     <field name="offer_saving"/>
                     <field name="stock_available" string="Stock Available" class="oe_subtotal_footer_separator"/>
                 </xpath>
 
-                
+
                 <xpath expr="//notebook" position="inside">
                     <page string="Ingredients &amp; Product Specs" name="legacy_current_item">
                         <div class="row">
-                            
-                            
+
+
                             <div class="col-lg-8 pe-lg-4">
                                 <group>
                                     <group string="Storage &amp; Serving">
@@ -100,15 +101,37 @@
                                 </group>
                             </div>
 
-                            
-                           <!-- <div class="col-lg-4 ps-lg-3 border-start">
-                                <group string="Dynamic Properties">
-                                    <field name="food_spec_properties" widget="properties" nolabel="1"/>
-                                </group>
-                            </div>-->
+
+                            <!-- <div class="col-lg-4 ps-lg-3 border-start">
+                                 <group string="Dynamic Properties">
+                                     <field name="food_spec_properties" widget="properties" nolabel="1"/>
+                                 </group>
+                             </div>-->
 
                         </div>
                     </page>
+                </xpath>
+
+            </field>
+        </record>
+        <record id="view_product_template_form_additional_fields" model="ir.ui.view">
+            <field name="name">product.template.form.additional.fields</field>
+            <field name="model">product.template</field>
+            <field name="inherit_id" ref="product.product_template_form_view"/>
+            <field name="arch" type="xml">
+
+                <!-- Sales tab: Sales Analysis, right after Extra Info, before Quotation Description -->
+                <xpath expr="//field[@name='description_sale']/ancestor::group[1]" position="before">
+                    <group string="Reporting">
+                        <field name="stk_sales_analysis"/>
+                    </group>
+                </xpath>
+
+                <!-- Purchase tab: Purchase Analysis, right before Vendor Bills -->
+                <xpath expr="//field[@name='purchase_method']/ancestor::group[1]" position="before">
+                    <group string="Reporting">
+                        <field name="stk_purchase_analysis"/>
+                    </group>
                 </xpath>
 
             </field>

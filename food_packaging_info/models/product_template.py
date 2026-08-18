@@ -97,6 +97,22 @@ class ProductTemplate(models.Model):
         #definition_record='categ_id',
         #definition_record_field='product_properties_definition'
     #)
+    # RF-REQ-CUS-094 - Purchase tab - Procurement Reporting
+    stk_purchase_analysis = fields.Char(
+        string='Purchase Analysis',
+        help='Free-text field used for procurement reporting.',
+    )
+
+    # RF-REQ-CUS-094 - Sales tab - Reporting Category
+    stk_sales_analysis = fields.Char(
+        string='Sales Analysis',
+        help='Free-text field used as a reporting category for sales.',
+    )
+    stk_type_id = fields.Many2one(
+        'product.stk.type',
+        string='Type',
+        help='Product classification type. Add new types directly from this field.',
+    )
 
                 
     @api.depends('list_price', 'staff_price')
@@ -147,3 +163,10 @@ class ProductTemplate(models.Model):
             'view_mode': 'list,form',
             'domain': [('categ_id', '=', self.categ_id.id), ('id', '!=', self.id)],
         }
+
+class ProductType(models.Model):
+    _name = 'product.stk.type'
+    _description = 'Product Type (Classification)'
+    _order = 'name'
+
+    name = fields.Char(required=True)

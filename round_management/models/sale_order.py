@@ -4,7 +4,7 @@ from datetime import datetime, time
 import pytz
 
 
-DEFAULT_DELIVERY_TIME = time(23, 0)  # 11:00 PM (local time)
+DEFAULT_DELIVERY_TIME = time(23, 59)  # 11:00 PM (local time)
 
 class SaleOrder(models.Model):
     _inherit = 'sale.order'
@@ -15,7 +15,7 @@ class SaleOrder(models.Model):
         string='Round Batch', 
         ondelete='set null',
         index=True,
-        domain="[('round_id', '=?', round_id), ('state', 'in', ['act', 'prt'])]",
+        domain="[('round_id', '=?', round_id), ('state', 'in', ['act', 'prt','com'])]",
     )
     
     round_id = fields.Many2one(
@@ -82,6 +82,15 @@ class SaleOrder(models.Model):
         readonly=True,
         help="Operating delivery times calculated from round configuration"
     )
+    round_full_name = fields.Char(compute='_compute_round_full_name', store=True)
+
+    @api.depends('round_id.code', 'round_id.name')
+    def _compute_round_full_name(self):
+        for rec in self:
+            if rec.round_id:
+                rec.round_full_name = f'{rec.round_id.code}-{rec.round_id.name}'
+            else:
+                rec.round_full_name = False
 
     _DAY_FIELDS = {
         0: ('mon_active', 'mon_from', 'mon_to'),  # Monday
@@ -293,7 +302,7 @@ class SaleOrder(models.Model):
 
         batches = self.env['round.management.batch'].search([
             ('round_id', 'in', alt_round_ids),
-            ('state', 'in', ['act', 'prt', 'pln']),
+            ('state', 'in', ['act', 'prt', 'pln', 'com']),
         ])
 
         lines = [(0, 0, {
