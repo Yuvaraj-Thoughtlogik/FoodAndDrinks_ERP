@@ -63,7 +63,7 @@ class SelectAltRoundWizard(models.TransientModel):
         """Monitors child line toggles in real-time and blocks multi-selection instantly."""
         selected_lines = self.line_ids.filtered(lambda l: l.selected)
 
-<<<<<<< HEAD
+
         if len(selected_lines) > 1:
            
             selected_lines[-1].selected = False
@@ -74,10 +74,9 @@ class SelectAltRoundWizard(models.TransientModel):
                 }
             }
             
-=======
 
 
->>>>>>> 1b951b2b565cfe8dfde2b15a1a450d34b9195b8b
+
 class SelectAltRoundLine(models.TransientModel):
     _name = 'select.alt.round.line'
     _description = 'Select Alternative Delivery Round Line'
