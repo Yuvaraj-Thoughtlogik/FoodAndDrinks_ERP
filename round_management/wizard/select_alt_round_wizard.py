@@ -42,7 +42,21 @@ class SelectAltRoundWizard(models.TransientModel):
 
         return {'type': 'ir.actions.act_window_close'}
 
+    @api.onchange('line_ids')
+    def _onchange_line_ids(self):
+        """Monitors child line toggles in real-time and blocks multi-selection instantly."""
+        selected_lines = self.line_ids.filtered(lambda l: l.selected)
 
+        if len(selected_lines) > 1:
+           
+            selected_lines[-1].selected = False
+            return {
+                'warning': {
+                    'title': _("Invalid Selection"),
+                    'message': _("You can only select one Round Batch at a time."),
+                }
+            }
+            
 class SelectAltRoundLine(models.TransientModel):
     _name = 'select.alt.round.line'
     _description = 'Select Alternative Delivery Round Line'
