@@ -117,15 +117,19 @@
                             <field name="week_number" readonly="1"/>
                         </group>
 
+
                         <group string="Logistics &amp; Crew">
                             <!--<field name="vehicle_id" options="{'no_create': True}" readonly="state == 'com'"/>-->
                             <field name="driver_id" options="{'no_create': True}" readonly="state == 'com'"/>
                             <field name="helper_id" options="{'no_create': True}"/>
                             <!--<field name="pay_grade"/>-->
+
+                        </group>
+                        <group string="Drops" colspan="4">
                             <field name="max_alt_drops"/>
-                            <field name="current_regular_drops" readonly="1"/>
                             <field name="current_alt_drops" readonly="1" decoration-danger="is_alt_limit_reached == True"/>
                             <field name="balance_alt_drops" readonly="1" decoration-danger="balance_alt_drops &lt;= 0"/>
+                            <field name="current_regular_drops" readonly="1"/>
                         </group>
                     </group>
 

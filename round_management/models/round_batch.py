@@ -8,6 +8,7 @@ class RoundManagementBatch(models.Model):
     _name = 'round.management.batch'
     _description = 'Round Execution Batch'
     _rec_name = 'code'
+    _rec_names_search = ['reference', 'code']
     
     @api.model
     def _default_batch_code(self):
@@ -31,8 +32,7 @@ class RoundManagementBatch(models.Model):
     ], string='Status', default='pln', required=True, tracking=True)
     
     #pay_grade = fields.Char(string='Pay Grade', related='round_id.pay_grade', readonly=True)
-    max_alt_drops = fields.Integer(string='Max. Alt. Drops', related='round_id.max_alt_drops', readonly=True)
-    
+
     helper_needed = fields.Boolean(string='Helper Needed')
     knockup_round = fields.Boolean(string='Knockup Round')
     driver_id = fields.Many2one(
@@ -76,20 +76,9 @@ class RoundManagementBatch(models.Model):
     drops_count = fields.Integer(string='Drops', compute='_compute_order_metrics', store=True)
     late_orders_count = fields.Integer(string='Late Orders', compute='_compute_order_metrics', store=True)
     total_drops = fields.Integer(string='Total Drops', compute='_compute_order_metrics', store=True)
-    current_regular_drops = fields.Integer(
-        string="Current Regular Drops", compute="_compute_batch_drops", store=True
-    )
-    current_alt_drops = fields.Integer(
-        string="Current Alternative Drops", compute="_compute_batch_drops", store=True
-    )
-    balance_alt_drops = fields.Integer(
-        string="Balance Alternative Drops", compute="_compute_batch_drops", store=True
-    )
-    is_alt_limit_reached = fields.Boolean(
-        string="Max Alt Drops Reached", compute="_compute_batch_drops", store=True
-    )
 
-    order_ids = fields.One2many('sale.order', 'batch_id', string="Linked Orders")
+
+    # order_ids = fields.One2many('sale.order', 'batch_id', string="Linked Orders")
    
     #card_reader_count = fields.Selection([
         #('Y', 'Yes'),
@@ -115,6 +104,46 @@ class RoundManagementBatch(models.Model):
     start_odometer = fields.Float(string='Start Odometer (km)')
     end_odometer = fields.Float(string='End Odometer (km)')
     distance_run = fields.Float(string='Distance (km)', compute='_compute_distance', store=True)
+
+    max_alt_drops = fields.Integer(
+        string='Max. Alt. Drops',
+        compute='_compute_max_alt_drops',
+        readonly=False,
+        store=True
+    )
+    current_regular_drops = fields.Integer(
+        string="Current Regular Drops", compute="_compute_batch_drops", store=True
+    )
+    current_alt_drops = fields.Integer(
+        string="Current Alt Drops", compute="_compute_batch_drops", store=True
+    )
+    balance_alt_drops = fields.Integer(
+        string="Balance Alt Drops", compute="_compute_batch_drops", store=True
+    )
+    is_alt_limit_reached = fields.Boolean(
+        string="Max Alt Drops Reached", compute="_compute_batch_drops", store=True
+    )
+
+    @api.depends('round_id','round_id.max_alt_drops')
+    def _compute_max_alt_drops(self):
+        for rec in self:
+            rec.max_alt_drops = rec.round_id.max_alt_drops
+
+    @api.depends('max_alt_drops', 'order_ids', 'order_ids.state', 'order_ids.is_alternative_round')
+    def _compute_batch_drops(self):
+        for batch in self:
+            valid_orders = batch.order_ids.filtered(lambda o: o.state == 'sale')
+            alt_orders = valid_orders.filtered(lambda o: getattr(o, 'is_alternative_round', False))
+            reg_orders = valid_orders - alt_orders
+
+
+            batch.current_regular_drops = len(reg_orders)
+            batch.current_alt_drops = len(alt_orders)
+            batch.balance_alt_drops = batch.max_alt_drops - batch.current_alt_drops
+
+            # Flag for Kanban/Tree visual color styling
+            batch.is_alt_limit_reached = (batch.max_alt_drops > 0) and (batch.current_alt_drops >= batch.max_alt_drops)
+
 
     round_full_name = fields.Char(compute='_compute_round_full_name', store=True)
 
@@ -143,19 +172,7 @@ class RoundManagementBatch(models.Model):
         6: ('sun_active', 'sun_from', 'sun_to'),  # Sunday
     }
 
-    @api.depends('max_alt_drops', 'order_ids', 'order_ids.state', 'order_ids.is_alternative_round')
-    def _compute_batch_drops(self):
-        for batch in self:
-            valid_orders = batch.order_ids.filtered(lambda o: o.state not in ['cancel', 'draft'])
-            alt_orders = valid_orders.filtered(lambda o: getattr(o, 'is_alternative_round', False))
-            reg_orders = valid_orders - alt_orders
 
-            batch.current_regular_drops = len(reg_orders)
-            batch.current_alt_drops = len(alt_orders)
-            batch.balance_alt_drops = batch.max_alt_drops - batch.current_alt_drops
-            
-            # Flag for Kanban/Tree visual color styling
-            batch.is_alt_limit_reached = (batch.max_alt_drops > 0) and (batch.current_alt_drops >= batch.max_alt_drops)
 
     @api.depends(
         'delivery_date', 'round_id',

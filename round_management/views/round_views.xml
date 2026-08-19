@@ -45,9 +45,9 @@
                             <!--<field name="pay_grade"/>-->
                             <field name="target_cust_rev"/>
                             <field name="max_alt_drops"/>
-                            <field name="current_regular_drops" readonly="1"/>
-                            <field name="current_alt_drops" readonly="1"/>
-                            <field name="balance_alt_drops" readonly="1"/>
+<!--                            <field name="current_regular_drops" readonly="1"/>-->
+<!--                            <field name="current_alt_drops" readonly="1"/>-->
+<!--                            <field name="balance_alt_drops" readonly="1"/>-->
                           </group>
                     </group>
 
@@ -135,7 +135,7 @@
                             <field name="alt_round_ids">
                                 <list string="Alternative Rounds" editable="bottom">
                                     <field name="alt_round_code"/>
-                                    <field name="alt_round_id" string="Alter. Round Name" options="{'no_create': True}"/>
+                                    <field name="alt_round_id" string="Alter. Round Name" options="{'no_create': True}"  domain="[('id', '!=', round_id)]"/>
                                     <field name="before_time" string="Before"/>
                                     <field name="after_time" string="After"/>
                                     <field name="active" string="Active"/>

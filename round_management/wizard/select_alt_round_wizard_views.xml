@@ -8,13 +8,20 @@
                 <field name="sale_order_id" invisible="1"/>
 
                 <field name="line_ids">
-                    <list editable="bottom" create="false" write="false" delete="false">
-                        <field name="selected" string="" widget="boolean_toggle" readonly="state == 'pln'"/>
-                        <field name="code" string="Batch Code"  readonly="state == 'pln'" decoration-muted="state == 'pln'"/>
-                        <field name="round_id" options="{'no_open':True}" decoration-muted="state == 'pln'"/>
-                        <field name="reference"/>
-                        <field name="depot_id" options="{'no_open':True}" decoration-muted="state == 'pln'"/>
-                        <field name="delivery_date" decoration-muted="state == 'pln'"/>
+                    <list editable="bottom" create="false" write="false"  delete="false" decoration-info="state == 'pln'"  decoration-danger="is_alt_limit_reached">
+                        <!--<field name="selected" string="" widget="boolean_toggle" readonly="state == 'pln'"/>-->
+                        <field name="selected"
+                               string=""
+                               options="{'autosave': false}"
+                               widget="boolean_toggle"
+                               readonly="state == 'pln'"
+                               decoration-danger="is_alt_limit_reached"/>
+                        <field name="code" string="Batch Code"  readonly="1" decoration-muted="state == 'pln'"/>
+                        <field name="round_id"  readonly="1" options="{'no_open':True}" decoration-muted="state == 'pln'"/>
+                        <field name="reference"  readonly="1"/>
+                        <field name="depot_id"  readonly="1" options="{'no_open':True}" decoration-muted="state == 'pln'"/>
+                        <field name="delivery_date"  readonly="1" decoration-muted="state == 'pln'"/>
+                        <field name="is_alt_limit_reached"  readonly="1" decoration-muted="state == 'pln'"/>
                         <field name="state"
                                widget="badge"
                                decoration-info="state == 'pln'"

@@ -1,4 +1,5 @@
 from odoo import models, api, fields
+from odoo.exceptions import UserError
 from odoo.tools import _
 from datetime import datetime, time
 import pytz
@@ -15,7 +16,7 @@ class SaleOrder(models.Model):
         string='Round Batch', 
         ondelete='set null',
         index=True,
-        domain="[('round_id', '=?', round_id), ('state', 'in', ['act', 'prt','com'])]",
+        domain="[('round_id', '=?', round_id), ('state', 'in', ['act', 'prt'])]",
     )
     
     round_id = fields.Many2one(
@@ -102,28 +103,40 @@ class SaleOrder(models.Model):
         6: ('sun_active', 'sun_from', 'sun_to'),  # Sunday
     }
     
-    is_alternative_round = fields.Boolean(string="Is Alternative Round", default=False)
+    is_alternative_round = fields.Boolean(
+        string="Is Alternative Round",
+        default=False,
+        compute= "_compute_is_alternative_round",
+        store=True,
+    )
+
+    @api.depends('batch_id','batch_id.round_id','round_id')
+    def _compute_is_alternative_round(self):
+        for rec in self:
+            rec.is_alternative_round = True if rec.batch_id.round_id != rec.round_id else False
     
 
     def action_confirm(self):
         """Enforces Max. Alternative Drops limit during Sales Order confirmation."""
         for order in self:
             if order.is_alternative_round:
-                # Check Batch Limit if assigned
-                if order.batch_id and order.batch_id.max_alt_drops > 0:
-                    current_drops = len(order.batch_id.order_ids.filtered(
-                        lambda o: o.is_alternative_round and o.state in ['sale', 'done'] and o.id != order.id
-                    ))
-                    if current_drops >= order.batch_id.max_alt_drops:
-                        raise UserError(_("Max Alternative Drops have been reached."))
-
-                # Check Round Limit if assigned
-                elif order.round_id and order.round_id.max_alt_drops > 0:
-                    current_drops = len(order.round_id.order_ids.filtered(
-                        lambda o: o.is_alternative_round and o.state in ['sale', 'done'] and o.id != order.id
-                    ))
-                    if current_drops >= order.round_id.max_alt_drops:
-                        raise UserError(_("Max Alternative Drops have been reached."))
+                # # Check Batch Limit if assigned
+                # if order.batch_id and order.batch_id.max_alt_drops > 0:
+                #     current_drops = len(order.batch_id.order_ids.filtered(
+                #         lambda o: o.is_alternative_round and o.state in ['sale', 'done'] and o.id != order.id
+                #     ))
+                #     if current_drops >= order.batch_id.max_alt_drops:
+                #         raise UserError(_("Max Alternative Drops have been reached."))
+                #
+                # # Check Round Limit if assigned
+                # elif order.round_id and order.round_id.max_alt_drops > 0:
+                #     current_drops = len(order.round_id.order_ids.filtered(
+                #         lambda o: o.is_alternative_round and o.state in ['sale', 'done'] and o.id != order.id
+                #     ))
+                #     if current_drops >= order.round_id.max_alt_drops:
+                #         raise UserError(_("Max Alternative Drops have been reached."))
+                if order.batch_id.is_alt_limit_reached:
+                    raise UserError(_("Max Alternative Drops have been reached."))
 
         return super(SaleOrder, self).action_confirm()
 
@@ -302,7 +315,7 @@ class SaleOrder(models.Model):
 
         batches = self.env['round.management.batch'].search([
             ('round_id', 'in', alt_round_ids),
-            ('state', 'in', ['act', 'prt', 'pln', 'com']),
+            ('state', 'in', ['act', 'prt', 'pln']),
         ])
 
         lines = [(0, 0, {
