@@ -12,7 +12,7 @@
                 <label for="round_id" string="Delivery Round"/>
                 <div class="o_row">
                     <field name="round_code" placeholder="Code" style="max-width: 1000px;" readonly="1"/>
-                    <field name="round_id" readonly="1" placeholder="Select Round..."/>
+                    <field name="round_id" placeholder="Select Round..."/>
                 </div>
 
                 <!-- Batch Code -->

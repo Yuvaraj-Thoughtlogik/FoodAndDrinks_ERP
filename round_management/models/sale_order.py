@@ -22,7 +22,9 @@ class SaleOrder(models.Model):
     round_id = fields.Many2one(
         'round.management.round', 
         string='Delivery Round',
-        index=True, domain="[('state', '=', 'active')]"
+        index=True, domain="[('state', '=', 'active')]",
+        compute='_compute_partner_id_set_round',
+        store=True,
     )
     round_code = fields.Char(related='round_id.code', string='Round Code', store=True)
     
@@ -301,10 +303,13 @@ class SaleOrder(models.Model):
         return res
 
 
-    @api.onchange('partner_id')
-    def _onchange_partner_id_set_round(self):
-        if self.partner_id and self.partner_id.round_id:
-            self.round_id = self.partner_id.round_id
+    @api.depends('partner_id','partner_id.round_id')
+    def _compute_partner_id_set_round(self):
+        for rec in self:
+            if rec.partner_id and rec.partner_id.round_id:
+                rec.round_id = rec.partner_id.round_id
+            else:
+                rec.round_id = False
             
             
     def action_select_alt_delivery_round(self):
