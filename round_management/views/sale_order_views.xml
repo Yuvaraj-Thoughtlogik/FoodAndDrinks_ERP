@@ -79,7 +79,7 @@
 
                 <!-- Delivery Times -->
                 <field name="delivery_times" string="Delivery Times" placeholder="e.g. 08:00 to 12:00"/>
-                <field name="is_alternative_round" />
+                <field name="is_alternative_round" invisible="0"/>
 
 
             </xpath>
