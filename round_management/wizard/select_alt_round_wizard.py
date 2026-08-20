@@ -18,6 +18,7 @@ class SelectAltRoundWizard(models.TransientModel):
         string='Alternative Rounds'
     )
 
+    selectedId = fields.Char(string='Selected')
 
 
 
@@ -63,9 +64,8 @@ class SelectAltRoundWizard(models.TransientModel):
         """Monitors child line toggles in real-time and blocks multi-selection instantly."""
         selected_lines = self.line_ids.filtered(lambda l: l.selected)
 
-
         if len(selected_lines) > 1:
-           
+
             selected_lines[-1].selected = False
             return {
                 'warning': {
@@ -73,7 +73,7 @@ class SelectAltRoundWizard(models.TransientModel):
                     'message': _("You can only select one Round Batch at a time."),
                 }
             }
-            
+
 
 
 
@@ -101,4 +101,8 @@ class SelectAltRoundLine(models.TransientModel):
     def _onchange_selected(self):
         if self.selected and self.is_alt_limit_reached:
             self.selected = False
-            raise ValidationError(_("Max Alternative Drops have been reached for this batch."))
+            raise ValidationError(
+                _("Max Alternative Drops have been reached for this batch.")
+            )
+
+
