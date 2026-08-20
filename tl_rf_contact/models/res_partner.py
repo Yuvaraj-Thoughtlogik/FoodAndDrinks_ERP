@@ -186,7 +186,7 @@ class ResPartner(models.Model):
         'sale_order_ids',
         'sale_order_ids.date_order',
         'sale_order_ids.picking_ids.state',
-        'customer_source_id',
+        'order_channel_id',
     )
     def _compute_customer_lifecycle_status(self):
         today = fields.Date.today()
@@ -213,7 +213,7 @@ class ResPartner(models.Model):
             )
             done_deliveries = deliveries.filtered(lambda p: p.state == 'done')
 
-            customer_source = rec.customer_source_id.name
+            customer_source = rec.order_channel_id.name
 
             if days > 548:
                 status = 'inactive'

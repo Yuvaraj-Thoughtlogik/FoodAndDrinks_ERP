@@ -122,53 +122,16 @@ class SaleOrder(models.Model):
         """Enforces Max. Alternative Drops limit during Sales Order confirmation."""
         for order in self:
             if order.is_alternative_round:
-                # # Check Batch Limit if assigned
-                # if order.batch_id and order.batch_id.max_alt_drops > 0:
-                #     current_drops = len(order.batch_id.order_ids.filtered(
-                #         lambda o: o.is_alternative_round and o.state in ['sale', 'done'] and o.id != order.id
-                #     ))
-                #     if current_drops >= order.batch_id.max_alt_drops:
-                #         raise UserError(_("Max Alternative Drops have been reached."))
-                #
-                # # Check Round Limit if assigned
-                # elif order.round_id and order.round_id.max_alt_drops > 0:
-                #     current_drops = len(order.round_id.order_ids.filtered(
-                #         lambda o: o.is_alternative_round and o.state in ['sale', 'done'] and o.id != order.id
-                #     ))
-                #     if current_drops >= order.round_id.max_alt_drops:
-                #         raise UserError(_("Max Alternative Drops have been reached."))
+
                 if order.batch_id.is_alt_limit_reached:
                     raise UserError(_("Max Alternative Drops have been reached."))
 
         return super(SaleOrder, self).action_confirm()
 
-    @api.depends(
-        'commitment_date', 'round_id',
-        'round_id.mon_active', 'round_id.mon_from', 'round_id.mon_to',
-        'round_id.tue_active', 'round_id.tue_from', 'round_id.tue_to',
-        'round_id.wed_active', 'round_id.wed_from', 'round_id.wed_to',
-        'round_id.thu_active', 'round_id.thu_from', 'round_id.thu_to',
-        'round_id.fri_active', 'round_id.fri_from', 'round_id.fri_to',
-        'round_id.sat_active', 'round_id.sat_from', 'round_id.sat_to',
-        'round_id.sun_active', 'round_id.sun_from', 'round_id.sun_to',
-    )
+    @api.depends('batch_id', 'batch_id.delivery_times')
     def _compute_delivery_times(self):
         for order in self:
-            if order.commitment_date and order.round_id:
-                local_dt = fields.Datetime.context_timestamp(order, order.commitment_date)
-                weekday = local_dt.weekday()
-                active_field, from_field, to_field = order._DAY_FIELDS[weekday]
-                round_rec = order.round_id
-                if round_rec[active_field]:
-                    from_val = round_rec[from_field]
-                    to_val = round_rec[to_field]
-                    from_str = order._format_time(from_val)
-                    to_str = order._format_time(to_val)
-                    order.delivery_times = "%s to %s" % (from_str, to_str)
-                else:
-                    order.delivery_times = "N/A"
-            else:
-                order.delivery_times = False
+            order.delivery_times = order.batch_id.delivery_times if order.batch_id else False
 
     @api.depends('partner_id', 'partner_shipping_id','partner_id.comment')
     def _compute_permanent_notes(self):
@@ -190,37 +153,6 @@ class SaleOrder(models.Model):
         return utc_dt
 
 
-    @staticmethod
-    def _format_time(value):
-        if value in (False, None, ''):
-            return ""
-
-        # Normalize to a float number of hours first
-        if isinstance(value, str):
-            value = value.strip()
-            if ':' in value:
-                # e.g. "5:00", "05:30"
-                h_str, m_str = value.split(':', 1)
-                try:
-                    hours = int(h_str)
-                    minutes = int(m_str)
-                except ValueError:
-                    return value  # fallback: unparseable, show as-is
-            else:
-                # e.g. "5", "5.5"
-                try:
-                    float_val = float(value)
-                    hours = int(float_val)
-                    minutes = int(round((float_val - hours) * 60))
-                except ValueError:
-                    return value  # fallback: unparseable, show as-is
-        elif isinstance(value, (int, float)):
-            hours = int(value)
-            minutes = int(round((value - hours) * 60))
-        else:
-            return ""
-
-        return "%02d:%02d" % (hours, minutes)
 
     @api.depends('batch_id')
     def _compute_is_late_order(self):

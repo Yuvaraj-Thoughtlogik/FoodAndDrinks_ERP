@@ -17,7 +17,7 @@ class ResPartner(models.Model):
     order_channel_id = fields.Many2one(
         "utm.source",
         string="Order Channel",
-        tracking=True,
+        tracking=2,
     )
     order_channel_log_count = fields.Integer(
         compute="_compute_order_channel_log_count"
