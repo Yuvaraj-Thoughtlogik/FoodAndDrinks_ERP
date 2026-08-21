@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Inherit Sale Order Form: Add Box Qty column after product_uom_qty -->
+    <record id="view_order_form_inherit_box_qty" model="ir.ui.view">
+        <field name="name">sale.order.form.inherit.box.qty</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="priority">100</field>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='order_line']/list/field[@name='product_uom_qty']" position="after">
+                <field name="box_qty" string="Box Qty" readonly="0" optional="show"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

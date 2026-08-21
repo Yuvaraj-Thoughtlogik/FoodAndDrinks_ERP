@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Dock Weight Breakdown Wizard Form View -->
+    <record id="view_batch_report_wizard_form" model="ir.ui.view">
+        <field name="name">batch.report.wizard.form</field>
+        <field name="model">batch.report.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Dock Weight Breakdown Report">
+                <sheet>
+                    <!-- Row 1: Delivery Date From & To on the same line -->
+                    <group>
+                        <group>
+                            <field name="delivery_date_from" widget="date" required="1"/>
+                        </group>
+                        <group>
+                            <field name="delivery_date_to" widget="date" required="1"/>
+                        </group>
+                    </group>
+
+                    <!-- Row 2: Late Order & Depot Checkboxes with class="o_horizontal_checkboxes" -->
+                    <group>
+                        <group colspan="4">
+                            <field name="include_late_orders" string="Late Order"/>
+                        </group>
+                        <group string="Depot" colspan="4">
+                            <field name="depot_ids"
+                                   widget="many2many_checkboxes"
+                                   class="o_horizontal_checkboxes"
+                                   nolabel="1"/>
+                        </group>
+                    </group>
+                </sheet>
+                <footer>
+                    <button name="action_print_report" string="Print" type="object" class="btn-primary" icon="fa-print" data-hotkey="q"/>
+                    <button string="Cancel" class="btn-secondary" special="cancel" data-hotkey="x"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <!-- Action to open the Wizard -->
+    <record id="action_dock_weight_breakdown_wizard" model="ir.actions.act_window">
+        <field name="name">Dock Weight Breakdown Report</field>
+        <field name="res_model">batch.report.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+        <field name="view_id" ref="view_batch_report_wizard_form"/>
+    </record>
+</odoo>

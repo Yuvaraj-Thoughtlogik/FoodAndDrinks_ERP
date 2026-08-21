@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Reporting Menu under Round Management (Placed after Driver Rounds, before Configuration) -->
+    <menuitem id="menu_round_reporting_root"
+              name="Reporting"
+              parent="round_management.menu_round_management_root"
+              sequence="50"/>
+
+    <!-- Dock Weight Breakdown Report Menu Item -->
+    <menuitem id="menu_report_dock_weight_breakdown"
+              name="Dock Weight Breakdown Report"
+              parent="menu_round_reporting_root"
+              action="action_dock_weight_breakdown_wizard"
+              sequence="10"/>
+</odoo>

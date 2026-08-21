@@ -1,0 +1,18 @@
+.o_horizontal_checkboxes {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: wrap !important;
+    gap: 20px !important;
+    align-items: center !important;
+
+    .form-check,
+    .o_checkbox,
+    >div {
+        display: inline-flex !important;
+        align-items: center !important;
+        margin-right: 20px !important;
+        margin-bottom: 6px !important;
+        width: max-content;
+        gap: 5px;
+    }
+}
