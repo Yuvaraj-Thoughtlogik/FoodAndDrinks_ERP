@@ -42,9 +42,16 @@ class SaleOrder(models.Model):
         string='Delivery Date', 
         compute='_compute_batch_delivery_info', 
         store=True, 
-        readonly=False
+        readonly=False,
+        copy=True,
     )
-    delivery_date = fields.Date(string="Delivery Date",compute='_compute_batch_delivery_info',store=True, readonly=False)
+    delivery_date = fields.Date(
+        string="Delivery Date",
+        compute='_compute_batch_delivery_info',
+        store=True, 
+        readonly=False,
+        copy=True,
+    )
     # delivery_time_slot = fields.Selection([
     #     ('08:00_12:00', '08:00 to 12:00'),
     #     ('12:00_16:00', '12:00 to 16:00'),
@@ -78,12 +85,19 @@ class SaleOrder(models.Model):
         string='No Between Times on Round',
         readonly=True
     )
+    # delivery_times = fields.Char(
+    #     string='Delivery Times',
+    #     compute='_compute_delivery_times',
+    #     store=True,
+    #     readonly=True,
+    #     help="Operating delivery times calculated from round configuration"
+    # )
     delivery_times = fields.Char(
         string='Delivery Times',
         compute='_compute_delivery_times',
         store=True,
         readonly=True,
-        help="Operating delivery times calculated from round configuration"
+        help="Delivery times copied from the selected batch"
     )
     round_full_name = fields.Char(compute='_compute_round_full_name', store=True)
 
@@ -122,11 +136,13 @@ class SaleOrder(models.Model):
         """Enforces Max. Alternative Drops limit during Sales Order confirmation."""
         for order in self:
             if order.is_alternative_round:
-
+             
                 if order.batch_id.is_alt_limit_reached:
                     raise UserError(_("Max Alternative Drops have been reached."))
 
         return super(SaleOrder, self).action_confirm()
+
+   
 
     @api.depends('batch_id', 'batch_id.delivery_times')
     def _compute_delivery_times(self):
@@ -145,6 +161,8 @@ class SaleOrder(models.Model):
         internally in UTC but should represent a fixed local wall-clock time.
         """
         self.ensure_one()
+        if not date_val:
+            return False
         tz_name = self.env.user.tz or 'UTC'
         local_tz = pytz.timezone(tz_name)
         naive_local_dt = datetime.combine(date_val, local_time)
@@ -153,6 +171,37 @@ class SaleOrder(models.Model):
         return utc_dt
 
 
+    @staticmethod
+    def _format_time(value):
+        if value in (False, None, ''):
+            return ""
+
+        # Normalize to a float number of hours first
+        if isinstance(value, str):
+            value = value.strip()
+            if ':' in value:
+                # e.g. "5:00", "05:30"
+                h_str, m_str = value.split(':', 1)
+                try:
+                    hours = int(h_str)
+                    minutes = int(m_str)
+                except ValueError:
+                    return value  # fallback: unparseable, show as-is
+            else:
+                # e.g. "5", "5.5"
+                try:
+                    float_val = float(value)
+                    hours = int(float_val)
+                    minutes = int(round((float_val - hours) * 60))
+                except ValueError:
+                    return value  # fallback: unparseable, show as-is
+        elif isinstance(value, (int, float)):
+            hours = int(value)
+            minutes = int(round((value - hours) * 60))
+        else:
+            return ""
+
+        return "%02d:%02d" % (hours, minutes)
 
     @api.depends('batch_id')
     def _compute_is_late_order(self):
@@ -162,14 +211,17 @@ class SaleOrder(models.Model):
             else:
                 rec.is_late_order = False
 
-    @api.depends('commitment_date')
+    @api.depends('delivery_date', 'commitment_date')
     def _compute_delivery_day_name(self):
         for order in self:
-            if order.commitment_date:
-                order.delivery_day_name = f"({order.commitment_date.strftime('%a')})"
+            target_date = order.delivery_date
+            if not target_date and order.commitment_date:
+                local_dt = fields.Datetime.context_timestamp(order, order.commitment_date)
+                target_date = local_dt.date()
+            if target_date:
+                order.delivery_day_name = f"({target_date.strftime('%a')})"
             else:
                 order.delivery_day_name = ""
-
 
     @api.depends('batch_id', 'batch_id.delivery_date', 'batch_id.week_number')
     def _compute_batch_delivery_info(self):
@@ -179,21 +231,35 @@ class SaleOrder(models.Model):
                 order.week_number = order.batch_id.week_number
 
                 if order.batch_id.delivery_date:
-                    order.commitment_date = datetime.combine(
+                    order.commitment_date = order._local_time_to_utc_datetime(
                         order.batch_id.delivery_date,
                         DEFAULT_DELIVERY_TIME
                     )
                 else:
                     order.commitment_date = False
             else:
-                order.delivery_date = False
-                order.week_number = False
-                order.commitment_date = False
+                if order.delivery_date:
+                    iso_year, iso_week, _ = order.delivery_date.isocalendar()
+                    order.week_number = f"{iso_year}{str(iso_week).zfill(2)}"
+                    if not order.commitment_date:
+                        order.commitment_date = order._local_time_to_utc_datetime(
+                            order.delivery_date, DEFAULT_DELIVERY_TIME
+                        )
+                else:
+                    order.delivery_date = False
+                    order.week_number = False
+                    order.commitment_date = False
 
     @api.onchange('commitment_date')
     def _onchange_commitment_date_sync_delivery_date(self):
         for order in self:
-            order.delivery_date = order.commitment_date.date() if order.commitment_date else False
+            if order.commitment_date:
+                local_dt = fields.Datetime.context_timestamp(order, order.commitment_date)
+                order.delivery_date = local_dt.date()
+                iso_year, iso_week, _ = order.delivery_date.isocalendar()
+                order.week_number = f"{iso_year}{str(iso_week).zfill(2)}"
+            else:
+                order.delivery_date = False
 
     @api.onchange('delivery_date')
     def _onchange_delivery_date_sync_commitment_date(self):
@@ -202,37 +268,61 @@ class SaleOrder(models.Model):
                 order.commitment_date = order._local_time_to_utc_datetime(
                     order.delivery_date, DEFAULT_DELIVERY_TIME
                 )
+                iso_year, iso_week, _ = order.delivery_date.isocalendar()
+                order.week_number = f"{iso_year}{str(iso_week).zfill(2)}"
             else:
                 order.commitment_date = False
 
+    @api.model_create_multi
+    def create(self, vals_list):
+        tz_name = self.env.user.tz or 'UTC'
+        local_tz = pytz.timezone(tz_name)
+        for vals in vals_list:
+            if vals.get('delivery_date') and not vals.get('commitment_date'):
+                d_date = fields.Date.to_date(vals['delivery_date'])
+                naive_dt = datetime.combine(d_date, DEFAULT_DELIVERY_TIME)
+                vals['commitment_date'] = local_tz.localize(naive_dt).astimezone(pytz.UTC).replace(tzinfo=None)
+                if not vals.get('week_number'):
+                    iso_year, iso_week, _ = d_date.isocalendar()
+                    vals['week_number'] = f"{iso_year}{str(iso_week).zfill(2)}"
+            elif vals.get('commitment_date') and not vals.get('delivery_date'):
+                c_dt = fields.Datetime.to_datetime(vals['commitment_date'])
+                local_d = pytz.UTC.localize(c_dt).astimezone(local_tz).date()
+                vals['delivery_date'] = local_d
+                if not vals.get('week_number'):
+                    iso_year, iso_week, _ = local_d.isocalendar()
+                    vals['week_number'] = f"{iso_year}{str(iso_week).zfill(2)}"
+
+        return super().create(vals_list)
+
     def write(self, vals):
-        res = super().write(vals)
+        if not self.env.context.get('skip_date_sync'):
+            tz_name = self.env.user.tz or 'UTC'
+            local_tz = pytz.timezone(tz_name)
 
-        if self.env.context.get('skip_date_sync'):
-            return res
-
-        if 'commitment_date' in vals and 'delivery_date' not in vals:
-            for order in self:
-                new_delivery_date = order.commitment_date.date() if order.commitment_date else False
-                if order.delivery_date != new_delivery_date:
-                    order.with_context(skip_date_sync=True).write({
-                        'delivery_date': new_delivery_date
-                    })
-
-        elif 'delivery_date' in vals and 'commitment_date' not in vals:
-            for order in self:
-                if order.delivery_date:
-                    new_commitment_date = order._local_time_to_utc_datetime(
-                        order.delivery_date, DEFAULT_DELIVERY_TIME
-                    )
+            if 'delivery_date' in vals and 'commitment_date' not in vals:
+                if vals.get('delivery_date'):
+                    d_date = fields.Date.to_date(vals['delivery_date'])
+                    naive_dt = datetime.combine(d_date, DEFAULT_DELIVERY_TIME)
+                    vals['commitment_date'] = local_tz.localize(naive_dt).astimezone(pytz.UTC).replace(tzinfo=None)
+                    if 'week_number' not in vals:
+                        iso_year, iso_week, _ = d_date.isocalendar()
+                        vals['week_number'] = f"{iso_year}{str(iso_week).zfill(2)}"
                 else:
-                    new_commitment_date = False
-                if order.commitment_date != new_commitment_date:
-                    order.with_context(skip_date_sync=True).write({
-                        'commitment_date': new_commitment_date
-                    })
+                    vals['commitment_date'] = False
 
-        return res
+            elif 'commitment_date' in vals and 'delivery_date' not in vals:
+                if vals.get('commitment_date'):
+                    c_dt = fields.Datetime.to_datetime(vals['commitment_date'])
+                    local_d = pytz.UTC.localize(c_dt).astimezone(local_tz).date()
+                    vals['delivery_date'] = local_d
+                    if 'week_number' not in vals:
+                        iso_year, iso_week, _ = local_d.isocalendar()
+                        vals['week_number'] = f"{iso_year}{str(iso_week).zfill(2)}"
+                else:
+                    vals['delivery_date'] = False
+
+        return super().write(vals)
 
 
     @api.depends('partner_id','partner_id.round_id')
@@ -273,6 +363,19 @@ class SaleOrder(models.Model):
             'view_mode': 'form',
             'target': 'new',
         }
+
+    def copy(self, default=None):
+        self.ensure_one()
+        default = dict(default or {})
+        if 'delivery_date' not in default and self.delivery_date:
+            default['delivery_date'] = self.delivery_date
+        if 'commitment_date' not in default and self.commitment_date:
+            default['commitment_date'] = self.commitment_date
+        if 'week_number' not in default and self.week_number:
+            default['week_number'] = self.week_number
+        if 'batch_id' not in default and self.batch_id:
+            default['batch_id'] = self.batch_id.id
+        return super().copy(default=default)
 
     def action_duplicate(self):
         self.ensure_one()
