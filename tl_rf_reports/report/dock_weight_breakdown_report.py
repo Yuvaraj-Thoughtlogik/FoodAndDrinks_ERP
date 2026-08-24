@@ -68,12 +68,110 @@ class ReportDockWeightBreakdown(models.AbstractModel):
 
         report_results = []
         for wizard in docs:
-            # Format display date (e.g., 'Tuesday 11/08/2026')
+            # Format display date
             if wizard.delivery_date_from == wizard.delivery_date_to:
                 formatted_date = wizard.delivery_date_from.strftime('%A %d/%m/%Y')
+                delivery_date_str = wizard.delivery_date_from.strftime('%d/%m/%Y')
             else:
                 formatted_date = f"{wizard.delivery_date_from.strftime('%A %d/%m/%Y')} - {wizard.delivery_date_to.strftime('%A %d/%m/%Y')}"
+                delivery_date_str = f"{wizard.delivery_date_from.strftime('%d/%m/%Y')} - {wizard.delivery_date_to.strftime('%d/%m/%Y')}"
 
+            # Courier Delivery Flow
+            if getattr(wizard, 'delivery_channel', 'regal_van') == 'courier':
+                order_domain = [
+                    ('delivery_channel', '=', 'courier'),
+                    ('state', 'in', ['sale', 'done']),
+                    ('delivery_date', '>=', wizard.delivery_date_from),
+                    ('delivery_date', '<=', wizard.delivery_date_to),
+                ]
+                if not wizard.include_late_orders:
+                    order_domain.append(('is_late_order', '=', False))
+                else:
+                    order_domain.append(('is_late_order', '=', True))
+
+                applicable_orders = self.env['sale.order'].search(order_domain, order='delivery_date asc, name asc')
+
+                categories_map = {}
+                grand_total_qty = 0.0
+                grand_total_weight = 0.0
+
+                for order in applicable_orders:
+                    for line in order.order_line.filtered(lambda l: not l.display_type and l.product_id):
+                        product = line.product_id
+                        categ = product.categ_id
+                        categ_key = categ.id if categ else 0
+                        categ_name = (categ.name or _('Fresh')).strip() if categ else 'Fresh'
+
+                        if categ_key not in categories_map:
+                            categories_map[categ_key] = {
+                                'categ_id': categ_key,
+                                'categ_name': categ_name,
+                                'products': {},
+                                'total_qty': 0.0,
+                                'total_weight': 0.0,
+                            }
+
+                        prod_key = product.id
+                        if prod_key not in categories_map[categ_key]['products']:
+                            unit_weight = self._extract_unit_weight(product, line)
+                            uom_name = (line.product_uom_id.name if hasattr(line, 'product_uom_id') and line.product_uom_id else (product.uom_id.name if product.uom_id else ''))
+                            product_name = line.product_id.name or product.name
+
+                            categories_map[categ_key]['products'][prod_key] = {
+                                'product_id': prod_key,
+                                'product_code': product.default_code or '',
+                                'product_name': product_name,
+                                'uom_name': uom_name,
+                                'unit_weight': unit_weight,
+                                'total_qty': 0.0,
+                                'total_weight': 0.0,
+                            }
+
+                        qty = line.product_uom_qty
+                        prod_info = categories_map[categ_key]['products'][prod_key]
+
+                        if prod_info['unit_weight'] > 0:
+                            line_weight = prod_info['unit_weight'] * qty
+                        else:
+                            line_weight = qty
+
+                        prod_info['total_qty'] += qty
+                        prod_info['total_weight'] += line_weight
+
+                        categ_map = categories_map[categ_key]
+                        categ_map['total_qty'] += qty
+                        categ_map['total_weight'] += line_weight
+
+                        grand_total_qty += qty
+                        grand_total_weight += line_weight
+
+                category_pages = []
+                for c_key, c_val in sorted(categories_map.items(), key=lambda item: item[1]['categ_name']):
+                    prod_list = sorted(
+                        c_val['products'].values(),
+                        key=lambda item: item['product_name']
+                    )
+                    if prod_list:
+                        category_pages.append({
+                            'categ_name': c_val['categ_name'],
+                            'product_list': prod_list,
+                            'total_weight': c_val['total_weight'],
+                            'total_qty': c_val['total_qty'],
+                        })
+
+                report_results.append({
+                    'wizard': wizard,
+                    'delivery_channel': 'courier',
+                    'formatted_date': formatted_date,
+                    'delivery_date_str': delivery_date_str,
+                    'categories': category_pages,
+                    'grand_total_qty': grand_total_qty,
+                    'grand_total_weight': grand_total_weight,
+                    'total_orders_count': len(applicable_orders),
+                })
+                continue
+
+            # Regal Van Delivery Flow (Batch-based)
             # Step 1: Find eligible batches
             batch_domain = [
                 ('delivery_date', '>=', wizard.delivery_date_from),
@@ -87,12 +185,14 @@ class ReportDockWeightBreakdown(models.AbstractModel):
             batches = self.env['round.management.batch'].search(batch_domain, order='delivery_date asc, code asc')
 
             # Step 2: Retrieve and filter Sale Orders
-            all_orders = batches.mapped('order_ids').filtered(lambda so: so.state != 'cancel')
+            all_orders = batches.mapped('order_ids').filtered(
+                lambda so: so.state in ('sale', 'done') and getattr(so, 'delivery_channel', False) in ('regal_van', False)
+            )
 
             if not wizard.include_late_orders:
                 applicable_orders = all_orders.filtered(lambda so: not getattr(so, 'is_late_order', False))
             else:
-                applicable_orders = all_orders
+                applicable_orders = all_orders.filtered(lambda so: getattr(so, 'is_late_order', False))
 
             # Step 3: Group by Depot -> Category -> Product
             depots_map = {}
@@ -187,7 +287,9 @@ class ReportDockWeightBreakdown(models.AbstractModel):
 
             report_results.append({
                 'wizard': wizard,
+                'delivery_channel': 'regal_van',
                 'formatted_date': formatted_date,
+                'delivery_date_str': delivery_date_str,
                 'pages': combo_pages,
                 'grand_total_qty': grand_total_qty,
                 'grand_total_weight': grand_total_weight,

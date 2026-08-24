@@ -12,4 +12,53 @@
             </xpath>
         </field>
     </record>
+
+    <!-- Sale Order Line List View for Dock Weight / Courier Report -->
+    <record id="view_sale_order_line_dock_weight_tree" model="ir.ui.view">
+        <field name="name">sale.order.line.dock.weight.list</field>
+        <field name="model">sale.order.line</field>
+        <field name="arch" type="xml">
+            <list string="Dock Weight Breakdown" create="0" delete="0" edit="0" expand="1">
+                <field name="depot_id" optional="show"/>
+                <field name="categ_id" optional="show"/>
+                <field name="product_id"/>
+                <field name="weight" string="Weight (Kg)" sum="Total Weight"/>
+                <field name="product_uom_qty" string="Quantity" sum="Total Quantity"/>
+                <field name="product_uom_id" string="Unit" optional="show"/>
+                <field name="order_id"/>
+                <field name="order_partner_id" string="Customer" optional="hide"/>
+                <field name="delivery_date" optional="show"/>
+                <field name="delivery_channel" optional="hide"/>
+                <field name="is_late_order" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Sale Order Line Search View for Dock Weight Breakdown -->
+    <record id="view_sale_order_line_dock_weight_search" model="ir.ui.view">
+        <field name="name">sale.order.line.dock.weight.search</field>
+        <field name="model">sale.order.line</field>
+        <field name="arch" type="xml">
+            <search string="Search Dock Weight Lines">
+                <field name="product_id"/>
+                <field name="order_id"/>
+                <field name="categ_id"/>
+                <field name="depot_id"/>
+                <field name="delivery_date"/>
+                <separator/>
+                <filter string="Courier Delivery" name="courier" domain="[('delivery_channel', '=', 'courier')]"/>
+                <filter string="Regal Van Delivery" name="regal_van" domain="[('delivery_channel', 'in', ['regal_van', False])]"/>
+                <separator/>
+                <filter string="Normal Orders" name="normal_orders" domain="[('is_late_order', '=', False)]"/>
+                <filter string="Late Orders" name="late_orders" domain="[('is_late_order', '=', True)]"/>
+                <group>
+                    <filter string="Depot" name="group_by_depot" context="{'group_by': 'depot_id'}"/>
+                    <filter string="Product Category" name="group_by_category" context="{'group_by': 'categ_id'}"/>
+                    <filter string="Product" name="group_by_product" context="{'group_by': 'product_id'}"/>
+                    <filter string="Delivery Date" name="group_by_delivery_date" context="{'group_by': 'delivery_date'}"/>
+                    <filter string="Delivery Channel" name="group_by_channel" context="{'group_by': 'delivery_channel'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
 </odoo>

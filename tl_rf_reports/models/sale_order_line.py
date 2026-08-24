@@ -15,6 +15,39 @@ class SaleOrderLine(models.Model):
         digits=(16, 0),
         help="Auto-calculated box quantity based on 1kg box capacity per unit multiplied by line quantity."
     )
+    weight = fields.Float(
+        string="Weight (Kg)",
+        compute='_compute_weight',
+        digits=(16, 2),
+        help="Calculated weight in Kg based on unit weight and product quantity."
+    )
+    categ_id = fields.Many2one(
+        'product.category',
+        related='product_id.categ_id',
+        string="Product Category",
+        readonly=True,
+    )
+    depot_id = fields.Many2one(
+        'stock.warehouse',
+        related='order_id.batch_id.depot_id',
+        string="Depot",
+        readonly=True,
+    )
+    delivery_date = fields.Date(
+        related='order_id.delivery_date',
+        string="Delivery Date",
+        readonly=True,
+    )
+    delivery_channel = fields.Selection(
+        related='order_id.delivery_channel',
+        string="Delivery Channel",
+        readonly=True,
+    )
+    is_late_order = fields.Boolean(
+        related='order_id.is_late_order',
+        string="Late Order",
+        readonly=True,
+    )
 
     def _get_product_unit_weight_in_kg(self):
         """Extracts or calculates unit weight in kg for the order line's product."""
@@ -22,6 +55,12 @@ class SaleOrderLine(models.Model):
         product = self.product_id
         if not product:
             return 0.0
+
+        # 0. Check if UoM is kg
+        uom = self.product_uom_id if hasattr(self, 'product_uom_id') and self.product_uom_id else (product.uom_id if product else False)
+        uom_name = (uom.name or '').strip().lower() if uom else ''
+        if uom_name in ('kg', 'kgs', 'kilogram', 'kilograms'):
+            return 1.0
 
         # 1. Product standard weight field
         if product.weight and product.weight > 0:
@@ -50,16 +89,37 @@ class SaleOrderLine(models.Model):
                 except ValueError:
                     pass
 
-        # 3. Fallback: Parse weight from product name (e.g. '2kg', '1-1.2kg', '500g')
+        # 3. Fallback: Parse weight from product name (e.g. '125-140G', '1-1.2kg', '500g', '2kg')
         if product.name:
-            kg_match = re.search(r"(\d+(?:\.\d+)?)\s*kg\b", product.name, re.IGNORECASE)
-            if kg_match:
-                return float(kg_match.group(1))
-            g_match = re.search(r"(\d+(?:\.\d+)?)\s*g\b", product.name, re.IGNORECASE)
-            if g_match:
-                return float(g_match.group(1)) / 1000.0
+            g_range = re.search(r"(\d+)\s*-\s*(\d+)\s*g\b", product.name, re.IGNORECASE)
+            if g_range:
+                avg_g = (float(g_range.group(1)) + float(g_range.group(2))) / 2.0
+                return avg_g / 1000.0
+            g_single = re.search(r"(\d+(?:\.\d+)?)\s*g\b", product.name, re.IGNORECASE)
+            if g_single:
+                return float(g_single.group(1)) / 1000.0
+            kg_range = re.search(r"(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)\s*kg\b", product.name, re.IGNORECASE)
+            if kg_range:
+                avg_kg = (float(kg_range.group(1)) + float(kg_range.group(2))) / 2.0
+                return avg_kg
+            kg_single = re.search(r"(\d+(?:\.\d+)?)\s*kg\b", product.name, re.IGNORECASE)
+            if kg_single:
+                return float(kg_single.group(1))
 
         return 0.0
+
+    @api.depends('product_id', 'product_uom_qty', 'product_id.weight', 'product_uom_id')
+    def _compute_weight(self):
+        """Calculate total weight in kg for the order line."""
+        for line in self:
+            if not line.product_id or line.product_uom_qty <= 0:
+                line.weight = 0.0
+                continue
+            unit_weight = line._get_product_unit_weight_in_kg()
+            if unit_weight > 0:
+                line.weight = round(unit_weight * line.product_uom_qty, 2)
+            else:
+                line.weight = round(line.product_uom_qty, 2)
 
     @api.depends('product_id', 'product_uom_qty', 'product_id.weight')
     def _compute_box_qty(self):
@@ -90,12 +150,14 @@ class SaleOrderLine(models.Model):
 
     @api.onchange('product_id', 'product_uom_qty')
     def _onchange_product_compute_box_qty(self):
-        """Immediately auto-fills box_qty on user input in UI before saving."""
+        """Immediately auto-fills box_qty and weight on user input in UI before saving."""
         for line in self:
             if line.product_id and line.product_uom_qty > 0:
                 unit_weight = line._get_product_unit_weight_in_kg()
                 if unit_weight > 0:
                     total_weight_kg = unit_weight * line.product_uom_qty
                     line.box_qty = math.ceil(total_weight_kg / 1.0)
+                    line.weight = round(total_weight_kg, 2)
                 else:
                     line.box_qty = line.product_uom_qty
+                    line.weight = round(line.product_uom_qty, 2)
