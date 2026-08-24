@@ -1,0 +1,4 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_worldpay_vt_popup_user,access.worldpay.vt.popup.user,model_worldpay_vt_popup,base.group_user,1,1,1,1
+access_worldpay_virtual_payment_user,access.worldpay.virtual.payment.user,model_worldpay_virtual_payment,base.group_user,1,1,1,1
+access_worldpay_vt_payment_token_user,access.worldpay.vt.payment.token.user,model_worldpay_vt_payment_token,base.group_user,1,1,1,1

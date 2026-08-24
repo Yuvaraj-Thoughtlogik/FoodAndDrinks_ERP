@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="payment_neatworldpayvt.form" inherit_id="payment.form">
+        <xpath expr="." position="inside">
+            <div id="neatworldpayvt_popup" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999;">
+                <div style="background: #fff; padding: 20px; max-height: 700px; overflow: auto; width: 100%; max-width: 800px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3); border-radius: 10px; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
+                    <div id="neatworldpayvt-container"></div>
+                </div>
+            </div>
+        </xpath>
+    </template>
+</odoo>

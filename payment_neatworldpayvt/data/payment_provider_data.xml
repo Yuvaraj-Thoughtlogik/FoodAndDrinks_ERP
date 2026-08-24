@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+    <record id="payment_method_neatworldpayvt" model="payment.method">
+        <field name="name">Worldpay Virtual Terminal</field>
+        <field name="code">neatworldpayvt</field>
+        <field name="image" type="base64"
+            file="payment_neatworldpayvt/static/description/icon.png" />
+    </record>
+    <record id="payment_provider_neatworldpayvt" model="payment.provider">
+        <field name="code">neatworldpayvt</field>
+        <field name="name">Worldpay Virtual Terminal</field>
+        <field name="inline_form_view_id" ref="inline_form"/>
+        <field name="allow_tokenization">False</field>
+        <field name="image_128" type="base64"
+            file="payment_neatworldpayvt/static/description/icon.png" />
+        <field name="module_id" ref="base.module_payment_neatworldpayvt" />
+        <field name="payment_method_ids"
+                eval="[Command.set([ref('payment_neatworldpayvt.payment_method_neatworldpayvt')])]" />
+    </record>
+
+</odoo>

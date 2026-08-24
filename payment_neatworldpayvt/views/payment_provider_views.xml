@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="payment_provider_form" model="ir.ui.view">
+        <field name="name">NEATWorldPay Virtual Terminal Provider Form</field>
+        <field name="model">payment.provider</field>
+        <field name="inherit_id" ref="payment.payment_provider_form"/>
+        <field name="arch" type="xml">
+            <group name="provider_credentials" position='inside'>
+                <group invisible="code != 'neatworldpayvt'">
+                    <script type="text/javascript" src="/payment_neatworldpayvt/static/src/interactions/neatworldpay.js"/>
+                    <link rel="stylesheet" href="/payment_neatworldpayvt/static/src/css/neatworldpay.css"/>
+                    <div class="alert alert-success" role="alert" colspan="2" invisible="neatworldpayvt_activation_code">
+                        Don't have an Activation Code yet?<br />
+                          
+                        <a href="#" name="activation-code-button" onclick="showActivationForm(event)">
+                        Get a free activation code
+                        </a>
+                        <!-- Hidden Form -->
+                        <div id="neatworldpayvt_form" class="neatworldpayvt-popup">
+                            <h3>Request an Activation Code</h3>
+                            <div id="neatworldpayvt_request_form">
+
+                            </div>
+                            <a href="#" class="neatworldpayvt_submit" name="neatworldpayvt_submit">Submit</a>
+                            <a href="#" class="neatworldpayvt_close_form" name="neatworldpayvt_close_form">Cancel</a>
+                        </div>
+                    </div>
+                    <field
+                        name="neatworldpayvt_reset_code"
+                        string="Update Module Cache"
+                        required="code == 'neatworldpayvt' and state != 'disabled'"
+                    />
+                    <field
+                        name="neatworldpayvt_activation_code"
+                        string="Activation Code"
+                        password="True"
+                        required="code == 'neatworldpayvt' and state != 'disabled'"
+                    />
+                    <field
+                        name="neatworldpayvt_username"
+                        string="Username"
+                        required="code == 'neatworldpayvt' and state != 'disabled'"
+                    />
+                    <field
+                        name="neatworldpayvt_password"
+                        string="Password"
+                        password="True"
+                        required="code == 'neatworldpayvt' and state != 'disabled'"
+                    />
+                    <field
+                        name="neatworldpayvt_checkout_id"
+                        string="Checkout ID"
+                        required="code == 'neatworldpayvt' and state != 'disabled'"
+                    />
+                    <field
+                        name="neatworldpayvt_entity"
+                        string="Entity"
+                        required="code == 'neatworldpayvt' and state != 'disabled'"
+                    />
+                    <field
+                        name="neatworldpayvt_fallback_user_id"
+                        string="Fallback Failure VT User"
+                        required="code == 'neatworldpayvt' and state != 'disabled'"
+                    />
+                    <div class="alert alert-success" role="alert" colspan="2">
+                        <b>By using this module you agree to our </b>
+                        <a
+                            href="https://www.sns-software.com/privacy"
+                            target="_blank">
+                        terms and conditions
+                        </a>
+                    </div>
+                    <div class="oe_structure" colspan="2">
+                        <p>
+                            Please make sure to set the following webhook in the Worldpay Dashboard:
+                        </p>
+                        <p><strong>{Odoo Server URL}/neatworldpayvt/wh</strong></p>
+                    </div>
+                </group>
+            </group>
+        </field>
+    </record>
+</odoo>

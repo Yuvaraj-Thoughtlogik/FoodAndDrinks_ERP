@@ -1,0 +1,560 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="worldpay_vt_invoice_payment_page" name="WorldPay VT Invoice Provider Select">
+        <t t-call="web.html_container">
+            <div id="neatworldpayvt_invoice_select_root" t-att-data-wizard-id="wizard.id"/>
+            <style>
+                body { margin: 0; font-family: Arial, sans-serif; }
+                .select-wrap { padding: 24px; max-width: 520px; margin: 0 auto; }
+                .select-wrap h2 { font-size: 18px; margin: 0 0 16px; font-weight: 600; color: #212529; }
+                .form-group { margin-bottom: 16px; }
+                .form-group label { display: block; font-size: 13px; font-weight: 500; color: #495057; margin-bottom: 6px; }
+                .form-group select { width: 100%; padding: 8px 12px; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px; color: #495057; background-color: #fff; box-sizing: border-box; }
+                .button-row { display: flex; gap: 10px; margin-top: 20px; }
+                .btn { cursor: pointer; flex: 1; color: white; outline: 0; font-size: 14px; border-radius: 4px; font-weight: 500; padding: 10px 16px; border: 1px solid transparent; }
+                .btn-next { background: #007bff; border-color: #007bff; }
+                .msg { font-size: 13px; margin-top: 12px; color: #dc3545; display: none; }
+                .msg.show { display: block; }
+                .hint { font-size: 12px; color: #6c757d; margin-top: 8px; line-height: 1.4; }
+            </style>
+            <div class="select-wrap">
+                <h2>Select Worldpay virtual terminal provider</h2>
+                <div class="form-group">
+                    <label for="vtProviderSelect">Payment provider</label>
+                    <select id="vtProviderSelect" required="required">
+                        <option value="">Choose a provider...</option>
+                        <t t-foreach="vt_providers" t-as="p">
+                            <option t-att-value="p.id" t-esc="p.name"
+                                    t-att-selected="wizard.provider_id and wizard.provider_id.id == p.id and 'selected' or None"/>
+                        </t>
+                    </select>
+                </div>
+                <div class="button-row">
+                    <button type="button" class="btn btn-next" id="vtSelectNext">Next</button>
+                </div>
+                <p class="msg" id="vtSelectMsg"></p>
+                <p class="hint">Use Next to load the payment form for the selected provider. You can return here to change provider before charging.</p>
+            </div>
+            <script><![CDATA[
+                document.addEventListener('DOMContentLoaded', function () {
+                    const root = document.getElementById('neatworldpayvt_invoice_select_root');
+                    const selectEl = document.getElementById('vtProviderSelect');
+                    const msgEl = document.getElementById('vtSelectMsg');
+                    if (!root || !selectEl || !msgEl) {
+                        return;
+                    }
+                    const wizardId = root.dataset.wizardId || '';
+
+                    function vtResetWizardIframeSize() {
+                        try {
+                            var f = window.frameElement;
+                            if (!f) {
+                                return;
+                            }
+                            f.style.minHeight = '1180px';
+                            f.style.height = '92vh';
+                            f.style.maxHeight = '';
+                            f.style.overflow = 'hidden';
+                        } catch (e) {}
+                    }
+                    vtResetWizardIframeSize();
+
+                    function closeModal() {
+                        if (window.parent && window.parent !== window) {
+                            const dialog = window.parent.document.querySelector('.modal');
+                            const closeBtn = dialog && dialog.querySelector('.btn-close, [data-bs-dismiss="modal"]');
+                            if (closeBtn) {
+                                closeBtn.click();
+                                return;
+                            }
+                        }
+                        window.close();
+                    }
+
+                    function showMsg(text) {
+                        msgEl.textContent = text || '';
+                        msgEl.classList.toggle('show', !!text);
+                    }
+
+                    document.getElementById('vtSelectNext').addEventListener('click', function (e) {
+                        e.preventDefault();
+                        const providerId = selectEl.value;
+                        if (!providerId) {
+                            showMsg('Please select a payment provider.');
+                            return;
+                        }
+                        showMsg('');
+                        fetch(`/neatworldpayvt/invoice_payment/${wizardId}/checkout`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ provider_id: parseInt(providerId, 10) }),
+                            credentials: 'same-origin',
+                        }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, body: j }; }); })
+                        .then(function (res) {
+                            if (!res.ok || !res.body || !res.body.ok) {
+                                showMsg('Could not start checkout. Please try again.');
+                                return;
+                            }
+                            window.location.href = `/neatworldpayvt/invoice_payment/${wizardId}/pay`;
+                        }).catch(function () {
+                            showMsg('Network error. Please try again.');
+                        });
+                    });
+                });
+            ]]></script>
+        </t>
+    </template>
+
+    <template id="worldpay_vt_invoice_payment_checkout" name="WorldPay VT Invoice Payment Checkout">
+        <t t-call="web.html_container">
+            <div id="neatworldpayvt_invoice_payment_root"
+                 t-att-data-transaction-reference="transaction_reference or ''"
+                 t-att-data-transaction-key="transaction_key or ''"
+                 t-att-data-checkout-id="checkout_id or ''"
+                 t-att-data-worldpay-url="worldpay_url or ''"
+                 t-att-data-billing-address="billing_address_json or '{}'"
+                 t-att-data-countries="countries_json or '[]'"
+                 t-att-data-saved-payment-tokens="saved_payment_tokens_json or '[]'"
+                 t-att-data-provider-id="provider_id or ''"
+                 t-att-data-wizard-id="wizard_id or ''"/>
+            <div id="neatworldpayvt-container"/>
+            <script><![CDATA[
+                document.addEventListener('DOMContentLoaded', function () {
+                    const root = document.getElementById('neatworldpayvt_invoice_payment_root');
+                    const container = document.getElementById('neatworldpayvt-container');
+                    if (!root || !container) {
+                        return;
+                    }
+
+                    function vtResetWizardIframeSize() {
+                        try {
+                            var f = window.frameElement;
+                            if (!f) {
+                                return;
+                            }
+                            f.style.minHeight = '1180px';
+                            f.style.height = '92vh';
+                            f.style.maxHeight = '';
+                            f.style.overflow = 'hidden';
+                        } catch (e) {}
+                    }
+                    function vtShrinkWizardIframeForResult() {
+                        try {
+                            var f = window.frameElement;
+                            if (!f) {
+                                return;
+                            }
+                            f.style.minHeight = '0';
+                            f.style.height = 'min(520px, 88vh)';
+                            f.style.maxHeight = '88vh';
+                            f.style.overflow = 'auto';
+                        } catch (e) {}
+                    }
+                    vtResetWizardIframeSize();
+
+                    const data = {
+                        transactionReference: root.dataset.transactionReference || '',
+                        transactionKey: root.dataset.transactionKey || '',
+                        checkoutId: root.dataset.checkoutId || '',
+                        worldpayUrl: root.dataset.worldpayUrl || 'https://try.access.worldpay.com',
+                        billingAddress: JSON.parse(root.dataset.billingAddress || '{}'),
+                        countries: JSON.parse(root.dataset.countries || '[]'),
+                        savedPaymentTokens: JSON.parse(root.dataset.savedPaymentTokens || '[]'),
+                        providerId: root.dataset.providerId || '',
+                        wizardId: root.dataset.wizardId || '',
+                    };
+
+                    if (!data.checkoutId) {
+                        container.innerHTML = '<div style="padding:20px;text-align:center;color:#dc3545;">Worldpay virtual terminal is not configured. Please update the activation code and checkout ID.</div>';
+                        return;
+                    }
+
+                    container.innerHTML = `
+                        <style>
+                            body { margin: 0; font-family: Arial, sans-serif; }
+                            .checkout-wrap { padding: 20px; max-width: 720px; margin: 0 auto; }
+                            .checkout .label { font-size: 13px; font-weight: 500; color: #495057; margin-bottom: 8px; display: block; }
+                            .checkout .field { height: 40px; border-bottom: 1px solid lightgray; margin-bottom: 0; }
+                            .checkout .field#card-pan { margin-bottom: 30px; }
+                            .checkout .col-2 { display: flex; }
+                            .checkout .col-2 .col { flex: 1; }
+                            .checkout .col-2 .col:first-child { flex: 1; margin-right: 10px; }
+                            .checkout .col-2 .col:last-child { flex: 1; margin-left: 10px; }
+                            .checkout #card-expiry.field, .checkout #card-cvv.field { height: 44px; min-width: 80px; }
+                            .form-group { margin-bottom: 16px; }
+                            .form-group label { display: block; font-size: 13px; font-weight: 500; color: #495057; margin-bottom: 6px; }
+                            .form-group input[type="text"], .form-group select { width: 100%; padding: 8px 12px; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px; color: #495057; background-color: #fff; box-sizing: border-box; }
+                            .saved-card-wrap { border: 1px solid #dee2e6; border-radius: 5px; padding: 12px; margin-bottom: 18px; background: #f8f9fa; }
+                            .saved-card-wrap label { display: block; font-size: 13px; font-weight: 500; color: #495057; margin-bottom: 6px; }
+                            .payment-method-option { display: flex; align-items: center; gap: 8px; font-size: 14px; color: #495057; margin: 8px 0; cursor: pointer; }
+                            .payment-method-option input { margin: 0; }
+                            .save-card-wrap { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #495057; margin: 4px 0 16px; }
+                            .new-card-fields.hidden { display: none; }
+                            .button-group { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; }
+                            .submit, .clear, .cancel, .change-provider { cursor: pointer; width: 100%; color: white; outline: 0; font-size: 14px; border-radius: 4px; font-weight: 500; padding: 10px 16px; border: 1px solid transparent; }
+                            .submit { background: #007bff; border-color: #007bff; }
+                            .clear { background: #6c757d; border-color: #6c757d; }
+                            .change-provider { background: #6c757d; border-color: #6c757d; }
+                            .cancel { background: #dc3545; border-color: #dc3545; }
+                            .error-message { color: #dc3545; font-size: 12px; margin-top: 4px; display: none; }
+                            .error-message.show { display: block; }
+                            .disclaimer { font-size: 14px; background-color: #fff3cd; border: 1px solid #ffeeba; color: #856404; border-radius: 5px; padding: 12px 15px; margin-bottom: 20px; line-height: 1.4; }
+                        </style>
+                        <div class="checkout-wrap">
+                            <p class="disclaimer">This payment channel is strictly for internal employee use. It must never be presented to customers and is not approved for ecommerce transactions.</p>
+                            <form class="checkout" id="card-form">
+                                <div class="saved-card-wrap" id="savedCardWrap">
+                                    <div style="font-size: 13px; font-weight: 500; color: #495057; margin-bottom: 6px;">Payment method</div>
+                                    <label class="payment-method-option">
+                                        <input type="radio" name="selectedPaymentTokenId" value="" checked="checked"/>
+                                        <span>Use a new card</span>
+                                    </label>
+                                    <div id="savedPaymentTokenOptions"></div>
+                                </div>
+                                <div class="new-card-fields" id="newCardFields">
+                                    <div class="label">Card number</div>
+                                    <section id="card-pan" class="field"></section>
+                                    <section class="col-2">
+                                        <section class="col">
+                                            <div class="label">Expiry date</div>
+                                            <section id="card-expiry" class="field"></section>
+                                        </section>
+                                        <section class="col">
+                                            <div class="label">CVV</div>
+                                            <section id="card-cvv" class="field"></section>
+                                        </section>
+                                    </section>
+                                    <div class="form-group">
+                                        <label for="cardholderName">Cardholder Name</label>
+                                        <input type="text" id="cardholderName" name="cardholderName" required="required"/>
+                                        <div class="error-message" id="cardholderName-error"></div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="address">Address</label>
+                                        <input type="text" id="address" name="address" required="required"/>
+                                        <div class="error-message" id="address-error"></div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="address2">Address 2</label>
+                                        <input type="text" id="address2" name="address2"/>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="address3">Address 3</label>
+                                        <input type="text" id="address3" name="address3"/>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="city">City</label>
+                                        <input type="text" id="city" name="city" required="required"/>
+                                        <div class="error-message" id="city-error"></div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="state">State</label>
+                                        <input type="text" id="state" name="state"/>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="country">Country</label>
+                                        <select id="country" name="country" required="required">
+                                            <option value="">Select a country...</option>
+                                        </select>
+                                        <div class="error-message" id="country-error"></div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="postcode">Postcode</label>
+                                        <input type="text" id="postcode" name="postcode" required="required"/>
+                                        <div class="error-message" id="postcode-error"></div>
+                                    </div>
+                                    <label class="save-card-wrap">
+                                        <input type="checkbox" id="saveCardDetails" name="saveCardDetails"/>
+                                        Save this card for future virtual terminal payments
+                                    </label>
+                                </div>
+                                <div class="button-group">
+                                    <button class="submit" type="submit">Charge Customer</button>
+                                    <button class="clear" type="button" id="clear">Clear</button>
+                                    <button class="change-provider" type="button" id="vtChangeProvider">Back</button>
+                                </div>
+                                <div class="error-message" id="form-error"></div>
+                            </form>
+                        </div>
+                    `;
+
+                    document.getElementById('address').value = data.billingAddress.addressLine || '';
+                    document.getElementById('address2').value = data.billingAddress.addressLine2 || '';
+                    document.getElementById('address3').value = data.billingAddress.address3 || '';
+                    document.getElementById('city').value = data.billingAddress.city || '';
+                    document.getElementById('state').value = data.billingAddress.state || '';
+                    document.getElementById('postcode').value = data.billingAddress.postalCode || '';
+
+                    const countrySelect = document.getElementById('country');
+                    (data.countries || []).forEach(function (country) {
+                        const option = document.createElement('option');
+                        option.value = country.code || '';
+                        option.textContent = country.name || '';
+                        if (country.code === (data.billingAddress.country || '')) {
+                            option.selected = true;
+                        }
+                        countrySelect.appendChild(option);
+                    });
+
+                    const savedTokenOptions = document.getElementById('savedPaymentTokenOptions');
+                    const newCardFields = document.getElementById('newCardFields');
+                    (data.savedPaymentTokens || []).forEach(function (token) {
+                        const label = document.createElement('label');
+                        label.className = 'payment-method-option';
+                        const input = document.createElement('input');
+                        input.type = 'radio';
+                        input.name = 'selectedPaymentTokenId';
+                        input.value = token.payment_token_id || '';
+                        const text = document.createElement('span');
+                        text.textContent = token.label || 'Saved card';
+                        label.appendChild(input);
+                        label.appendChild(text);
+                        savedTokenOptions.appendChild(label);
+                    });
+                    function selectedSavedTokenId() {
+                        const selectedTokenInput = document.querySelector('input[name="selectedPaymentTokenId"]:checked');
+                        return selectedTokenInput ? selectedTokenInput.value : '';
+                    }
+                    function setBillingFieldsRequired(required) {
+                        ['cardholderName', 'address', 'city', 'country', 'postcode'].forEach(function (fieldId) {
+                            const field = document.getElementById(fieldId);
+                            if (!field) {
+                                return;
+                            }
+                            if (required) {
+                                field.setAttribute('required', 'required');
+                            } else {
+                                field.removeAttribute('required');
+                            }
+                        });
+                    }
+                    function toggleNewCardFields() {
+                        const useSavedCard = !!selectedSavedTokenId();
+                        newCardFields.classList.toggle('hidden', useSavedCard);
+                        setBillingFieldsRequired(!useSavedCard);
+                    }
+                    document.querySelectorAll('input[name="selectedPaymentTokenId"]').forEach(function (input) {
+                        input.addEventListener('change', toggleNewCardFields);
+                    });
+                    toggleNewCardFields();
+
+                    function closeModal() {
+                        if (window.parent && window.parent !== window) {
+                            const dialog = window.parent.document.querySelector('.modal');
+                            const closeBtn = dialog && dialog.querySelector('.btn-close, [data-bs-dismiss="modal"]');
+                            if (closeBtn) {
+                                closeBtn.click();
+                                return;
+                            }
+                        }
+                        window.close();
+                    }
+
+                    function showError(fieldId, message) {
+                        const errorElement = document.getElementById(fieldId + '-error');
+                        if (!errorElement) {
+                            return;
+                        }
+                        errorElement.textContent = message || '';
+                        errorElement.classList.toggle('show', !!message);
+                    }
+
+                    function showProcessResult(success, message) {
+                        container.innerHTML = `
+                            <style>
+                                body { margin: 0; font-family: Arial, sans-serif; }
+                                .result-overlay { position: fixed; top: 0; left: 0; right: 0; padding: 16px 20px; display: flex; justify-content: center; align-items: flex-start; background: rgba(255, 255, 255, 0.96); z-index: 9999; box-sizing: border-box; height: auto; }
+                                .result-wrap { width: 100%; max-width: 640px; max-height: 85vh; overflow-y: auto; text-align: center; background: #ffffff; border: 1px solid #e9ecef; border-radius: 8px; padding: 28px 20px; box-sizing: border-box; }
+                                .result-title { font-size: 22px; font-weight: 600; margin-bottom: 8px; color: ${success ? '#198754' : '#dc3545'}; }
+                                .result-message { font-size: 14px; color: #495057; margin-bottom: 20px; }
+                                .result-btn { cursor: pointer; color: white; outline: 0; font-size: 14px; border-radius: 4px; font-weight: 500; padding: 10px 16px; border: 1px solid #6c757d; background: #6c757d; min-width: 160px; }
+                            </style>
+                            <div class="result-overlay">
+                                <div class="result-wrap">
+                                    <div class="result-title">${success ? 'Payment successful' : 'Something went wrong'}</div>
+                                    <div class="result-message">${message || (success ? 'The payment was processed successfully.' : 'Please try again or contact support.')}</div>
+                                </div>
+                            </div>
+                        `;
+                        try { window.scrollTo(0, 0); } catch (e) {}
+                        if (document.documentElement) { document.documentElement.scrollTop = 0; }
+                        if (document.body) { document.body.scrollTop = 0; }
+                        vtShrinkWizardIframeForResult();
+                        const closeButton = document.getElementById('vtResultClose');
+                        if (closeButton) {
+                            closeButton.addEventListener('click', function () {
+                                closeModal();
+                            });
+                        }
+                    }
+
+                    function setSubmitLoading(isLoading) {
+                        const submitBtn = document.querySelector('#card-form .submit');
+                        if (!submitBtn) {
+                            return;
+                        }
+                        if (isLoading) {
+                            submitBtn.disabled = true;
+                            submitBtn.dataset.originalText = submitBtn.dataset.originalText || submitBtn.textContent;
+                            submitBtn.textContent = 'Processing...';
+                            submitBtn.style.opacity = '0.7';
+                            submitBtn.style.cursor = 'not-allowed';
+                            return;
+                        }
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = submitBtn.dataset.originalText || 'Charge Customer';
+                        submitBtn.style.opacity = '';
+                        submitBtn.style.cursor = '';
+                    }
+
+                    const validators = {
+                        cardholderName: (value) => value.trim() ? '' : 'Cardholder name is required',
+                        address: (value) => value.trim() ? '' : 'Address is required',
+                        city: (value) => value.trim() ? '' : 'City is required',
+                        country: (value) => value ? '' : 'Country is required',
+                        postcode: (value) => value.trim() ? '' : 'Postcode is required',
+                    };
+
+                    document.getElementById('vtChangeProvider').addEventListener('click', function (event) {
+                        event.preventDefault();
+                        if (data.wizardId) {
+                            window.location.href = `/neatworldpayvt/invoice_payment/${data.wizardId}`;
+                            return;
+                        }
+                        window.history.back();
+                    });
+
+                    document.getElementById('clear').addEventListener('click', function (event) {
+                        event.preventDefault();
+                        document.getElementById('cardholderName').value = '';
+                        document.getElementById('address').value = data.billingAddress.addressLine || '';
+                        document.getElementById('address2').value = data.billingAddress.addressLine2 || '';
+                        document.getElementById('address3').value = data.billingAddress.address3 || '';
+                        document.getElementById('city').value = data.billingAddress.city || '';
+                        document.getElementById('state').value = data.billingAddress.state || '';
+                        document.getElementById('country').value = data.billingAddress.country || '';
+                        document.getElementById('postcode').value = data.billingAddress.postalCode || '';
+                        const newCardRadio = document.querySelector('input[name="selectedPaymentTokenId"][value=""]');
+                        if (newCardRadio) {
+                            newCardRadio.checked = true;
+                        }
+                        document.getElementById('saveCardDetails').checked = false;
+                        toggleNewCardFields();
+                        ['cardholderName', 'address', 'city', 'country', 'postcode'].forEach(function (fieldId) {
+                            showError(fieldId, '');
+                        });
+                    });
+
+                    function initializeCheckout() {
+                        Worldpay.checkout.init({
+                            id: data.checkoutId,
+                            form: '#card-form',
+                            fields: {
+                                pan: { selector: '#card-pan', placeholder: '4444 3333 2222 1111' },
+                                expiry: { selector: '#card-expiry', placeholder: 'MM/YY' },
+                                cvv: { selector: '#card-cvv', placeholder: '123' },
+                            },
+                            acceptedCardBrands: ['amex', 'diners', 'discover', 'jcb', 'maestro', 'mastercard', 'visa'],
+                            enablePanFormatting: true,
+                        }, function (error, checkout) {
+                            if (error) {
+                                document.getElementById('form-error').textContent = 'Failed to initialize payment form. Please refresh the page.';
+                                document.getElementById('form-error').classList.add('show');
+                                return;
+                            }
+
+                            document.getElementById('card-form').addEventListener('submit', function (event) {
+                                event.preventDefault();
+                                toggleNewCardFields();
+                                let hasErrors = false;
+                                if (!selectedSavedTokenId()) {
+                                    Object.keys(validators).forEach(function (fieldId) {
+                                        const value = document.getElementById(fieldId).value || '';
+                                        const errorMessage = validators[fieldId](value);
+                                        showError(fieldId, errorMessage);
+                                        hasErrors = hasErrors || !!errorMessage;
+                                    });
+                                }
+                                if (hasErrors) {
+                                    return;
+                                }
+                                setSubmitLoading(true);
+
+                                function submitPayment(sessionState) {
+                                    const fields = {
+                                        transaction_reference: data.transactionReference,
+                                        transaction_key: data.transactionKey,
+                                        sessionState: sessionState || '',
+                                        cardholderName: document.getElementById('cardholderName').value.trim(),
+                                        address: document.getElementById('address').value.trim(),
+                                        address2: document.getElementById('address2').value.trim(),
+                                        address3: document.getElementById('address3').value.trim(),
+                                        city: document.getElementById('city').value.trim(),
+                                        state: document.getElementById('state').value.trim(),
+                                        country: document.getElementById('country').value,
+                                        postcode: document.getElementById('postcode').value.trim(),
+                                        provider_id: data.providerId,
+                                        selected_payment_token_id: selectedSavedTokenId(),
+                                        save_card_details: document.getElementById('saveCardDetails').checked ? '1' : '',
+                                    };
+                                    const body = new URLSearchParams();
+                                    Object.keys(fields).forEach(function (key) {
+                                        body.append(key, fields[key] || '');
+                                    });
+                                    fetch('/neatworldpayvt/process-payment', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+                                        body: body.toString(),
+                                        credentials: 'same-origin',
+                                    }).then(function (response) {
+                                        return response.json().then(function (json) {
+                                            return { ok: response.ok, status: response.status, body: json || {} };
+                                        }).catch(function () {
+                                            return { ok: false, status: response.status, body: {} };
+                                        });
+                                    }).then(function (result) {
+                                        const success = result.ok && result.body && result.body.error === 'OK';
+                                        const message = (result.body && result.body.message) || '';
+                                        if (!success) {
+                                            setSubmitLoading(false);
+                                        }
+                                        showProcessResult(success, message);
+                                    }).catch(function () {
+                                        setSubmitLoading(false);
+                                        showProcessResult(false, 'Network error while submitting the payment.');
+                                    });
+                                }
+                                if (selectedSavedTokenId()) {
+                                    submitPayment('');
+                                    return;
+                                }
+                                checkout.generateSessionState(function (sessionError, sessionState) {
+                                    if (sessionError) {
+                                        document.getElementById('form-error').textContent = 'Failed to process payment. Please try again.';
+                                        document.getElementById('form-error').classList.add('show');
+                                        setSubmitLoading(false);
+                                        return;
+                                    }
+                                    submitPayment(sessionState);
+                                });
+                            });
+                        });
+                    }
+
+                    if (!window.Worldpay || !window.Worldpay.checkout) {
+                        const script = document.createElement('script');
+                        script.src = `${data.worldpayUrl}/access-checkout/v2/checkout.js`;
+                        script.onload = initializeCheckout;
+                        script.onerror = function () {
+                            document.getElementById('form-error').textContent = 'Failed to load payment form. Please refresh the page.';
+                            document.getElementById('form-error').classList.add('show');
+                        };
+                        document.head.appendChild(script);
+                    } else {
+                        initializeCheckout();
+                    }
+                });
+            ]]></script>
+        </t>
+    </template>
+</odoo>

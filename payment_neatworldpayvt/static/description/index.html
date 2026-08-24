@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment Provider: Worldpay Virtual Terminal</title>
+</head>
+<body>
+    <h1>Worldpay online payments integration by SNS Software LTD</h1>
+    <br/>
+    <h3>Start accepting online payments effortlessly with Worldpay</h3>
+    <br/>
+    <p><b>As a Worldpay partner, we offer:</b></p>
+    <ul><b>Premium rates for new customers</b></ul>
+    <ul><b>Attractive commission opportunities for Odoo partners</b></ul>
+
+    <p>Contact us for more information on our email: <strong>support@neatapps.io</strong></p>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Odoo App Installation</title>
+</head>
+<body>
+    <img style="width: 800px; height: auto;" src="main.gif" alt="Bar">
+    <br/>
+    <h2>Installation</h2>
+    <ol>
+        <li>Upon clicking the 'Download' button on the app, you will receive the link to download the zip file of the module.</li>
+        <li>Extract the file on your system after the download finishes. You will be able to see a folder named- 'payment_neatworldpayvt'.</li>
+        <li>Copy and paste this folder inside your Odoo Add-Ons path.</li>
+        <li>Now, open the Odoo App and click on the Settings menu.Scroll to the very bottom of settings. Here, click on Activate the "Developer Mode".</li>
+        <li>Then, open the Apps menu and click on the top bar 'Update Apps List'.</li>
+        <li>In the search bar, remove all the filters and search 'Worldpay'.</li>
+        <li>You will be able to see the module 'Payment Provider: Worldpay' in the search result. Click on 'Install' to install it.</li>
+    </ol>
+    <h2>Migration Guide to v3.0</h2>
+    <ol>
+        <li>In case you are using an older version you may run into some issues when trying to install the new version. if this is the case on Odoo.sh you will have to open the Shell</li>
+        <li>Then type "psql" and press Enter.</li>
+        <li>Execute this script: 
+            <p>ALTER TABLE payment_provider ADD COLUMN IF NOT EXISTS neatworldpayvt_checkout_id VARCHAR;</p>
+            <p>ALTER TABLE payment_provider ADD COLUMN IF NOT EXISTS neatworldpayvt_entity VARCHAR;</p>
+            <p>ALTER TABLE payment_provider ADD COLUMN IF NOT EXISTS neatworldpayvt_fallback_user_id VARCHAR;</p>
+        </li>
+        <li>Close the page and then install the app.</li>
+        <li>Once the app is installed you have to set the new required fields for the payment provider which are the CheckoutID, Entity and Responsible User. To do that please refer to the Setup instructions below.</li>
+    </ol>
+    <h2>Setup</h2>
+    <ol>
+        <li>In Odoo goto Settings -> Sale -> Payment Providers and select Worldpay Virtual Terminal</li>
+        <li>There are 3 states available (Disabled, Enabled, Test Mode) select Enabled if you are looking to go live and Test Mode if you first want to do a test run payment and change it later to Enabled for live.</li>
+        <li>You will need an Activation Code for this module and to get it you can click the "Get Free Activation Code" link and fill out the form or contact us at: support@sns-software.com and we will provide the code shortly.</li>
+        <li>Next we will need to enter the Username and Password so you will need a Worldpay account. If you dont have one get in touch with us and we can help you with setting one up. If you are an Odoo partner we can offer partnership terms and free B2B support.</li>
+        <li>Once registered go to https://dashboard.worldpay.com login and go to the Developer Tools section.</li>
+        <li>Click on API Credentials to generate a Username and Password. in Try Mode you can do test payments if you have selected Test Mode in Odoo otherwise select Live Mode and click Generate Credentials.</li>
+        <li>Copy the Username and Password back in to Odoo payment method (worldpay virtual terminal).</li>
+        <li>Next you need to also retrieve the Checkout ID which is retrieved on the same page as the Username and Password in the Worldpay Dashboard but at the section above called "Access Checkout".</li>
+        <li>There again you have to pick between the try mode if you are testing and live if you are looking to take live payments.</li>
+        <li>After that we just have to also retrieve the Entity from the Worldpay Dashboard which is the section "Entity" above "Access Checkout"</li>
+        <li>Paste both the Entity and Checkout ID in Odoo.</li>
+        <li>Then you have to pick a Responsible User. The responsible user is someone that will get a failure activity attached to in case of a payment failure if a Sale Order or an Invoice has no associated employee that is responsible for it.</li>
+        <li>Save your changes</li>
+        <li>You are now ready to take your first payments! If you have selected Testing mode with Try Mode credentials you can use the test cards form here: https://developer.worldpay.com/products/access/hosted-payment-pages/testing</li>
+        <li>You can now use the payment method in through all available channels. We suggest to keep this payment method unpublished in order not to confused clients (unpublished payment methods are still visible to internal users)</li>
+        <li>Usage example: Create a quote and put it in "Quotation Sent" state. On the top left of your screen next to the "Confirm" button on the quote there is a "Preview" button. Clicking it will navigate you to the portal view of the quotation. On this view you can click the "Accept & Pay" or "Sign & Pay" button depending on your configuration. This will lead you to the payment methods menu. Here you need to select "Worldpay Virtul Terminal" and copy the reference code on your display.</li>
+        <li>Go to your Worldpay Online Payment Dashboard and click on "Virtual Terminal" on the side menu. You can toggle between test and live mode on the top. Paste your Reference number under "Transaction Reference". Type in the amount you want to charge and all customer details, then click "charge customer" at the bottom. Once the payment is processed your Odoo quotation will be automatically confirmed and paid following the standard flow for online payments.</li>
+    </ol>
+    
+    <h2>Support</h2>
+        <p>Email: <b>support@sns-software.com</b></p>
+    </div>
+</body>
+</html>
