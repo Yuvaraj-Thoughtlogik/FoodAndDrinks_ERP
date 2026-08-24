@@ -12,4 +12,9 @@
               parent="menu_round_reporting_root"
               action="action_dock_weight_breakdown_wizard"
               sequence="10"/>
+
+
+
+
+              <!-- test -->
 </odoo>
