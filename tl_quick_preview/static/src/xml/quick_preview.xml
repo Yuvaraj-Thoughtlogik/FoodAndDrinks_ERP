@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+
+    <t t-inherit="web.ListRenderer" t-inherit-mode="extension" owl="1">
+        <xpath expr="//th[@t-else]" position="inside">
+            <span t-if="column.label" class="d-block min-w-0 text-truncate" t-esc="column.label"/>
+        </xpath>
+    </t>
+
+</templates>
