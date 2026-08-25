@@ -22,6 +22,7 @@
         'sale',
         'stock',
         'round_management',
+        'tl_contact_utm',
     ],
     'data': [
         'security/ir.model.access.csv',
@@ -34,6 +35,7 @@
     'assets': {
         'web.assets_backend': [
             'tl_rf_reports/static/src/scss/horizontal_checkboxes.scss',
+            'tl_rf_reports/static/src/js/print_and_open_lines.js',
         ],
     },
     'installable': True,

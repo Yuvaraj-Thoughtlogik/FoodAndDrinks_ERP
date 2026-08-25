@@ -4,12 +4,7 @@
         <field name="model">sale.order</field>
         <field name="inherit_id" ref="sale.view_order_form"/>
         <field name="arch" type="xml">
-            <xpath expr="//field[@name='name']" position="before">
-                <button name="quick_view"
-                        icon="fa-eye"
-                        title="View"
-                        class="btn-link"/>
-            </xpath>
+           
             <!-- LEFT COLUMN FIELDS -->
             <xpath expr="//field[@name='partner_shipping_id']" position="after">
 
@@ -125,7 +120,12 @@
         <field name="inherit_id" ref="sale.view_order_tree"/>
         <field name="arch" type="xml">
 
-
+             <xpath expr="//field[@name='name']" position="before">
+                <button name="quick_view"
+                        icon="fa-eye"
+                        title="View"
+                        class="btn-link"/>
+            </xpath>
             <xpath expr="//field[@name='partner_id']" position="after">
                 <field name="round_id" optional="show"/>
                 <field name="round_code" optional="show"/>
