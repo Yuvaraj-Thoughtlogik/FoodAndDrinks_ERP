@@ -1,6 +1,16 @@
 # -*- coding: utf-8 -*-
+import datetime
 import re
-from odoo import api, models, _
+from odoo import api, fields, models, _
+
+
+def _format_weight_display(val):
+    if val is None:
+        return '0'
+    formatted = f"{val:.2f}"
+    if '.' in formatted:
+        formatted = formatted.rstrip('0').rstrip('.')
+    return formatted
 
 
 class ReportDockWeightBreakdown(models.AbstractModel):
@@ -75,6 +85,21 @@ class ReportDockWeightBreakdown(models.AbstractModel):
             else:
                 formatted_date = f"{wizard.delivery_date_from.strftime('%A %d/%m/%Y')} - {wizard.delivery_date_to.strftime('%A %d/%m/%Y')}"
                 delivery_date_str = f"{wizard.delivery_date_from.strftime('%d/%m/%Y')} - {wizard.delivery_date_to.strftime('%d/%m/%Y')}"
+
+            # Calculate packing dates (1 day before delivery date)
+            packing_date_from = wizard.delivery_date_from - datetime.timedelta(days=1)
+            packing_date_to = wizard.delivery_date_to - datetime.timedelta(days=1)
+            packing_date_from_str = packing_date_from.strftime('%d/%m/%Y')
+            packing_date_to_str = packing_date_to.strftime('%d/%m/%Y')
+            delivery_date_from_str = wizard.delivery_date_from.strftime('%d/%m/%Y')
+            delivery_date_to_str = wizard.delivery_date_to.strftime('%d/%m/%Y')
+
+            # Footer date display: e.g. "10 August 2026"
+            print_date_str = packing_date_from.strftime('%d %B %Y')
+
+            # Current timestamp in user timezone for "Printed at ..."
+            current_dt = fields.Datetime.context_timestamp(self, fields.Datetime.now())
+            printed_at_str = current_dt.strftime('%d/%m/%Y %H:%M:%S')
 
             # Courier Delivery Flow
             if getattr(wizard, 'delivery_channel', 'regal_van') == 'courier':
@@ -151,9 +176,12 @@ class ReportDockWeightBreakdown(models.AbstractModel):
                         c_val['products'].values(),
                         key=lambda item: item['product_name']
                     )
+                    for prod_item in prod_list:
+                        prod_item['formatted_weight'] = _format_weight_display(prod_item['total_weight'])
                     if prod_list:
                         category_pages.append({
                             'categ_name': c_val['categ_name'],
+                            'title': f"Courier {c_val['categ_name'].upper()} Filleters Weights",
                             'product_list': prod_list,
                             'total_weight': c_val['total_weight'],
                             'total_qty': c_val['total_qty'],
@@ -164,6 +192,12 @@ class ReportDockWeightBreakdown(models.AbstractModel):
                     'delivery_channel': 'courier',
                     'formatted_date': formatted_date,
                     'delivery_date_str': delivery_date_str,
+                    'packing_date_from_str': packing_date_from_str,
+                    'packing_date_to_str': packing_date_to_str,
+                    'delivery_date_from_str': delivery_date_from_str,
+                    'delivery_date_to_str': delivery_date_to_str,
+                    'print_date_str': print_date_str,
+                    'printed_at_str': printed_at_str,
                     'categories': category_pages,
                     'grand_total_qty': grand_total_qty,
                     'grand_total_weight': grand_total_weight,
@@ -290,6 +324,8 @@ class ReportDockWeightBreakdown(models.AbstractModel):
                 'delivery_channel': 'regal_van',
                 'formatted_date': formatted_date,
                 'delivery_date_str': delivery_date_str,
+                'print_date_str': print_date_str,
+                'printed_at_str': printed_at_str,
                 'pages': combo_pages,
                 'grand_total_qty': grand_total_qty,
                 'grand_total_weight': grand_total_weight,
