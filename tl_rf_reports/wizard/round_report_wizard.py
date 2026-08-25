@@ -90,17 +90,17 @@ class BatchReportWizard(models.TransientModel):
                     self.delivery_date_from.strftime('%d/%m/%Y'),
                     self.delivery_date_to.strftime('%d/%m/%Y'),
                 ))
-            # report_act = self.env.ref('tl_rf_reports.action_report_dock_weight_breakdown').report_action(self)
-            # lines_act = self.action_view_lines()
-            # return {
-            #     'type': 'ir.actions.client',
-            #     'tag': 'print_and_open_lines',
-            #     'params': {
-            #         'report_action': report_act,
-            #         'lines_action': lines_act,
-            #     }
-            # }
-            return self.env.ref('tl_rf_reports.action_report_dock_weight_breakdown').report_action(self)
+            report_act = self.env.ref('tl_rf_reports.action_report_dock_weight_breakdown').report_action(self)
+            lines_act = self.action_view_lines()
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'print_and_open_lines',
+                'params': {
+                    'report_action': report_act,
+                    'lines_action': lines_act,
+                }
+            }
+            # return self.env.ref('tl_rf_reports.action_report_dock_weight_breakdown').report_action(self)
 
         # Regal Van Delivery (Batch-based)
         domain = [
@@ -134,17 +134,17 @@ class BatchReportWizard(models.TransientModel):
         if not eligible_orders:
             raise UserError(_("Eligible batches were found, but they do not contain any matching Regal Van Delivery sale orders."))
 
-        # report_act = self.env.ref('tl_rf_reports.action_report_dock_weight_breakdown').report_action(self)
-        # lines_act = self.action_view_lines()
-        # return {
-        #     'type': 'ir.actions.client',
-        #     'tag': 'print_and_open_lines',
-        #     'params': {
-        #         'report_action': report_act,
-        #         'lines_action': lines_act,
-        #     }
-        # }
-        return self.env.ref('tl_rf_reports.action_report_dock_weight_breakdown').report_action(self)
+        report_act = self.env.ref('tl_rf_reports.action_report_dock_weight_breakdown').report_action(self)
+        lines_act = self.action_view_lines()
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'print_and_open_lines',
+            'params': {
+                'report_action': report_act,
+                'lines_action': lines_act,
+            }
+        }
+        # return self.env.ref('tl_rf_reports.action_report_dock_weight_breakdown').report_action(self)
 
     def action_view_lines(self):
         """Opens the Sale Order Line list view with grouping by category (Courier) or depot and category (Regal Van)."""

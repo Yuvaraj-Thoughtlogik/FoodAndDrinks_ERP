@@ -60,24 +60,24 @@
                                     </div>
 
                                     <!-- Table Header -->
-                                    <table style="width: 100%; max-width: 750px; border-collapse: collapse; color: #000; margin-top: 5px;">
+                                    <table style="width: 100%; max-width: 750px; border-collapse: collapse; color: #000; margin-top: 5px; border: none !important;">
                                         <thead>
-                                            <tr style="border-bottom: 2px solid #000;">
-                                                <th style="width: 130px; text-align: left; vertical-align: middle; padding: 6px 12px 6px 0; font-size: 15px; font-weight: bold;">
+                                            <tr style="border: none !important; border-bottom: 2px solid #000 !important;">
+                                                <th style="width: 130px; text-align: left; vertical-align: middle; padding: 6px 12px 6px 0; font-size: 15px; font-weight: bold; border: none !important; border-bottom: 2px solid #000 !important;">
                                                     Weight (Kg)
                                                 </th>
-                                                <th style="text-align: left; vertical-align: middle; padding: 6px 0; font-size: 15px; font-weight: bold;">
+                                                <th style="text-align: left; vertical-align: middle; padding: 6px 0; font-size: 15px; font-weight: bold; border: none !important; border-bottom: 2px solid #000 !important;">
                                                     Product
                                                 </th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             <t t-foreach="cat_page['product_list']" t-as="prod">
-                                                <tr style="border-bottom: 1px solid #333;">
-                                                    <td style="width: 130px; text-align: left; vertical-align: top; padding: 6px 12px 6px 0; font-size: 15px; font-weight: bold; white-space: nowrap;">
+                                                <tr style="border: none !important; border-bottom: 1px solid #333 !important;">
+                                                    <td style="width: 130px; text-align: left; vertical-align: top; padding: 6px 12px 6px 0; font-size: 15px; font-weight: bold; white-space: nowrap; border: none !important; border-bottom: 1px solid #333 !important;">
                                                         <t t-esc="'%.2f' % prod['total_weight']"/>
                                                     </td>
-                                                    <td style="vertical-align: top; padding: 6px 0; font-size: 15px; font-weight: 500; line-height: 1.4; color: #000;">
+                                                    <td style="vertical-align: top; padding: 6px 0; font-size: 15px; font-weight: 500; line-height: 1.4; color: #000; border: none !important; border-bottom: 1px solid #333 !important;">
                                                         <t t-esc="prod['product_name']"/>
                                                     </td>
                                                 </tr>
@@ -134,14 +134,14 @@
                                     </div>
 
                                     <!-- Product Weight Breakdown List -->
-                                    <table style="width: 100%; max-width: 750px; border-collapse: collapse; color: #000;">
-                                        <tbody>
+                                    <table style="width: 100%; max-width: 750px; border-collapse: collapse; color: #000; border: none !important;">
+                                        <tbody style="border: none !important;">
                                             <t t-foreach="combo_page['product_list']" t-as="prod">
-                                                <tr>
-                                                    <td style="width: 80px; text-align: right; vertical-align: top; padding: 5px 28px 5px 0; font-size: 15px; font-weight: bold; white-space: nowrap;">
+                                                <tr style="border: none !important;">
+                                                    <td style="width: 80px; text-align: right; vertical-align: top; padding: 5px 28px 5px 0; font-size: 15px; font-weight: bold; white-space: nowrap; border: none !important;">
                                                         <t t-esc="'%.2f' % prod['total_weight']"/>
                                                     </td>
-                                                    <td style="vertical-align: top; padding: 5px 0; font-size: 15px; font-weight: 500; line-height: 1.4; color: #000;">
+                                                    <td style="vertical-align: top; padding: 5px 0; font-size: 15px; font-weight: 500; line-height: 1.4; color: #000; border: none !important;">
                                                         <t t-esc="prod['product_name']"/>
                                                     </td>
                                                 </tr>
