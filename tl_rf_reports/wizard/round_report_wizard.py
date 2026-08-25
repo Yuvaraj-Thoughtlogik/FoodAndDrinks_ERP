@@ -150,7 +150,7 @@ class BatchReportWizard(models.TransientModel):
 
         if self.delivery_channel == 'courier':
             domain = [
-                ('order_id.delivery_channel', '=', 'courier'),
+                ('delivery_channel', '=', 'courier'),
                 ('order_id.state', 'in', ['sale', 'done']),
                 ('order_id.delivery_date', '>=', self.delivery_date_from),
                 ('order_id.delivery_date', '<=', self.delivery_date_to),
@@ -158,9 +158,9 @@ class BatchReportWizard(models.TransientModel):
                 ('product_id', '!=', False),
             ]
             if not self.include_late_orders:
-                domain.append(('order_id.is_late_order', '=', False))
+                domain.append(('is_late_order', '=', False))
             else:
-                domain.append(('order_id.is_late_order', '=', True))
+                domain.append(('is_late_order', '=', True))
 
             matching_lines = self.env['sale.order.line'].search_count(domain)
             if not matching_lines:
@@ -198,11 +198,11 @@ class BatchReportWizard(models.TransientModel):
             ('product_id', '!=', False),
         ]
         if self.depot_ids:
-            domain.append(('order_id.batch_id.depot_id', 'in', self.depot_ids.ids))
+            domain.append(('depot_id', 'in', self.depot_ids.ids))
         if not self.include_late_orders:
-            domain.append(('order_id.is_late_order', '=', False))
+            domain.append(('is_late_order', '=', False))
         else:
-            domain.append(('order_id.is_late_order', '=', True))
+            domain.append(('is_late_order', '=', True))
 
         matching_lines = self.env['sale.order.line'].search_count(domain)
         if not matching_lines:

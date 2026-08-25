@@ -26,27 +26,32 @@ class SaleOrderLine(models.Model):
         related='product_id.categ_id',
         string="Product Category",
         readonly=True,
+        store=True,
     )
     depot_id = fields.Many2one(
         'stock.warehouse',
         related='order_id.batch_id.depot_id',
         string="Depot",
         readonly=True,
+        store=True,
     )
     delivery_date = fields.Date(
         related='order_id.delivery_date',
         string="Delivery Date",
         readonly=True,
+        store=True,
     )
     delivery_channel = fields.Selection(
         related='order_id.delivery_channel',
         string="Delivery Channel",
         readonly=True,
+        store=True,
     )
     is_late_order = fields.Boolean(
         related='order_id.is_late_order',
         string="Late Order",
         readonly=True,
+        store=True,
     )
 
     def _get_product_unit_weight_in_kg(self):
