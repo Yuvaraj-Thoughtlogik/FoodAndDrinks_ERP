@@ -100,6 +100,7 @@ class BatchReportWizard(models.TransientModel):
                     'lines_action': lines_act,
                 }
             }
+            # return self.env.ref('tl_rf_reports.action_report_dock_weight_breakdown').report_action(self)
 
         # Regal Van Delivery (Batch-based)
         domain = [
@@ -143,6 +144,7 @@ class BatchReportWizard(models.TransientModel):
                 'lines_action': lines_act,
             }
         }
+        # return self.env.ref('tl_rf_reports.action_report_dock_weight_breakdown').report_action(self)
 
     def action_view_lines(self):
         """Opens the Sale Order Line list view with grouping by category (Courier) or depot and category (Regal Van)."""
@@ -150,7 +152,7 @@ class BatchReportWizard(models.TransientModel):
 
         if self.delivery_channel == 'courier':
             domain = [
-                ('order_id.delivery_channel', '=', 'courier'),
+                ('delivery_channel', '=', 'courier'),
                 ('order_id.state', 'in', ['sale', 'done']),
                 ('order_id.delivery_date', '>=', self.delivery_date_from),
                 ('order_id.delivery_date', '<=', self.delivery_date_to),
@@ -158,9 +160,9 @@ class BatchReportWizard(models.TransientModel):
                 ('product_id', '!=', False),
             ]
             if not self.include_late_orders:
-                domain.append(('order_id.is_late_order', '=', False))
+                domain.append(('is_late_order', '=', False))
             else:
-                domain.append(('order_id.is_late_order', '=', True))
+                domain.append(('is_late_order', '=', True))
 
             matching_lines = self.env['sale.order.line'].search_count(domain)
             if not matching_lines:
@@ -198,11 +200,11 @@ class BatchReportWizard(models.TransientModel):
             ('product_id', '!=', False),
         ]
         if self.depot_ids:
-            domain.append(('order_id.batch_id.depot_id', 'in', self.depot_ids.ids))
+            domain.append(('depot_id', 'in', self.depot_ids.ids))
         if not self.include_late_orders:
-            domain.append(('order_id.is_late_order', '=', False))
+            domain.append(('is_late_order', '=', False))
         else:
-            domain.append(('order_id.is_late_order', '=', True))
+            domain.append(('is_late_order', '=', True))
 
         matching_lines = self.env['sale.order.line'].search_count(domain)
         if not matching_lines:
