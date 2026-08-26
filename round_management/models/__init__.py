@@ -5,3 +5,5 @@ from . import round_alternative
 from . import res_partner
 from . import fleet_vehicle
 from . import round_region
+from . import stock_picking
+

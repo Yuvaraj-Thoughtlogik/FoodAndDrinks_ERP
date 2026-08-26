@@ -77,7 +77,7 @@ class RoundManagementBatch(models.Model):
     late_orders_count = fields.Integer(string='Late Orders', compute='_compute_order_metrics', store=True)
     total_drops = fields.Integer(string='Total Drops', compute='_compute_order_metrics', store=True)
 
-
+    picking_type_id = fields.Many2one('stock.picking.type', string='Operation Type')
     # order_ids = fields.One2many('sale.order', 'batch_id', string="Linked Orders")
    
     #card_reader_count = fields.Selection([
