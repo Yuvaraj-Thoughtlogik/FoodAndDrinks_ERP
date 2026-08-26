@@ -17,11 +17,15 @@ class StockPicking(models.Model):
         store=True,
         readonly=False
     )
-    delivery_channel_id = fields.Many2one(
-        'delivery.carrier', 
-        string='Delivery Channel'
+    delivery_channel = fields.Selection(
+        selection=[
+            ('regal_van', 'Regal Van Delivery'),
+            ('courier', 'Courier Delivery'),
+        ],
+        string='Delivery Channel',
+        default='regal_van',
+        index=True,
     )
-
     @api.depends('origin')
     def _compute_delivery_date(self):
         for picking in self:

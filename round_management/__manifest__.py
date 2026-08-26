@@ -11,6 +11,7 @@
         'base',
         'sale',
         'stock',
+        'sale_stock',
         'fleet',
         'hr'
     ],
