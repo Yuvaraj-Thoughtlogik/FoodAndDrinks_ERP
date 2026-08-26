@@ -179,6 +179,31 @@
               parent="menu_round_management_order_management_root"
               action="action_round_management_sale_order"
               sequence="10"/>
+              
+  <record id="action_round_management_deliveries" model="ir.actions.act_window">
+        <field name="name">Deliveries</field>
+        <field name="res_model">stock.picking</field>
+        <field name="view_mode">list,kanban,form</field>
+        
+        <field name="context">{
+            'search_default_filter_delivery_date_today': 1,
+            'search_default_groupby_round_batch': 1
+        }</field>
+        <field name="view_id" ref="round_management.view_picking_tree_round_management"/>
+        <field name="search_view_id" ref="round_management.view_picking_search_round_management"/>
+    </record>
+
+    <menuitem id="menu_orders_dispatch_root"
+              name="Orders Dispatch"
+              parent="round_management.menu_round_management_root"
+             
+              sequence="16"/>
+              
+     <menuitem id="menu_dispatch_management"
+              name="Deliveries Dispatch"
+              parent="menu_orders_dispatch_root"
+              action="action_round_management_deliveries"
+              sequence="10"/>         
 
 
 </odoo>
