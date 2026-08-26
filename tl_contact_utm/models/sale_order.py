@@ -18,7 +18,7 @@ class SaleOrder(models.Model):
             ('regal_van', 'Regal Van Delivery'),
             ('courier', 'Courier Delivery'),
         ],
-        string='Delivery Channel',
+        string='Delivery Channels',
     )
 
     # @api.onchange('partner_id')
