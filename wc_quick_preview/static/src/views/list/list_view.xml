@@ -3,7 +3,7 @@
 
     <t t-inherit="web.ListRenderer" t-inherit-mode="extension" owl="1">
         <xpath expr="//th[hasclass('o_list_record_selector')]" position="after">
-            <th class="o_wc_view_column text-center align-middle" style="width: 40px;">
+            <th class="o_wc_view_column text-center align-middle" style="width: 40px !important;">
                 View
             </th>
         </xpath>
@@ -30,6 +30,13 @@
     </t>
 
       <t t-inherit="account.FileUploadListRenderer" t-inherit-mode="extension" owl="1">
+        <xpath expr="//th[hasclass('o_list_record_selector')]" position="after">
+            <th class="o_wc_view_column text-center align-middle" style="width: 40px;">
+                View
+            </th>
+        </xpath>
+    </t>
+     <t t-inherit="stock.StockListRenderer" t-inherit-mode="extension" owl="1">
         <xpath expr="//th[hasclass('o_list_record_selector')]" position="after">
             <th class="o_wc_view_column text-center align-middle" style="width: 40px;">
                 View

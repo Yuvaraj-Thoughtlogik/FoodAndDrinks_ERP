@@ -179,6 +179,39 @@
               parent="menu_round_management_order_management_root"
               action="action_round_management_sale_order"
               sequence="10"/>
+
+
+    <record id="action_picking_tree_round_management" model="ir.actions.act_window">
+        <field name="name">Round Deliveries</field>
+        <field name="res_model">stock.picking</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_picking_search_round_management"/>
+        <field name="context">{'search_default_groupby_round_batch': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No deliveries assigned to round batches yet.
+            </p>
+            <p>
+                Manage van and courier delivery rounds by grouping operations under Round Batches.
+            </p>
+        </field>
+    </record>
+
+    <!-- Explicit View Binding for List View -->
+    <record id="action_picking_tree_round_management_view_list" model="ir.actions.act_window.view">
+        <field name="sequence" eval="1"/>
+        <field name="view_mode">list</field>
+        <field name="view_id" ref="view_picking_tree_round_management"/>
+        <field name="act_window_id" ref="action_picking_tree_round_management"/>
+    </record>
+
+    <!-- Top-Level or Sub-Menu Integration -->
+    <!-- Menu under Inventory Operations -->
+    <menuitem id="menu_picking_round_management"
+              name="Round Deliveries"
+              action="action_picking_tree_round_management"
+              parent="stock.menu_stock_warehouse_mgmt"
+              sequence="15"/>
               
   <record id="action_round_management_deliveries" model="ir.actions.act_window">
         <field name="name">Deliveries</field>
@@ -207,3 +240,4 @@
 
 
 </odoo>
+
