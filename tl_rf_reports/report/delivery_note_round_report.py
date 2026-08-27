@@ -44,6 +44,41 @@ class ReportDeliveryNoteRound(models.AbstractModel):
             return f"{full_name} ({code})"
         return full_name
 
+    # --------------------------------------------------------------
+    # DELIVERY (STOCK PICKING) HELPERS
+    # --------------------------------------------------------------
+    def _get_delivery_pickings(self, order):
+        """Return the order's live outgoing delivery pickings (cancelled excluded)."""
+        pickings = getattr(order, 'picking_ids', False)
+        if not pickings:
+            return self.env['stock.picking']
+
+        def _is_delivery(pick):
+            if pick.state == 'cancel':
+                return False
+            p_type = getattr(pick, 'picking_type_id', False)
+            code = getattr(p_type, 'code', False) if p_type else False
+            # If the picking type code is unavailable, keep the picking rather than lose data.
+            return code in ('outgoing', False, None)
+
+        return pickings.filtered(_is_delivery)
+
+    def _get_delivery_product_ids(self, pickings):
+        """Product ids actually present on the delivery moves (cancelled moves excluded)."""
+        product_ids = set()
+        for pick in pickings:
+            moves = getattr(pick, 'move_ids', False)
+            if moves is False:
+                moves = getattr(pick, 'move_ids_without_package', False) or getattr(pick, 'move_lines', False)
+            if not moves:
+                continue
+            for move in moves:
+                if move.state == 'cancel':
+                    continue
+                if move.product_id:
+                    product_ids.add(move.product_id.id)
+        return product_ids
+
     def _format_line_item(self, line):
         qty_val = getattr(line, 'product_uom_qty', 0)
         qty = int(qty_val) if hasattr(qty_val, 'is_integer') and qty_val.is_integer() else (int(qty_val) if float(qty_val).is_integer() else qty_val)
@@ -55,7 +90,7 @@ class ReportDeliveryNoteRound(models.AbstractModel):
             qty_prefix = f"{qty} {line.product_uom_id.name}"
 
         prod_name = line.product_id.name if getattr(line, 'product_id', False) and line.product_id else (getattr(line, 'name', '') or '')
-        
+
         # Check if line description contains special notes or hash annotations
         line_desc = (getattr(line, 'name', '') or '').strip()
         extra_note = ""
@@ -63,8 +98,61 @@ class ReportDeliveryNoteRound(models.AbstractModel):
             match = re.search(r'(#.+?#)', line_desc)
             if match:
                 extra_note = " " + match.group(1).strip()
-        
+
         return f"{qty_prefix} {prod_name}{extra_note}"
+
+    def _build_drop(self, order):
+        """Build one drop dict for an order, or None when the order has no delivery
+        or none of its lines are part of the delivery."""
+        pickings = self._get_delivery_pickings(order)
+        if not pickings:
+            return None
+
+        delivery_product_ids = self._get_delivery_product_ids(pickings)
+        if not delivery_product_ids:
+            return None
+
+        delivery_lines = order.order_line.filtered(
+            lambda l: not l.display_type and l.product_id and l.product_id.id in delivery_product_ids
+        )
+        if not delivery_lines:
+            return None
+
+        ship_partner = order.partner_shipping_id or order.partner_id
+        main_partner = order.partner_id
+
+        cust_str = self._format_customer_name(main_partner)
+        addr_str = self._format_address(ship_partner)
+        tel_str = getattr(ship_partner, 'phone', False) or getattr(ship_partner, 'mobile', False) or getattr(main_partner, 'mobile', False) or getattr(main_partner, 'phone', False) or ''
+
+        items = [self._format_line_item(line) for line in delivery_lines]
+
+        order_no = order.client_order_ref or order.name or ''
+        note_str = self._clean_text(order.note)
+
+        pay_flags = {
+            'card_reader': bool(getattr(order, 'pay_card_reader', False)),
+            'kb': bool(getattr(order, 'pay_kb', False)),
+            'lnp': bool(getattr(order, 'pay_lnp', False)),
+            'cash': bool(getattr(order, 'pay_cash', False)),
+            'cheque': bool(getattr(order, 'pay_cheque', False)),
+            'card': bool(getattr(order, 'pay_card', False)),
+        }
+
+        currency_sym = order.currency_id.symbol if order.currency_id else '£'
+        price_str = f"{currency_sym}{order.amount_total:,.2f}"
+
+        return {
+            'cust': cust_str,
+            'addr': addr_str,
+            'tel': tel_str,
+            'items': items,
+            'order_no': order_no,
+            'note': note_str,
+            'pay': pay_flags,
+            'price': price_str,
+            'zone': '',  # filled in by the caller (differs per flow)
+        }
 
     @api.model
     def _get_report_values(self, docids, data=None):
@@ -82,6 +170,7 @@ class ReportDeliveryNoteRound(models.AbstractModel):
                     ('state', 'in', ['sale', 'done']),
                     ('delivery_date', '>=', wizard.delivery_date_from),
                     ('delivery_date', '<=', wizard.delivery_date_to),
+                    ('picking_ids', '!=', False),
                 ]
                 applicable_orders = self.env['sale.order'].search(
                     order_domain,
@@ -99,44 +188,11 @@ class ReportDeliveryNoteRound(models.AbstractModel):
                 for d_date, date_orders in sorted(dates_dict.items(), key=lambda x: x[0]):
                     drops = []
                     for order in date_orders:
-                        ship_partner = order.partner_shipping_id or order.partner_id
-                        main_partner = order.partner_id
-
-                        cust_str = self._format_customer_name(main_partner)
-                        addr_str = self._format_address(ship_partner)
-                        tel_str = getattr(ship_partner, 'phone', False) or getattr(ship_partner, 'mobile', False) or getattr(main_partner, 'mobile', False) or getattr(main_partner, 'phone', False) or ''
-
-                        items = []
-                        for line in order.order_line.filtered(lambda l: not l.display_type and l.product_id):
-                            items.append(self._format_line_item(line))
-
-                        order_no = order.client_order_ref or order.name or ''
-                        note_str = self._clean_text(order.note)
-
-                        pay_flags = {
-                            'card_reader': bool(getattr(order, 'pay_card_reader', False)),
-                            'kb': bool(getattr(order, 'pay_kb', False)),
-                            'lnp': bool(getattr(order, 'pay_lnp', False)),
-                            'cash': bool(getattr(order, 'pay_cash', False)),
-                            'cheque': bool(getattr(order, 'pay_cheque', False)),
-                            'card': bool(getattr(order, 'pay_card', False)),
-                        }
-
-                        currency_sym = order.currency_id.symbol if order.currency_id else '£'
-                        price_str = f"{currency_sym}{order.amount_total:,.2f}"
-                        zone_code = order.round_code or 'COURIER'
-
-                        drops.append({
-                            'cust': cust_str,
-                            'addr': addr_str,
-                            'tel': tel_str,
-                            'items': items,
-                            'order_no': order_no,
-                            'note': note_str,
-                            'pay': pay_flags,
-                            'price': price_str,
-                            'zone': zone_code,
-                        })
+                        drop = self._build_drop(order)
+                        if not drop:
+                            continue
+                        drop['zone'] = order.round_code or 'COURIER'
+                        drops.append(drop)
 
                     if drops:
                         all_batch_groups.append({
@@ -164,7 +220,9 @@ class ReportDeliveryNoteRound(models.AbstractModel):
 
             for batch in batches:
                 eligible_orders = batch.order_ids.filtered(
-                    lambda so: so.state in ('sale', 'done') and getattr(so, 'delivery_channel', False) in ('regal_van', False)
+                    lambda so: so.state in ('sale', 'done')
+                    and getattr(so, 'delivery_channel', False) in ('regal_van', False)
+                    and self._get_delivery_pickings(so)
                 )
 
                 if not eligible_orders:
@@ -175,51 +233,17 @@ class ReportDeliveryNoteRound(models.AbstractModel):
 
                 drops = []
                 for order in sorted_orders:
-                    ship_partner = order.partner_shipping_id or order.partner_id
-                    main_partner = order.partner_id
-
-                    cust_str = self._format_customer_name(main_partner)
-                    addr_str = self._format_address(ship_partner)
-                    tel_str = getattr(ship_partner, 'phone', False) or getattr(ship_partner, 'mobile', False) or getattr(main_partner, 'mobile', False) or getattr(main_partner, 'phone', False) or ''
-
-                    items = []
-                    for line in order.order_line.filtered(lambda l: not l.display_type and l.product_id):
-                        items.append(self._format_line_item(line))
-
-                    # Order number
-                    order_no = order.client_order_ref or order.name or ''
-
-                    # Order delivery note / instructions
-                    note_str = self._clean_text(order.note)
-
-                    # Payment mode flags
-                    pay_flags = {
-                        'card_reader': bool(getattr(order, 'pay_card_reader', False)),
-                        'kb': bool(getattr(order, 'pay_kb', False)),
-                        'lnp': bool(getattr(order, 'pay_lnp', False)),
-                        'cash': bool(getattr(order, 'pay_cash', False)),
-                        'cheque': bool(getattr(order, 'pay_cheque', False)),
-                        'card': bool(getattr(order, 'pay_card', False)),
-                    }
-
-                    # Total amount & currency
-                    currency_sym = order.currency_id.symbol if order.currency_id else '£'
-                    price_str = f"{currency_sym}{order.amount_total:,.2f}"
+                    drop = self._build_drop(order)
+                    if not drop:
+                        continue
 
                     # Round / Zone code
-                    zone_code = order.round_code or (order.round_id.code if order.round_id else (batch.round_code or (batch.round_id.code if batch.round_id else ''))) or ''
-
-                    drops.append({
-                        'cust': cust_str,
-                        'addr': addr_str,
-                        'tel': tel_str,
-                        'items': items,
-                        'order_no': order_no,
-                        'note': note_str,
-                        'pay': pay_flags,
-                        'price': price_str,
-                        'zone': zone_code,
-                    })
+                    drop['zone'] = order.round_code or (
+                        order.round_id.code if order.round_id else (
+                            batch.round_code or (batch.round_id.code if batch.round_id else '')
+                        )
+                    ) or ''
+                    drops.append(drop)
 
                 if drops:
                     batch_name = batch.round_id.name if (batch.round_id and batch.round_id.name) else (batch.reference or '')
