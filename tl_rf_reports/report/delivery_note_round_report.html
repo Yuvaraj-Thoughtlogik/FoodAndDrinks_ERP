@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Delivery Note — S YKS Bircotes (123091)</title>
+<style>
+  /* ---------- A4 page setup ---------- */
+  @page { size: A4 portrait; margin: 10mm 9mm; }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: #e9e9e9;
+    font-family: Arial, "Helvetica Neue", Helvetica, sans-serif;
+    color: #000;
+  }
+
+  /* The sheet = A4 minus print margins */
+  .sheet {
+    width: 192mm;              /* 210mm - 2 x 9mm */
+    min-height: 277mm;         /* 297mm - 2 x 10mm */
+    margin: 8mm auto;
+    padding: 0;
+    background: #fff;
+    box-shadow: 0 2px 10px rgba(0,0,0,.25);
+    font-size: 8.2pt;
+    line-height: 1.25;
+  }
+
+  /* ---------- Header ---------- */
+  .top-rule { border-top: 0.6pt solid #b8b8b8; margin-bottom: 5mm; }
+
+  .hdr-1, .hdr-2 { display: flex; align-items: baseline; }
+  .hdr-1 { font-size: 11pt; font-weight: 700; }
+  .hdr-2 { font-size: 8.2pt; margin-top: 2mm; margin-bottom: 4mm; }
+
+  .hdr-title  { white-space: nowrap; }
+  .hdr-round  { padding-left: 12mm; }
+  .hdr-code   { padding-left: 12mm; font-weight: 700; }
+  .hdr-depot  { margin-left: auto; font-size: 9.5pt; font-weight: 700; }
+
+  .hdr-date   { white-space: nowrap; }
+  .hdr-count  { margin-left: 38mm; }
+  .hdr-count b { font-weight: 400; }
+
+  /* ---------- Delivery block ---------- */
+  .drop {
+    border-top: 1.1pt solid #000;
+    padding: 1.6mm 0 2.2mm;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  .drop-head { display: flex; align-items: baseline; }
+  .cust  { width: 30%; flex: none; }
+  .addr  { width: 52%; flex: none; font-weight: 700; white-space: nowrap; }
+  .tel   { width: 18%; flex: none; text-align: right; font-weight: 700; }
+
+  .body  { display: flex; align-items: flex-start; margin-top: 1mm; }
+  .items { width: 62%; padding-left: 4mm; }
+  .note  { width: 38%; text-align: right; padding-top: 3.4mm; }
+
+  .items div { color: #1a3fb0; }          /* blue product lines */
+  .items .qty { color: #1a3fb0; }
+  .order { color: #000; margin-top: 0.8mm; }
+
+  /* ---------- Payment / totals row ---------- */
+  .pay { display: flex; align-items: center; margin-top: 1.2mm; }
+  .pay-methods { display: flex; align-items: center; padding-left: 34mm; }
+
+  .m { display: inline-flex; align-items: center; margin-right: 5.5mm; white-space: nowrap; }
+  .m span { margin-right: 1.4mm; }
+
+  .box {
+    display: inline-block;
+    width: 3.1mm; height: 3.1mm;
+    border: 0.9pt solid #000;
+    position: relative;
+  }
+  .box.x::before,
+  .box.x::after {
+    content: "";
+    position: absolute;
+    left: -0.4mm; right: -0.4mm; top: 50%;
+    border-top: 0.9pt solid #000;
+  }
+  .box.x::before { transform: rotate(45deg); }
+  .box.x::after  { transform: rotate(-45deg); }
+
+  .price { margin-left: auto; width: 22mm; text-align: right; }
+  .zone  { width: 18mm; text-align: right; }
+
+  /* ---------- Screen-only toolbar ---------- */
+  .bar {
+    width: 192mm; margin: 6mm auto 0;
+    font-size: 9pt; color: #444;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .bar button {
+    font: inherit; padding: 4px 12px; cursor: pointer;
+    border: 1px solid #888; background: #fff; border-radius: 3px;
+  }
+
+  @media print {
+    body { background: #fff; }
+    .sheet { width: auto; min-height: 0; margin: 0; box-shadow: none; }
+    .bar { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <span>A4 portrait &mdash; print at 100% scale, no headers/footers.</span>
+  <button onclick="window.print()">Print</button>
+</div>
+
+<div class="sheet">
+  <div class="top-rule"></div>
+
+  <!-- ============ HEADER ============ -->
+  <div class="hdr-1">
+    <div class="hdr-title">DELIVERY NOTE FOR ROUND:</div>
+    <div class="hdr-round">S YKS BIRCOTES</div>
+    <div class="hdr-code">(123091)</div>
+    <div class="hdr-depot">GRIMSBY</div>
+  </div>
+
+  <div class="hdr-2">
+    <div class="hdr-date">For Delivery on: 10/08/2026</div>
+    <div class="hdr-count">35 &nbsp;&nbsp;&nbsp;Deliveries</div>
+  </div>
+
+  <!-- ============ DELIVERY 1 ============ -->
+  <div class="drop">
+    <div class="drop-head">
+      <div class="cust">Mr/Mrs Gregory (510549)</div>
+      <div class="addr">28 Alexandra Road DONCASTER South Yorkshire DN11 8EZ</div>
+      <div class="tel">07484726761</div>
+    </div>
+    <div class="body">
+      <div class="items">
+        <div>5 x Salmon Portion Skin on Boned (Chilled)</div>
+        <div>1 kg Haddock Fillets Skinned &amp; Boned</div>
+        <div>1 kg Haddock Fillets Skinned &amp; Boned</div>
+        <div>1 x Battered Cod Goujons</div>
+        <div class="order">Order No: 6279535</div>
+      </div>
+      <div class="note">if out porch</div>
+    </div>
+    <div class="pay">
+      <div class="pay-methods">
+        <div class="m"><span>Card Reader</span><i class="box"></i></div>
+        <div class="m"><span>K/B</span><i class="box"></i></div>
+        <div class="m"><span>LNP</span><i class="box"></i></div>
+        <div class="m"><span>Cash</span><i class="box"></i></div>
+        <div class="m"><span>Cheque</span><i class="box"></i></div>
+        <div class="m"><span>Card</span><i class="box x"></i></div>
+      </div>
+      <div class="price">&pound;84.70</div>
+      <div class="zone">A12</div>
+    </div>
+  </div>
+
+  <!-- ============ DELIVERY 2 ============ -->
+  <div class="drop">
+    <div class="drop-head">
+      <div class="cust">Mr Needham (647827)</div>
+      <div class="addr">63 Bawtry Road Harworth Doncaster South Yorkshire DN11 8PA</div>
+      <div class="tel">07902129289</div>
+    </div>
+    <div class="body">
+      <div class="items">
+        <div>1 x Battered Cod Fillets 4 pack</div>
+        <div>2 x Cod Fish Cakes (2pk)</div>
+        <div>1 x Battered Cod Fingers (5 x Jumbo Fingers )</div>
+        <div>1 x Superior Prawns</div>
+        <div class="order">Order No: 6280196</div>
+      </div>
+      <div class="note">will be in</div>
+    </div>
+    <div class="pay">
+      <div class="pay-methods">
+        <div class="m"><span>Card Reader</span><i class="box"></i></div>
+        <div class="m"><span>K/B</span><i class="box"></i></div>
+        <div class="m"><span>LNP</span><i class="box"></i></div>
+        <div class="m"><span>Cash</span><i class="box"></i></div>
+        <div class="m"><span>Cheque</span><i class="box"></i></div>
+        <div class="m"><span>Card</span><i class="box x"></i></div>
+      </div>
+      <div class="price">&pound;49.10</div>
+      <div class="zone">A12</div>
+    </div>
+  </div>
+
+  <!-- ============ DELIVERY 3 ============ -->
+  <div class="drop">
+    <div class="drop-head">
+      <div class="cust">Mr/Mrs France (566949)</div>
+      <div class="addr">21 Beaufort Gardens Bawtry Doncaster South Yorkshire DN10 6RT</div>
+      <div class="tel">01302943514</div>
+    </div>
+    <div class="body">
+      <div class="items">
+        <div>1 x Frozen Sea Bass Fillet (4 pack)</div>
+        <div>1 x Haddock Fillets, Skin On Boneless 1kg (Frozen)</div>
+        <div class="order">Order No: 6279466</div>
+      </div>
+      <div class="note">if out leave in coolbag on the gate</div>
+    </div>
+    <div class="pay">
+      <div class="pay-methods">
+        <div class="m"><span>Card Reader</span><i class="box"></i></div>
+        <div class="m"><span>K/B</span><i class="box"></i></div>
+        <div class="m"><span>LNP</span><i class="box"></i></div>
+        <div class="m"><span>Cash</span><i class="box"></i></div>
+        <div class="m"><span>Cheque</span><i class="box"></i></div>
+        <div class="m"><span>Card</span><i class="box x"></i></div>
+      </div>
+      <div class="price">&pound;32.60</div>
+      <div class="zone">A12</div>
+    </div>
+  </div>
+
+  <!-- ============ DELIVERY 4 ============ -->
+  <div class="drop">
+    <div class="drop-head">
+      <div class="cust">Mr/Mrs Smith (556690)</div>
+      <div class="addr">12 Bracken Way Harworth Doncaster South Yorkshire DN11 8SB</div>
+      <div class="tel">07753370200</div>
+    </div>
+    <div class="body">
+      <div class="items">
+        <div>1 kg Salmon Fillet Boned # 1 PIECE PER KG&nbsp; #</div>
+        <div>1 kg Salmon Fillet Boned # 1 PIECE PER KG&nbsp; #</div>
+        <div class="order">Order No: 6279836</div>
+      </div>
+      <div class="note">if out by side door</div>
+    </div>
+    <div class="pay">
+      <div class="pay-methods">
+        <div class="m"><span>Card Reader</span><i class="box"></i></div>
+        <div class="m"><span>K/B</span><i class="box"></i></div>
+        <div class="m"><span>LNP</span><i class="box"></i></div>
+        <div class="m"><span>Cash</span><i class="box"></i></div>
+        <div class="m"><span>Cheque</span><i class="box"></i></div>
+        <div class="m"><span>Card</span><i class="box x"></i></div>
+      </div>
+      <div class="price">&pound;50.50</div>
+      <div class="zone">A12</div>
+    </div>
+  </div>
+
+  <!--
+    To add another delivery, copy one <div class="drop"> … </div> block and edit:
+      .cust  = name (account no)      .addr = address      .tel = phone
+      .items = one <div> per product line
+      .order = order number
+      .note  = delivery instruction (right hand side)
+      add class "x" to a .box to tick that payment method
+      .price = total     .zone = round/zone code
+  -->
+
+</div>
+
+</body>
+</html>

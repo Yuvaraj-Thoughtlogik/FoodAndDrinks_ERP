@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Delivery Note Round Wizard Form View -->
+    <record id="view_delivery_note_round_wizard_form" model="ir.ui.view">
+        <field name="name">delivery.note.round.wizard.form</field>
+        <field name="model">delivery.note.round.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Delivery Note Round Report">
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="delivery_date_from" widget="date" required="1"/>
+                        </group>
+                        <group>
+                            <field name="delivery_date_to" widget="date" required="1"/>
+                        </group>
+                    </group>
+                    <group>
+                        <field name="delivery_channel" widget="radio" options="{'horizontal': true}" required="1"/>
+                    </group>
+                </sheet>
+                <footer>
+                    <button name="action_print_report" string="Print" type="object"
+                            class="btn-primary" icon="fa-print" data-hotkey="p"/>
+                    <button string="Cancel" class="btn-secondary" special="cancel" data-hotkey="x"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <!-- Action to open the Delivery Note Round Wizard -->
+    <record id="action_delivery_note_round_wizard" model="ir.actions.act_window">
+        <field name="name">Delivery Note Round Report</field>
+        <field name="res_model">delivery.note.round.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+        <field name="view_id" ref="view_delivery_note_round_wizard_form"/>
+    </record>
+</odoo>

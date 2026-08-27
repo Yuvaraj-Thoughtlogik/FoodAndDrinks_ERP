@@ -77,6 +77,35 @@
                     </div>
                 </div>
 
+                <!-- Payment Modes Checkboxes -->
+                <label for="pay_card_reader" string="Payment Modes"/>
+                <div class="o_row">
+                    <div class="d-flex align-items-center me-2">
+                        <field name="pay_card_reader" class="me-1"/>
+                        <label for="pay_card_reader" string="Card Reader" class="mb-0"/>
+                    </div>
+                    <div class="d-flex align-items-center me-2">
+                        <field name="pay_kb" class="me-1"/>
+                        <label for="pay_kb" string="K/B" class="mb-0"/>
+                    </div>
+                    <div class="d-flex align-items-center me-2">
+                        <field name="pay_lnp" class="me-1"/>
+                        <label for="pay_lnp" string="LNP" class="mb-0"/>
+                    </div>
+                    <div class="d-flex align-items-center me-2">
+                        <field name="pay_cash" class="me-1"/>
+                        <label for="pay_cash" string="Cash" class="mb-0"/>
+                    </div>
+                    <div class="d-flex align-items-center me-2">
+                        <field name="pay_cheque" class="me-1"/>
+                        <label for="pay_cheque" string="Cheque" class="mb-0"/>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <field name="pay_card" class="me-1"/>
+                        <label for="pay_card" string="Card" class="mb-0"/>
+                    </div>
+                </div>
+
                 <!-- Delivery Times -->
                 <field name="delivery_times" string="Delivery Times" placeholder="e.g. 08:00 to 12:00"/>
                 <field name="is_alternative_round" invisible="0"/>
@@ -120,12 +149,6 @@
         <field name="inherit_id" ref="sale.view_order_tree"/>
         <field name="arch" type="xml">
 
-             <xpath expr="//field[@name='name']" position="before">
-                <button name="quick_view"
-                        icon="fa-eye"
-                        title="View"
-                        class="btn-link"/>
-            </xpath>
             <xpath expr="//field[@name='partner_id']" position="after">
                 <field name="round_id" optional="show"/>
                 <field name="round_code" optional="show"/>

@@ -1,3 +1,4 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_batch_report_wizard,batch.report.wizard,model_batch_report_wizard,base.group_user,1,1,1,1
 access_packing_list_wizard,packing.list.wizard,model_packing_list_wizard,base.group_user,1,1,1,1
+access_delivery_note_round_wizard,delivery.note.round.wizard,model_delivery_note_round_wizard,base.group_user,1,1,1,1
