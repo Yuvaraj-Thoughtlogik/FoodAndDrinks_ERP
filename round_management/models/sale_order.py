@@ -141,35 +141,11 @@ class SaleOrder(models.Model):
     
 
     def action_confirm(self):
-        """Enforces Max. Alternative Drops limit and links round batch to delivery pickings."""
-        
+        """Enforces Max. Alternative Drops limit during Sales Order confirmation."""
         for order in self:
             if order.is_alternative_round and order.batch_id.is_alt_limit_reached:
                 raise UserError(_("Max Alternative Drops have been reached for batch '%s'.") % order.batch_id.display_name)
-        res = super().action_confirm()
-        for order in self:
-            if order.batch_id:
-                valid_pickings = order.picking_ids.filtered(lambda p: p.state != 'cancel')
-                if valid_pickings:
-                    # Pass context to bypass stock_picking_batch sanity checks and user assignments
-                    valid_pickings.with_context(
-                        building_backorder=True, 
-                        dont_check_company=True
-                    ).write({'batch_id': order.batch_id.id})
-
-        return res
-
-    def write(self, vals):
-        res = super().write(vals)
-        if 'batch_id' in vals:
-            for order in self:
-                valid_pickings = order.picking_ids.filtered(lambda p: p.state != 'cancel')
-                if valid_pickings:
-                    valid_pickings.with_context(
-                        building_backorder=True,
-                        dont_check_company=True
-                    ).write({'batch_id': order.batch_id.id if order.batch_id else False})
-        return res
+        return super().action_confirm()
 
    
 
