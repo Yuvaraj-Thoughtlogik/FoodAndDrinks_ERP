@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+   <!-- Custom Deliveries List View -->
+    <record id="view_picking_tree_round_management" model="ir.ui.view">
+        <field name="name">stock.picking.tree.round.management</field>
+        <field name="model">stock.picking</field>
+        <field name="arch" type="xml">
+            <list string="Deliveries" default_group_by="batch_id">
+                <field name="name" string="Reference"/>
+                <field name="location_id" string="From"/>
+                <field name="location_dest_id" string="To"/>
+                <field name="partner_id" string="Contact"/>
+                <field name="scheduled_date"/>
+                <field name="batch_id" string="Round Batch"/>
+                <field name="delivery_date" string="Delivery Date" widget="date"/>
+                <field name="delivery_channel" string="Delivery Channels"/>
+                <field name="origin" string="Source Document"/>
+                <field name="batch_id" string="Batch Transfer"/>
+                <field name="company_id" groups="base.group_multi_company"/>
+                <field name="state" string="Status" widget="badge" 
+                       decoration-success="state == 'done'" 
+                       decoration-info="state not in ('done', 'cancel')"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Standalone Primary Search View -->
+    <record id="view_picking_search_round_management" model="ir.ui.view">
+    <field name="name">stock.picking.search.round.management</field>
+    <field name="model">stock.picking</field>
+    <field name="inherit_id" ref="stock.view_picking_internal_search"/>
+    <field name="mode">primary</field>
+    <field name="arch" type="xml">
+        <xpath expr="//search" position="inside">
+            <field name="name" string="Reference"/>
+            <field name="partner_id" string="Contact"/>
+            <field name="origin" string="Source Document"/>
+            <field name="batch_id" string="Round Batch"/>
+            <field name="delivery_channel" string="Delivery Channel"/>
+            
+            <filter string="Delivery Date: Today" name="filter_delivery_date_today" 
+                    domain="[('delivery_date', '=', context_today().strftime('%Y-%m-%d'))]"/>
+                    
+            <filter string="Regal Van Delivery" 
+                    name="filter_regal_van" 
+                    domain="[('delivery_channel', '=', 'regal_van')]"/>
+            <filter string="Courier Delivery" 
+                    name="filter_courier" 
+                    domain="[('delivery_channel', '=', 'courier')]"/>
+
+            <filter string="Late Orders" 
+                    name="filter_late_orders" 
+                    domain="[('scheduled_date', '&lt;', context_today().strftime('%Y-%m-%d %H:%M:%S')), ('state', 'not in', ('done', 'cancel'))]"/>
+
+            <separator/>
+           
+            <filter string="Round Batch" name="groupby_round_batch" context="{'group_by': 'batch_id'}"/>
+            <filter string="Delivery Channel" name="groupby_delivery_channel" context="{'group_by': 'delivery_channel'}"/>
+            <filter string="Status" name="groupby_state" context="{'group_by': 'state'}"/>
+        </xpath>
+    </field>
+</record>
+    
+   
+    
+
+</odoo>
+
