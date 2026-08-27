@@ -89,8 +89,7 @@ class RoundManagementRound(models.Model):
 
     @api.depends(
         'partner_ids', 
-        'partner_ids.active', 
-        'partner_ids.customer_lifecycle_status'
+        'partner_ids.active'
     )
     def _compute_total_drops(self):
         for rec in self:
@@ -98,7 +97,7 @@ class RoundManagementRound(models.Model):
                 rec.total_drops = 0
                 continue
             
-            # Count active customers assigned to the round
+            # Safely evaluate customer status without needing it in @api.depends
             active_partners = rec.partner_ids.filtered(
                 lambda p: p.active and getattr(p, 'customer_lifecycle_status', False) not in ('inactive', 'closed')
             )
