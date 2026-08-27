@@ -37,14 +37,6 @@ class SaleOrder(models.Model):
    
     is_pickup = fields.Boolean(string="Pet Food / Pickup Order")
     is_b2b = fields.Boolean(string="B2B")
-
-    # Payment Modes
-    pay_card_reader = fields.Boolean(string="Card Reader", default=False)
-    pay_kb = fields.Boolean(string="K/B", default=False)
-    pay_lnp = fields.Boolean(string="LNP", default=False)
-    pay_cash = fields.Boolean(string="Cash", default=False)
-    pay_cheque = fields.Boolean(string="Cheque", default=False)
-    pay_card = fields.Boolean(string="Card", default=False)
    
     commitment_date = fields.Datetime(
         string='Delivery Date', 
@@ -144,7 +136,6 @@ class SaleOrder(models.Model):
         """Enforces Max. Alternative Drops limit and links round batch to delivery pickings."""
         
         for order in self:
-<<<<<<< HEAD
             if order.is_alternative_round and order.batch_id.is_alt_limit_reached:
                 raise UserError(_("Max Alternative Drops have been reached for batch '%s'.") % order.batch_id.display_name)
         res = super().action_confirm()
@@ -158,27 +149,6 @@ class SaleOrder(models.Model):
                         dont_check_company=True
                     ).write({'batch_id': order.batch_id.id})
 
-=======
-            if order.is_alternative_round:
-                if order.batch_id.is_alt_limit_reached:
-                    raise UserError(_("Max Alternative Drops have been reached."))
-
-        res = super(SaleOrder, self).action_confirm()
-        for order in self:
-            if order.batch_id:
-                pickings = order.picking_ids.filtered(lambda p: p.state != 'cancel')
-                if pickings:
-                    pickings.write({'batch_id': order.batch_id.id})
-        return res
-
-    def write(self, vals):
-        res = super(SaleOrder, self).write(vals)
-        if 'batch_id' in vals:
-            for order in self:
-                pickings = order.picking_ids.filtered(lambda p: p.state != 'cancel')
-                if pickings:
-                    pickings.write({'batch_id': order.batch_id.id if order.batch_id else False})
->>>>>>> 515d937bddcf24a91cc0754a37442b7c87a66510
         return res
 
    
