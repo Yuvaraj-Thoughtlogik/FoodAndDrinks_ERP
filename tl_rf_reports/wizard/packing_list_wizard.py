@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from datetime import timedelta
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError, ValidationError
 
@@ -17,6 +18,10 @@ class PackingListWizard(models.TransientModel):
         default='regal_van',
         help="Select delivery channel for the packing list report."
     )
+
+    def _default_packing_date(self):
+        return fields.Date.context_today(self) - timedelta(days=1)
+
     delivery_date_from = fields.Date(
         string='Delivery Date From',
         required=True,
@@ -28,6 +33,16 @@ class PackingListWizard(models.TransientModel):
         required=True,
         default=fields.Date.context_today,
         help="Ending delivery date for packing list selection."
+    )
+    packing_date_from = fields.Date(
+        string='Packing Date From',
+        default=_default_packing_date,
+        help="Starting packing date for packing list selection."
+    )
+    packing_date_to = fields.Date(
+        string='Packing Date To',
+        default=_default_packing_date,
+        help="Ending packing date for packing list selection."
     )
 
     @api.model
@@ -49,14 +64,40 @@ class PackingListWizard(models.TransientModel):
         help="When unchecked, normal Packing List is generated. When checked, separate Late Order Packing List is generated."
     )
 
+    @api.onchange('delivery_date_from')
+    def _onchange_delivery_date_from(self):
+        if self.delivery_date_from:
+            self.packing_date_from = self.delivery_date_from - timedelta(days=1)
+
+    @api.onchange('delivery_date_to')
+    def _onchange_delivery_date_to(self):
+        if self.delivery_date_to:
+            self.packing_date_to = self.delivery_date_to - timedelta(days=1)
+
+    @api.onchange('packing_date_from')
+    def _onchange_packing_date_from(self):
+        if self.packing_date_from:
+            self.delivery_date_from = self.packing_date_from + timedelta(days=1)
+
+    @api.onchange('packing_date_to')
+    def _onchange_packing_date_to(self):
+        if self.packing_date_to:
+            self.delivery_date_to = self.packing_date_to + timedelta(days=1)
+
     @api.constrains('delivery_date_from', 'delivery_date_to')
-    def _check_dates(self):
+    def _check_delivery_dates(self):
         for record in self:
             if record.delivery_date_from and record.delivery_date_to and record.delivery_date_to < record.delivery_date_from:
                 raise ValidationError(_("Delivery Date To cannot be earlier than Delivery Date From."))
 
+    @api.constrains('packing_date_from', 'packing_date_to')
+    def _check_packing_dates(self):
+        for record in self:
+            if record.packing_date_from and record.packing_date_to and record.packing_date_to < record.packing_date_from:
+                raise ValidationError(_("Packing Date To cannot be earlier than Packing Date From."))
+
     def action_print_report(self):
-        """Validates eligible batches or courier orders and triggers the Factory Only Packing List Report."""
+        """Validates eligible batches or courier orders and triggers the Packing List Report."""
         self.ensure_one()
 
         if self.delivery_channel == 'courier':
@@ -73,9 +114,11 @@ class PackingListWizard(models.TransientModel):
 
             matching_orders = self.env['sale.order'].search(order_domain)
             if not matching_orders:
+                order_type_str = _("Late Courier Delivery") if self.include_late_orders else _("Courier Delivery")
                 raise UserError(_(
-                    "No confirmed Courier Delivery orders found with delivery dates between %s and %s."
+                    "No confirmed %s orders found with delivery dates between %s and %s."
                 ) % (
+                    order_type_str,
                     self.delivery_date_from.strftime('%d/%m/%Y'),
                     self.delivery_date_to.strftime('%d/%m/%Y'),
                 ))

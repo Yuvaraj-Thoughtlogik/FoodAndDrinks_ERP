@@ -1,189 +1,364 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- Paper Format with 26mm top margin and 20mm header spacing for repeating header on multi-page batches -->
+    <!-- Paper Format with 12mm margins for clean pixel-perfect rendering -->
     <record id="paperformat_packing_list_report" model="report.paperformat">
-        <field name="name">Factory Only Packing List A4</field>
+        <field name="name">Packing List A4</field>
         <field name="default" eval="False"/>
         <field name="format">A4</field>
         <field name="page_height">0</field>
         <field name="page_width">0</field>
         <field name="orientation">Portrait</field>
-        <field name="margin_top">26</field>
-        <field name="margin_bottom">15</field>
+        <field name="margin_top">12</field>
+        <field name="margin_bottom">12</field>
         <field name="margin_left">12</field>
         <field name="margin_right">12</field>
         <field name="header_line" eval="False"/>
-        <field name="header_spacing">20</field>
+        <field name="header_spacing">0</field>
         <field name="dpi">90</field>
     </record>
 
     <!-- Report Action linked to Custom Paperformat -->
     <record id="action_report_packing_list" model="ir.actions.report">
-        <field name="name">Factory Only Packing List</field>
+        <field name="name">Packing List Report</field>
         <field name="model">packing.list.wizard</field>
         <field name="report_type">qweb-pdf</field>
         <field name="report_name">tl_rf_reports.report_packing_list</field>
         <field name="report_file">tl_rf_reports.report_packing_list</field>
-        <field name="print_report_name">('Packing_List_' + (object.delivery_date_from.strftime('%Y%m%d') if object.delivery_date_from else ''))</field>
+        <field name="print_report_name">('Courier_Packing_List_' if object.delivery_channel == 'courier' else
+            'Packing_List_') + (object.delivery_date_from.strftime('%Y%m%d') if object.delivery_date_from else '')
+        </field>
         <field name="paperformat_id" ref="paperformat_packing_list_report"/>
         <field name="binding_model_id" eval="False"/>
         <field name="binding_type">report</field>
     </record>
 
-    <!-- QWeb Template: Factory Only Packing List -->
+    <!-- QWeb Template: Packing List (Regal Van &amp; Courier Delivery) -->
     <template id="report_packing_list">
         <t t-call="web.html_container">
-            <style type="text/css">
-                .packing-page {
+            <!-- ============================================================== -->
+            <!-- 1. COURIER DELIVERY FLOW (CUSTOMER-WISE PACKING LIST)          -->
+            <!-- ============================================================== -->
+            <t t-if="delivery_channel == 'courier'">
+                <style type="text/css">
+                    .courier-page {
                     font-family: Arial, "Helvetica Neue", Helvetica, sans-serif !important;
                     color: #000000 !important;
                     background: #ffffff !important;
                     width: 100% !important;
                     padding: 0 !important;
                     margin: 0 !important;
-                }
-                .packing-table {
-                    width: 100% !important;
-                    min-width: 100% !important;
-                    border-collapse: collapse !important;
-                    border: none !important;
-                    margin: 0 0 4px 0 !important;
-                    padding: 0 !important;
-                }
-                .packing-table thead tr {
-                    border: none !important;
-                    border-bottom: 1.5px solid #000000 !important;
-                }
-                .packing-table thead th {
-                    border: none !important;
-                    border-bottom: 1.5px solid #000000 !important;
-                    padding: 3px 0 !important;
-                }
-                .packing-table tbody tr {
-                    border: none !important;
-                    border-bottom: 1px solid #000000 !important;
-                }
-                .packing-table tbody td {
-                    border: none !important;
-                    border-bottom: 1px solid #000000 !important;
-                    padding: 3.5px 0 !important;
-                }
-            </style>
+                    }
+                    .weight-box {
+                    border: 2px solid #000000;
+                    display: inline-block;
+                    min-width: 60px;
+                    padding: 2px 8px;
+                    font-size: 16px;
+                    font-weight: bold;
+                    text-align: right;
+                    vertical-align: middle;
+                    background: #ffffff;
+                    }
+                </style>
 
-            <t t-if="batch_groups">
-                <t t-foreach="batch_groups" t-as="group">
-                    <div class="article" t-attf-style="#{'page-break-before: always;' if not group_first else ''}">
-                        <!-- Top Header: Fixed on every page of this batch -->
-                        <div class="header" style="font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif; color: #000000; width: 100%; border: none !important; padding: 0; margin: 0;">
-                            <div style="width: 100%; border: none !important;">
-                                <div style="float: left; width: 60%; border: none !important;">
-                                    <div style="font-size: 20px; font-weight: bold; color: #000000; line-height: 1.2;">
-                                        Factory Only Packing List
+                <t t-if="customer_orders">
+                    <t t-foreach="customer_orders" t-as="order">
+                        <t t-foreach="order['pages']" t-as="page">
+                            <div class="article courier-page"
+                                 t-attf-style="#{'page-break-before: always;' if not (order_first and page_first) else ''}">
+                                <!-- Top Header: Only on the very first page of the whole report -->
+                                <t t-if="order_first and page_first">
+                                    <div style="width: 100%; margin-bottom: 8px;">
+                                        <div style="float: left; width: 50%;">
+                                            <div style="font-size: 26px; font-weight: bold; color: #000000; line-height: 1.1;">
+                                                Courier Packing List
+                                            </div>
+                                        </div>
+                                        <div style="float: right; width: 50%; text-align: right; font-size: 14px; font-weight: normal; color: #000000; line-height: 1.35;">
+                                            <div>For Packing between
+                                                <t t-esc="packing_date_from_str"/>
+                                                and
+                                                <t t-esc="packing_date_to_str"/>
+                                            </div>
+                                            <div>(Delivery<t t-esc="delivery_date_from_str"/>-<t
+                                                    t-esc="delivery_date_to_str"/>)
+                                            </div>
+                                        </div>
+                                        <div style="clear: both;"/>
+                                        <div style="border-bottom: 2px solid #000000; margin-top: 8px; margin-bottom: 12px;"/>
                                     </div>
-                                    <div style="font-size: 16px; font-weight: bold; color: #000000; margin-top: 4px; line-height: 1.2;">
-                                        <span style="display: inline-block; min-width: 75px;"><t t-esc="group['batch_code']"/></span>
-                                        <span style="margin-left: 20px;"><t t-esc="group['batch_name']"/></span>
+                                </t>
+
+                                <!-- Customer Info Header: repeated on every page of this order -->
+                                <div style="width: 100%; margin-top: 2px; margin-bottom: 4px;">
+                                    <div style="float: left; width: 42%;">
+                                        <div style="font-size: 17px; font-weight: bold; color: #000000; line-height: 1.3;">
+                                            <span style="display: inline-block; min-width: 85px;">
+                                                <t t-esc="order['customer_code']"/>
+                                            </span>
+                                            <span>
+                                                <t t-esc="order['customer_name']"/>
+                                            </span>
+                                        </div>
                                     </div>
+                                    <div style="float: right; width: 58%; text-align: right;">
+                                        <div style="font-size: 17px; font-weight: bold; color: #000000; line-height: 1.3;">
+                                            <t t-if="order.get('address_line1')">
+                                                <div>
+                                                    <t t-esc="order['address_line1']"/>
+                                                </div>
+                                            </t>
+                                            <t t-if="order.get('address_line2')">
+                                                <div>
+                                                    <t t-esc="order['address_line2']"/>
+                                                </div>
+                                            </t>
+                                        </div>
+                                    </div>
+                                    <div style="clear: both;"/>
                                 </div>
-                                <div style="float: right; width: 40%; text-align: right; border: none !important;">
-                                    <div style="font-size: 15px; font-weight: bold; color: #000000; line-height: 1.2;">
-                                        <span>Delivery On: </span><t t-esc="group['delivery_date']"/>
+
+                                <div style="width: 100%; border-bottom: 2px solid #000000; margin-top: 8px; margin-bottom: 10px;"/>
+
+                                <!-- Product Categories Loop for THIS PAGE ONLY -->
+                                <t t-foreach="page['categories']" t-as="cat">
+                                    <div style="font-size: 16px; font-weight: bold; color: #000000; text-transform: uppercase; margin-top: 8px; margin-bottom: 4px; width: 100%;">
+                                        <t t-esc="cat['categ_name']"/>
                                     </div>
-                                    <t t-if="group.get('depot_name')">
-                                        <div style="font-size: 15px; font-weight: bold; color: #000000; margin-top: 4px; line-height: 1.2;">
-                                            <t t-esc="group['depot_name']"/>
+
+                                    <t t-foreach="cat['products']" t-as="prod">
+                                        <div style="width: 100%; font-size: 16px; color: #000000; line-height: 1.5; margin-bottom: 2px;">
+                                            <div style="float: left; width: 30px; text-align: left; font-weight: bold;">
+                                                <t t-esc="prod['qty']"/>
+                                            </div>
+                                            <div style="float: left; width: 25px; text-align: center; font-weight: bold;">
+                                                X
+                                            </div>
+                                            <div style="float: left; width: calc(100% - 155px); text-align: left; padding-left: 8px;">
+                                                <t t-esc="prod['product_name']"/>
+                                            </div>
+                                            <div style="float: right; width: 95px; text-align: right; font-weight: bold;">
+                                                <t t-esc="prod['weight_display']"/>
+                                            </div>
+                                            <div style="clear: both;"/>
                                         </div>
                                     </t>
-                                </div>
-                                <div style="clear: both;"/>
-                            </div>
-                        </div>
 
-                        <!-- Page Body Content -->
-                        <div class="page packing-page">
-                            <!-- Categories and Products Loop -->
-                            <t t-foreach="group['categories']" t-as="cat">
-                                <!-- Category Title in bold uppercase -->
-                                <div style="font-size: 15px; font-weight: bold; color: #000000; text-transform: uppercase; margin-top: 14px; margin-bottom: 2px; width: 100%;">
-                                    <t t-esc="cat['categ_name']"/>
-                                </div>
+                                    <div style="width: 100%; border-bottom: 2px solid #000000; margin-top: 6px; margin-bottom: 8px;"/>
+                                </t>
 
-                                <!-- Full Width Product Table with ONLY horizontal line after each product -->
-                                <table class="packing-table" style="width: 100% !important; min-width: 100% !important; border-collapse: collapse !important; border: none !important;">
-                                    <thead>
-                                        <tr style="border: none !important; border-bottom: 1.5px solid #000000 !important;">
-                                            <th style="width: 70px; text-align: center; vertical-align: middle; font-size: 13px; font-weight: bold; font-style: italic; border: none !important; border-bottom: 1.5px solid #000000 !important; padding: 3px 0 !important;">
-                                                Quantity
-                                            </th>
-                                            <th style="text-align: left; vertical-align: middle; font-size: 13px; font-weight: bold; font-style: italic; border: none !important; border-bottom: 1.5px solid #000000 !important; padding: 3px 10px !important;">
-                                                Product / Box Contents
-                                            </th>
-                                            <th style="width: 60px; text-align: right; vertical-align: middle; font-size: 12px; font-weight: normal; border: none !important; border-bottom: 1.5px solid #000000 !important; padding: 3px 0 !important;">
-                                                Sort
-                                            </th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <t t-foreach="cat['products']" t-as="prod">
-                                            <tr style="border: none !important; border-bottom: 1px solid #000000 !important;">
-                                                <td style="width: 70px; text-align: center; vertical-align: middle; font-size: 13px; font-weight: bold; white-space: nowrap; border: none !important; border-bottom: 1px solid #000000 !important; padding: 3.5px 0 !important;">
-                                                    <t t-esc="prod['qty_display']"/>
-                                                </td>
-                                                <td style="text-align: left; vertical-align: middle; font-size: 13px; font-weight: normal; line-height: 1.3; color: #000000; border: none !important; border-bottom: 1px solid #000000 !important; padding: 3.5px 10px !important;">
-                                                    <t t-esc="prod['product_name']"/>
-                                                </td>
-                                                <td style="width: 60px; text-align: right; vertical-align: middle; font-size: 13px; font-weight: normal; color: #000000; border: none !important; border-bottom: 1px solid #000000 !important; padding: 3.5px 0 !important;">
-                                                    <t t-esc="prod['sort_str']"/>
-                                                </td>
-                                            </tr>
-                                        </t>
-                                    </tbody>
-                                </table>
+                                <!-- Bottom Section: only on the LAST page of this order -->
+                                <t t-if="page['is_last_page']">
+                                    <div style="width: 100%; margin-top: 4px;">
+                                        <div style="float: right; text-align: right;">
+                                            <span style="font-size: 14px; font-weight: bold; color: #000000; margin-right: 8px; vertical-align: middle;">
+                                                Total Weight - Not Inc Fres
+                                            </span>
+                                            <span class="weight-box">
+                                                <t t-esc="order['total_weight_g']"/>
+                                            </span>
+                                        </div>
 
-                                <!-- Category Box Count directly below each Category table -->
-                                <div style="margin-top: 1px; margin-bottom: 12px;">
-                                    <div style="border-top: 1.5px solid #000000; width: 100px; text-align: center; padding-top: 2px; font-size: 13px; font-weight: bold; color: #000000;">
-                                        <t t-esc="cat['total_boxes']"/> Boxes
+                                        <div style="float: left;">
+                                            <div style="margin-bottom: 6px; line-height: 24px;">
+                                                <div style="width: 75px; height: 24px; border: 2px solid #000000; display: inline-block; vertical-align: middle; margin-right: 10px; background-color: #ffffff;">
+                                                    &#160;
+                                                </div>
+                                                <span style="font-size: 15px; font-weight: bold; color: #000000; vertical-align: middle;">
+                                                    Large Polly (s)
+                                                </span>
+                                            </div>
+                                            <div style="margin-bottom: 6px; line-height: 24px;">
+                                                <div style="width: 75px; height: 24px; border: 2px solid #000000; display: inline-block; vertical-align: middle; margin-right: 10px; background-color: #ffffff;">
+                                                    &#160;
+                                                </div>
+                                                <span style="font-size: 15px; font-weight: bold; color: #000000; vertical-align: middle;">
+                                                    Small Polly
+                                                </span>
+                                            </div>
+                                            <div style="margin-bottom: 6px; line-height: 24px;">
+                                                <div style="width: 75px; height: 24px; border: 2px solid #000000; display: inline-block; vertical-align: middle; margin-right: 10px; background-color: #ffffff;">
+                                                    &#160;
+                                                </div>
+                                                <span style="font-size: 15px; font-weight: bold; color: #000000; vertical-align: middle;">
+                                                    Dry Ice
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div style="clear: both;"/>
                                     </div>
-                                </div>
-                            </t>
+                                </t>
 
-                            <!-- End of Batch: Checked By signature on bottom right -->
-                            <div style="margin-top: 20px; margin-bottom: 10px; text-align: right; padding-right: 10px; page-break-inside: avoid;">
-                                <span style="font-size: 13px; color: #000000;">Checked By _____________________</span>
+<!--                                &lt;!&ndash; Footer: continuous page numbering across the whole courier report &ndash;&gt;-->
+<!--                                <div class="footer"-->
+<!--                                     style="font-family: Arial, Helvetica, sans-serif; font-size: 10px; color: #000000; border-top: none; padding: 0; width: 100%;">-->
+<!--                                    <div style="position: relative; width: 100%; text-align: center;">-->
+<!--                                        <span style="font-size: 10px; font-weight: normal;">-->
+<!--                                            Page-->
+<!--                                            <t t-esc="page['page_number']"/>-->
+<!--                                            of-->
+<!--                                            <t t-esc="page['total_pages']"/>-->
+<!--                                        </span>-->
+<!--                                        <span style="position: absolute; right: 0; top: 0; font-size: 10px;">-->
+<!--                                            Printed at:-->
+<!--                                            <t t-esc="printed_at"/>-->
+<!--                                        </span>-->
+<!--                                    </div>-->
+<!--                                </div>-->
                             </div>
+                        </t>
+                    </t>
+                </t>
+                <t t-else="">
+                    <div style="padding: 20px; font-size: 16px; color: #555;">
+                        <div style="font-size: 20px; font-weight: bold; color: #000; margin-bottom: 10px;">
+                            Courier Packing List
                         </div>
-
-                        <!-- Footer: Page Number Centered (Continuous across all pages), Printed at on Right -->
-                        <div class="footer" style="font-family: Arial, Helvetica, sans-serif; font-size: 10px; color: #000000; border-top: none; padding: 0; width: 100%;">
-                            <div style="position: relative; width: 100%; text-align: center;">
-                                <span class="page" style="font-size: 10px; font-weight: normal;"/>
-                                <span style="position: absolute; right: 0; top: 0; font-size: 10px;">
-                                    Printed at: <t t-esc="printed_at"/>
-                                </span>
-                            </div>
-                        </div>
+                        <div>No Courier Delivery orders found for the selected criteria.</div>
                     </div>
                 </t>
             </t>
+
+            <!-- ============================================================== -->
+            <!-- 2. REGAL VAN DELIVERY FLOW (FACTORY ONLY BATCH PACKING LIST)   -->
+            <!-- ============================================================== -->
             <t t-else="">
+                <style type="text/css">
+                    .packing-page {
+                    font-family: Arial, "Helvetica Neue", Helvetica, sans-serif !important;
+                    color: #000000 !important;
+                    background: #ffffff !important;
+                    width: 100% !important;
+                    padding: 0 !important;
+                    margin: 0 !important;
+                    }
+                </style>
+
+                <t t-if="batch_groups">
+                    <t t-foreach="batch_groups" t-as="group">
+                        <t t-foreach="group['pages']" t-as="page">
+                            <!--
+                                Page-break rule:
+                                - Break before the FIRST page of a NEW batch (always start a new batch on a fresh page).
+                                - Break before any CONTINUATION page of the same batch, i.e. when this batch's
+                                  content overflowed the previous page (page_first is False within this group).
+                                - Do NOT break between the last page of one batch and the first page of the next
+                                  batch's own first page other than the mandatory "new batch = new page" rule above
+                                  (that's already covered by group_first).
+                            -->
+                            <div class="article packing-page"
+                                 t-attf-style="#{'page-break-before: always;' if not (group_first and page_first) else ''}">
+                                <!-- Batch Header: repeated on every page -->
+                                <div style="width: 100%; border: none !important; margin-bottom: 12px;">
+                                    <div style="float: left; width: 60%; border: none !important;">
+                                        <div style="font-size: 22px; font-weight: bold; color: #000000; line-height: 1.2;">
+                                            Factory Only Packing List
+                                        </div>
+                                        <div style="font-size: 16px; font-weight: bold; color: #000000; margin-top: 4px; line-height: 1.2;">
+                                            <span style="display: inline-block; min-width: 75px;">
+                                                <t t-esc="group['batch_code']"/>
+                                            </span>
+                                            <span style="margin-left: 20px;">
+                                                <t t-esc="group['batch_name']"/>
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div style="float: right; width: 40%; text-align: right; border: none !important;">
+                                        <div style="font-size: 16px; font-weight: bold; color: #000000; line-height: 1.2;">
+                                            <span>Delivery On:</span>
+                                            <t t-esc="group['delivery_date']"/>
+                                        </div>
+                                        <t t-if="group.get('depot_name')">
+                                            <div style="font-size: 16px; font-weight: bold; color: #000000; margin-top: 4px; line-height: 1.2;">
+                                                <t t-esc="group['depot_name']"/>
+                                            </div>
+                                        </t>
+                                    </div>
+                                    <div style="clear: both;"/>
+                                </div>
+
+                                <div>
+                                    <t t-foreach="page['categories']" t-as="cat">
+                                        <div style="font-size: 16px; font-weight: bold; color: #000000; text-transform: uppercase; margin-top: 14px; margin-bottom: 4px; width: 100%;">
+                                            <t t-esc="cat['categ_name']"/>
+                                        </div>
+
+                                        <div style="width: 100%; font-size: 14px; font-weight: bold; font-style: italic; border-bottom: 2px solid #000000; padding-bottom: 3px; margin-bottom: 3px;">
+                                            <div style="float: left; width: 75px; text-align: center;">Quantity</div>
+                                            <div style="float: left; width: calc(100% - 150px); text-align: left; padding-left: 10px;">
+                                                Product / Box Contents
+                                            </div>
+                                            <div style="float: right; width: 65px; text-align: right; font-style: normal; font-weight: normal; font-size: 13px;">
+                                                Sort
+                                            </div>
+                                            <div style="clear: both;"/>
+                                        </div>
+
+                                        <t t-foreach="cat['products']" t-as="prod">
+                                            <div style="width: 100%; font-size: 15px; color: #000000; border-bottom: 1px solid #000000; padding: 4px 0; line-height: 1.35;">
+                                                <div style="float: left; width: 75px; text-align: center; font-weight: bold;">
+                                                    <t t-esc="prod['qty_display']"/>
+                                                </div>
+                                                <div style="float: left; width: calc(100% - 150px); text-align: left; padding-left: 10px;">
+                                                    <t t-esc="prod['product_name']"/>
+                                                </div>
+                                                <div style="float: right; width: 65px; text-align: right; font-weight: normal;">
+                                                    <t t-esc="prod['sort_str']"/>
+                                                </div>
+                                                <div style="clear: both;"/>
+                                            </div>
+                                        </t>
+
+                                        <!-- Only show box total when this category is complete on this page -->
+                                        <t t-if="cat.get('is_complete')">
+                                            <div style="margin-top: 2px; margin-bottom: 14px;">
+                                                <div style="border-top: 2px solid #000000; width: 110px; text-align: center; padding-top: 3px; font-size: 15px; font-weight: bold; color: #000000;">
+                                                    <t t-esc="cat['total_boxes']"/>
+                                                    Boxes
+                                                </div>
+                                            </div>
+                                        </t>
+                                    </t>
+
+                                    <!-- Checked By: only on last page of this batch -->
+                                    <t t-if="page['is_last_page']">
+                                        <div style="margin-top: 25px; margin-bottom: 10px; text-align: right; padding-right: 10px; page-break-inside: avoid;">
+                                            <span style="font-size: 14px; font-weight: 500; color: #000000;">Checked By
+                                                _____________________
+                                            </span>
+                                        </div>
+                                    </t>
+                                </div>
+
+                                <!-- Footer: continuous page numbering across the WHOLE regal van report -->
+                                <div class="footer"
+                                     style="font-family: Arial, Helvetica, sans-serif; font-size: 10px; color: #000000; border-top: none; padding: 0; width: 100%;">
+                                    <div style="position: relative; width: 100%; text-align: center;">
+                                        <span style="font-size: 10px; font-weight: normal;">
+<!--                                            Page-->
+                                            <t t-esc="page['page_number']"/>
+<!--                                            of-->
+<!--                                            <t t-esc="page['total_pages']"/>-->
+                                        </span>
+                                        <span style="position: absolute; right: 0; top: 0; font-size: 10px;">
+                                            Printed at:
+                                            <t t-esc="printed_at"/>
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </t>
+                    </t>
+                </t>
+                <t t-else="">
                     <div style="padding: 20px; font-size: 16px; color: #555;">
                         <div style="font-size: 20px; font-weight: bold; color: #000; margin-bottom: 10px;">
-                                Factory Only Packing List
+                            Factory Only Packing List
                         </div>
-                 <div>No packing list data found for the selected criteria.</div>
+                        <div>No packing list data found for the selected criteria.</div>
                     </div>
                 </t>
-                <!-- Footer: Continuous Sequential Page Numbering Centered, Printed at on Right -->
-                <div class="footer" style="font-family: Arial, Helvetica, sans-serif; font-size: 10px; color: #000000; border-top: none; padding: 0; width: 100%;">
-                    <div style="position: relative; width: 100%; text-align: center;">
-                        <span class="page" style="font-size: 10px; font-weight: normal;"/>
-                        <span style="position: absolute; right: 0; top: 0; font-size: 10px;">
-                            Printed at: <t t-esc="printed_at"/>
-                        </span>
-                    </div>
-                </div>
-
+            </t>
         </t>
     </template>
 </odoo>
