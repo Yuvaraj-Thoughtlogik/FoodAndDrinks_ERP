@@ -78,8 +78,13 @@ class RoundManagementBatch(models.Model):
     total_drops = fields.Integer(string='Total Drops', compute='_compute_order_metrics', store=True)
 
     picking_type_id = fields.Many2one('stock.picking.type', string='Operation Type')
+    picking_ids = fields.One2many(
+        'stock.picking',
+        'batch_id',
+        string='Transfers / Deliveries'
+    )
     is_wave = fields.Boolean(string="Is Wave", default=False)
-    
+   
     # order_ids = fields.One2many('sale.order', 'batch_id', string="Linked Orders")
    
     #card_reader_count = fields.Selection([
@@ -146,6 +151,11 @@ class RoundManagementBatch(models.Model):
         default=lambda self: self.env.company,
         index=True
     )
+
+    user_id = fields.Many2one('res.users', string='Responsible')
+    
+    def _sanity_check(self):
+        return True
     @api.depends('round_id','round_id.max_alt_drops')
     def _compute_max_alt_drops(self):
         for rec in self:
@@ -486,3 +496,4 @@ class RoundManagementBatch(models.Model):
                 record.total_drops = 0
                 record.total_revenue = 0.0
                 record.is_b2b_batch = False
+
