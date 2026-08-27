@@ -82,13 +82,18 @@ class RoundManagementRound(models.Model):
     )
     total_drops = fields.Integer(
         string='Total Drops',
-        compute='_compute_customer_counts',
-        store=True
+        compute='_compute_total_drops_from_batches',
+        store=True,
     )
+
+    @api.depends('batch_ids', 'batch_ids.total_drops')
+    def _compute_total_drops_from_batches(self):
+        for rec in self:
+            rec.total_drops = sum(rec.batch_ids.mapped('total_drops'))
 
     @api.depends('partner_ids', 'partner_ids.active')
     def _compute_customer_counts(self):
-        excluded_statuses = {'inactive', 'closed', 'cancelled_ftlt', False}
+        excluded_statuses = {'inactive', 'closed', 'cancelled_ftlt'}
 
         for rec in self:
             if not rec.partner_ids:
@@ -96,23 +101,24 @@ class RoundManagementRound(models.Model):
                 rec.ftlt_customers_m_count = 0
                 rec.customer_f_count = 0
                 rec.ftlt_count = 0
-                rec.total_drops = 0
                 continue
 
             active_partners = rec.partner_ids.filtered(
-                lambda p: p.active and p.customer_lifecycle_status not in excluded_statuses
+                lambda p: p.active and str(getattr(p, 'customer_lifecycle_status', '') or '').strip() not in excluded_statuses
             )
 
             rec.active_customers_count = len(active_partners)
-            rec.total_drops = len(active_partners)
+
             rec.ftlt_customers_m_count = len(active_partners.filtered(
-                lambda p: p.customer_lifecycle_status == 'main_customer'
+                lambda p: str(getattr(p, 'customer_lifecycle_status', '') or '').strip() == 'main_customer'
             ))
+
             rec.customer_f_count = len(active_partners.filtered(
-                lambda p: p.customer_lifecycle_status == 'ftlt'
+                lambda p: str(getattr(p, 'customer_lifecycle_status', '') or '').strip() == 'ftlt'
             ))
+
             rec.ftlt_count = len(active_partners.filtered(
-                lambda p: p.customer_lifecycle_status in ('ftlt', 'old_ftlt')
+                lambda p: str(getattr(p, 'customer_lifecycle_status', '') or '').strip() in ('ftlt', 'old_ftlt')
             ))
             
             
