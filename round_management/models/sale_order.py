@@ -45,6 +45,60 @@ class SaleOrder(models.Model):
     pay_cash = fields.Boolean(string="Cash", default=False)
     pay_cheque = fields.Boolean(string="Cheque", default=False)
     pay_card = fields.Boolean(string="Card", default=False)
+
+    @api.onchange('pay_card_reader')
+    def _onchange_pay_card_reader(self):
+        if self.pay_card_reader:
+            self.pay_kb = False
+            self.pay_lnp = False
+            self.pay_cash = False
+            self.pay_cheque = False
+            self.pay_card = False
+
+    @api.onchange('pay_kb')
+    def _onchange_pay_kb(self):
+        if self.pay_kb:
+            self.pay_card_reader = False
+            self.pay_lnp = False
+            self.pay_cash = False
+            self.pay_cheque = False
+            self.pay_card = False
+
+    @api.onchange('pay_lnp')
+    def _onchange_pay_lnp(self):
+        if self.pay_lnp:
+            self.pay_card_reader = False
+            self.pay_kb = False
+            self.pay_cash = False
+            self.pay_cheque = False
+            self.pay_card = False
+
+    @api.onchange('pay_cash')
+    def _onchange_pay_cash(self):
+        if self.pay_cash:
+            self.pay_card_reader = False
+            self.pay_kb = False
+            self.pay_lnp = False
+            self.pay_cheque = False
+            self.pay_card = False
+
+    @api.onchange('pay_cheque')
+    def _onchange_pay_cheque(self):
+        if self.pay_cheque:
+            self.pay_card_reader = False
+            self.pay_kb = False
+            self.pay_lnp = False
+            self.pay_cash = False
+            self.pay_card = False
+
+    @api.onchange('pay_card')
+    def _onchange_pay_card(self):
+        if self.pay_card:
+            self.pay_card_reader = False
+            self.pay_kb = False
+            self.pay_lnp = False
+            self.pay_cash = False
+            self.pay_cheque = False
    
     commitment_date = fields.Datetime(
         string='Delivery Date', 
@@ -146,6 +200,16 @@ class SaleOrder(models.Model):
             if order.is_alternative_round and order.batch_id.is_alt_limit_reached:
                 raise UserError(_("Max Alternative Drops have been reached for batch '%s'.") % order.batch_id.display_name)
         return super().action_confirm()
+
+    def write(self, vals):
+        payment_fields = ['pay_card_reader', 'pay_kb', 'pay_lnp', 'pay_cash', 'pay_cheque', 'pay_card']
+        checked = [f for f in payment_fields if vals.get(f)]
+        if checked:
+            chosen = checked[-1]
+            for f in payment_fields:
+                if f != chosen and f not in vals:
+                    vals[f] = False
+        return super().write(vals)
 
    
 

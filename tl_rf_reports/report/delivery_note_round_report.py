@@ -223,7 +223,7 @@ class ReportDeliveryNoteRound(models.AbstractModel):
 
                 if drops:
                     batch_name = batch.round_id.name if (batch.round_id and batch.round_id.name) else (batch.reference or '')
-                    batch_code = batch.round_id.code or batch.code or ''
+                    batch_code = batch.code or ''
                     depot_name = batch.depot_id.name.upper() if batch.depot_id and batch.depot_id.name else 'GRIMSBY'
                     delivery_date_str = batch.delivery_date.strftime('%d/%m/%Y') if batch.delivery_date else ''
 

@@ -106,7 +106,7 @@
                                             style="float: left; width: 68%; padding-left: 20px; box-sizing: border-box;">
                                             <t t-foreach="drop['items']" t-as="item">
                                                 <div
-                                                    style="color: #1a3fb0; font-size: 13.5px; line-height: 1.35;">
+                                                    style="font-size: 13.5px; line-height: 1.5;">
                                                     <t t-esc="item" />
                                                 </div>
                                             </t>
@@ -128,7 +128,7 @@
 
                                         <!-- Payment Methods -->
                                         <div
-                                            style="float: left; width: 63%; text-align: left; padding-left: 10px; box-sizing: border-box; white-space: nowrap;">
+                                            style="float: left; width: 63%; text-align: left; padding-left: 20px;margin-top: 30px; box-sizing: border-box; white-space: nowrap;">
                                             <t
                                                 t-foreach="[('Card Reader', drop['pay']['card_reader']), ('K/B', drop['pay']['kb']), ('LNP', drop['pay']['lnp']), ('Cash', drop['pay']['cash']), ('Cheque', drop['pay']['cheque']), ('Card', drop['pay']['card'])]"
                                                 t-as="pm">
@@ -140,7 +140,7 @@
                                                     </span>
                                                     <t t-if="pm[1]">
                                                         <span
-                                                            style="display: inline-block; width: 13px; height: 13px; border: 1.5px solid #000000; text-align: center; line-height: 11px; font-size: 10px; font-weight: bold; vertical-align: middle;">
+                                                            style="display: inline-block; width: 13px; height: 13px; border: 1.5px solid #000000; text-align: center; line-height: 11px; font-size: 11px; font-weight: bold; vertical-align: middle;">
                                                             &#10006;</span>
                                                     </t>
                                                     <t t-else="">
@@ -160,7 +160,7 @@
                                         <!-- Zone -->
                                         <div
                                             style="float: right; width: 10%; text-align: right; font-size: 14.5px; font-weight: bold; color: #000000; white-space: nowrap;">
-                                            <t t-esc="drop['zone']" />
+                                            <!-- <t t-esc="drop['zone']" /> -->
                                         </div>
 
                                         <div style="clear: both;" />

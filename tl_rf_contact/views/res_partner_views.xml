@@ -108,15 +108,6 @@
             action = records.action_close_partner()
         </field>
     </record>
-       <record id="view_partner_tree_quickview" model="ir.ui.view">
-        <field name="name">res.partner.list.quickview</field>
-        <field name="model">res.partner</field>
-        <field name="inherit_id" ref="base.view_partner_tree"/>
-        <field name="arch" type="xml">
-            <xpath expr="//field[@name='avatar_128']" position="before">
-                 <button name="quick_view" icon="fa-eye" title="View" class="btn-link"/>
-            </xpath>
-        </field>
-    </record>
+     
 
 </odoo>

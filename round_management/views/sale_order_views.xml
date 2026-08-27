@@ -62,47 +62,53 @@
 
                 <!-- Checkbox Flags Side-by-Side -->
                 <label for="is_late_order" string="Order Flags"/>
-                <div class="o_row">
-                    <div class="d-flex align-items-center me-3">
-                        <field name="is_late_order" class="me-1"/>
-                        <label for="is_late_order" string="Late Order" class="mb-0"/>
-                    </div>
-                    <div class="d-flex align-items-center me-3">
-                        <field name="is_pickup" class="me-1"/>
-                        <label for="is_pickup" string="Pet Food Order" class="mb-0"/>
-                    </div>
-                    <div class="d-flex align-items-center">
-                        <field name="is_b2b" class="me-1"/>
-                        <label for="is_b2b" string="B2B Order" class="mb-0"/>
+                <div>
+                    <div class="row g-0 align-items-baseline" style="max-width: 460px;">
+                        <div class="col-4 d-flex align-items-baseline">
+                            <field name="is_late_order" class="me-1"/>
+                            <label for="is_late_order" string="Late Order" class="mb-0 text-nowrap"/>
+                        </div>
+                        <div class="col-4 d-flex align-items-baseline">
+                            <field name="is_pickup" class="me-1"/>
+                            <label for="is_pickup" string="Pet Food Order" class="mb-0 text-nowrap"/>
+                        </div>
+                        <div class="col-4 d-flex align-items-baseline">
+                            <field name="is_b2b" class="me-1"/>
+                            <label for="is_b2b" string="B2B Order" class="mb-0 text-nowrap"/>
+                        </div>
                     </div>
                 </div>
 
-                <!-- Payment Modes Checkboxes -->
+                <!-- Payment Modes Checkboxes (2 Lines) -->
                 <label for="pay_card_reader" string="Payment Modes"/>
-                <div class="o_row">
-                    <div class="d-flex align-items-center me-2">
-                        <field name="pay_card_reader" class="me-1"/>
-                        <label for="pay_card_reader" string="Card Reader" class="mb-0"/>
+                <div>
+                    <div class="row g-0 align-items-baseline mb-1" style="max-width: 460px;">
+                        <div class="col-4 d-flex align-items-baseline">
+                            <field name="pay_card_reader" class="me-1"/>
+                            <label for="pay_card_reader" string="Card Reader" class="mb-0 text-nowrap"/>
+                        </div>
+                        <div class="col-4 d-flex align-items-baseline">
+                            <field name="pay_kb" class="me-1"/>
+                            <label for="pay_kb" string="K/B" class="mb-0 text-nowrap"/>
+                        </div>
+                        <div class="col-4 d-flex align-items-baseline">
+                            <field name="pay_lnp" class="me-1"/>
+                            <label for="pay_lnp" string="LNP" class="mb-0 text-nowrap"/>
+                        </div>
                     </div>
-                    <div class="d-flex align-items-center me-2">
-                        <field name="pay_kb" class="me-1"/>
-                        <label for="pay_kb" string="K/B" class="mb-0"/>
-                    </div>
-                    <div class="d-flex align-items-center me-2">
-                        <field name="pay_lnp" class="me-1"/>
-                        <label for="pay_lnp" string="LNP" class="mb-0"/>
-                    </div>
-                    <div class="d-flex align-items-center me-2">
-                        <field name="pay_cash" class="me-1"/>
-                        <label for="pay_cash" string="Cash" class="mb-0"/>
-                    </div>
-                    <div class="d-flex align-items-center me-2">
-                        <field name="pay_cheque" class="me-1"/>
-                        <label for="pay_cheque" string="Cheque" class="mb-0"/>
-                    </div>
-                    <div class="d-flex align-items-center">
-                        <field name="pay_card" class="me-1"/>
-                        <label for="pay_card" string="Card" class="mb-0"/>
+                    <div class="row g-0 align-items-baseline" style="max-width: 460px;">
+                        <div class="col-4 d-flex align-items-baseline">
+                            <field name="pay_cash" class="me-1"/>
+                            <label for="pay_cash" string="Cash" class="mb-0 text-nowrap"/>
+                        </div>
+                        <div class="col-4 d-flex align-items-baseline">
+                            <field name="pay_cheque" class="me-1"/>
+                            <label for="pay_cheque" string="Cheque" class="mb-0 text-nowrap"/>
+                        </div>
+                        <div class="col-4 d-flex align-items-baseline">
+                            <field name="pay_card" class="me-1"/>
+                            <label for="pay_card" string="Card" class="mb-0 text-nowrap"/>
+                        </div>
                     </div>
                 </div>
 
