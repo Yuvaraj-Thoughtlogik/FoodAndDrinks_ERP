@@ -31,10 +31,6 @@ class RoundManagementBatch(models.Model):
         ('cancel', 'Cancelled'),
     ], string='Status', default='pln', required=True, tracking=True)
     
-    user_id = fields.Many2one('res.users', string='Responsible', default=lambda self: self.env.user)
-    company_id = fields.Many2one('res.company', string='Company', default=lambda self: self.env.company)
-    currency_id = fields.Many2one('res.currency', string='Currency', default=lambda self: self.env.company.currency_id)
-    
     #pay_grade = fields.Char(string='Pay Grade', related='round_id.pay_grade', readonly=True)
 
     helper_needed = fields.Boolean(string='Helper Needed')
@@ -477,8 +473,8 @@ class RoundManagementBatch(models.Model):
         'order_ids.state', 
         'order_ids.amount_total',
         'order_ids.is_late_order', 
-        'order_ids.is_pickup', 
-        'order_ids.is_b2b'
+        'order_ids.is_b2b',
+        #'order_ids.is_staff_order'
     )
     def _compute_order_metrics(self):
         for record in self:
@@ -487,9 +483,9 @@ class RoundManagementBatch(models.Model):
             ) if record.order_ids else self.env['sale.order']
             
             if active_orders:
-                record.drops_count = len(active_orders.filtered(lambda o: not getattr(o, 'is_pickup', False)))
+                record.drops_count = len(active_orders)
                 record.late_orders_count = len(active_orders.filtered(lambda o: getattr(o, 'is_late_order', False)))
-                record.pickups_count = len(active_orders.filtered(lambda o: getattr(o, 'is_pickup', False)))
+                record.pickups_count = 0
                 record.total_drops = len(active_orders)
                 record.total_revenue = sum(active_orders.mapped('amount_total'))
                 record.is_b2b_batch = any(getattr(o, 'is_b2b', False) for o in active_orders)

@@ -35,70 +35,18 @@ class SaleOrder(models.Model):
         store=True
     )
    
-    is_pickup = fields.Boolean(string="Pet Food / Pickup Order")
-    is_b2b = fields.Boolean(string="B2B")
-
-    # Payment Modes
-    pay_card_reader = fields.Boolean(string="Card Reader", default=False)
-    pay_kb = fields.Boolean(string="K/B", default=False)
-    pay_lnp = fields.Boolean(string="LNP", default=False)
-    pay_cash = fields.Boolean(string="Cash", default=False)
-    pay_cheque = fields.Boolean(string="Cheque", default=False)
-    pay_card = fields.Boolean(string="Card", default=False)
-
-    @api.onchange('pay_card_reader')
-    def _onchange_pay_card_reader(self):
-        if self.pay_card_reader:
-            self.pay_kb = False
-            self.pay_lnp = False
-            self.pay_cash = False
-            self.pay_cheque = False
-            self.pay_card = False
-
-    @api.onchange('pay_kb')
-    def _onchange_pay_kb(self):
-        if self.pay_kb:
-            self.pay_card_reader = False
-            self.pay_lnp = False
-            self.pay_cash = False
-            self.pay_cheque = False
-            self.pay_card = False
-
-    @api.onchange('pay_lnp')
-    def _onchange_pay_lnp(self):
-        if self.pay_lnp:
-            self.pay_card_reader = False
-            self.pay_kb = False
-            self.pay_cash = False
-            self.pay_cheque = False
-            self.pay_card = False
-
-    @api.onchange('pay_cash')
-    def _onchange_pay_cash(self):
-        if self.pay_cash:
-            self.pay_card_reader = False
-            self.pay_kb = False
-            self.pay_lnp = False
-            self.pay_cheque = False
-            self.pay_card = False
-
-    @api.onchange('pay_cheque')
-    def _onchange_pay_cheque(self):
-        if self.pay_cheque:
-            self.pay_card_reader = False
-            self.pay_kb = False
-            self.pay_lnp = False
-            self.pay_cash = False
-            self.pay_card = False
-
-    @api.onchange('pay_card')
-    def _onchange_pay_card(self):
-        if self.pay_card:
-            self.pay_card_reader = False
-            self.pay_kb = False
-            self.pay_lnp = False
-            self.pay_cash = False
-            self.pay_cheque = False
+    is_staff_order = fields.Boolean(
+        string="Staff Order",
+        compute='_compute_is_staff_order',
+        store=True,
+        readonly=False,
+    )
+    is_b2b = fields.Boolean(
+        string="B2B",
+        compute='_compute_is_b2b',
+        store=True,
+        readonly=False,
+    )
    
     commitment_date = fields.Datetime(
         string='Delivery Date', 
@@ -195,21 +143,23 @@ class SaleOrder(models.Model):
     
 
     def action_confirm(self):
-        """Enforces Max. Alternative Drops limit during Sales Order confirmation."""
+        """Enforces Max. Alternative Drops limit and links round batch to delivery pickings."""
+        
         for order in self:
             if order.is_alternative_round and order.batch_id.is_alt_limit_reached:
                 raise UserError(_("Max Alternative Drops have been reached for batch '%s'.") % order.batch_id.display_name)
-        return super().action_confirm()
+        res = super().action_confirm()
+        for order in self:
+            if order.batch_id:
+                valid_pickings = order.picking_ids.filtered(lambda p: p.state != 'cancel')
+                if valid_pickings:
+                    # Pass context to bypass stock_picking_batch sanity checks and user assignments
+                    valid_pickings.with_context(
+                        building_backorder=True, 
+                        dont_check_company=True
+                    ).write({'batch_id': order.batch_id.id})
 
-    def write(self, vals):
-        payment_fields = ['pay_card_reader', 'pay_kb', 'pay_lnp', 'pay_cash', 'pay_cheque', 'pay_card']
-        checked = [f for f in payment_fields if vals.get(f)]
-        if checked:
-            chosen = checked[-1]
-            for f in payment_fields:
-                if f != chosen and f not in vals:
-                    vals[f] = False
-        return super().write(vals)
+        return res
 
    
 
@@ -457,3 +407,28 @@ class SaleOrder(models.Model):
             'view_mode': 'form',
             'target': 'current',
         }
+        
+    @api.depends('partner_id', 'partner_id.customer_type')
+    def _compute_is_b2b(self):
+        for order in self:
+            if not order.partner_id:
+                order.is_b2b = False
+                continue
+            is_b2b_customer = (
+                order.partner_id.customer_type == 'b2b_trade'
+                #order.partner_id.customer_source == 'b2b'
+            )
+            order.is_b2b = bool(is_b2b_customer)
+            
+    @api.depends('pricelist_id', 'partner_id', 'partner_id.property_product_pricelist')
+    def _compute_is_staff_order(self):
+        """Computes whether the order uses a Staff pricelist based on SO pricelist or Partner default pricelist."""
+        for order in self:
+            pricelist = order.pricelist_id or (order.partner_id and order.partner_id.property_product_pricelist)
+            
+            if not pricelist:
+                order.is_staff_order = False
+                continue
+
+            pricelist_name = (pricelist.name or '').strip().lower()
+            order.is_staff_order = 'staff' in pricelist_name

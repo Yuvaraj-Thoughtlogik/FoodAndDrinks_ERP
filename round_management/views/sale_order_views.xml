@@ -68,9 +68,9 @@
                             <field name="is_late_order" class="me-1"/>
                             <label for="is_late_order" string="Late Order" class="mb-0 text-nowrap"/>
                         </div>
-                        <div class="col-4 d-flex align-items-baseline">
-                            <field name="is_pickup" class="me-1"/>
-                            <label for="is_pickup" string="Pet Food Order" class="mb-0 text-nowrap"/>
+                       <div class="col-4 d-flex align-items-baseline">
+                            <field name="is_staff_order" class="me-1"/>
+                            <label for="is_staff_order" string="Pet Food Order" class="mb-0 text-nowrap"/>
                         </div>
                         <div class="col-4 d-flex align-items-baseline">
                             <field name="is_b2b" class="me-1"/>
@@ -166,7 +166,7 @@
 
                 <field name="is_late_order" widget="boolean_toggle" optional="hide"/>
 
-                <field name="is_pickup" optional="hide"/>
+                <field name="is_staff_order" optional="hide"/>
                 <field name="is_b2b" optional="hide"/>
             </xpath>
 
@@ -189,7 +189,7 @@
 
                 <field name="is_late_order" widget="boolean_toggle" optional="hide"/>
 
-                <field name="is_pickup" optional="hide"/>
+               <field name="is_staff_order" optional="hide"/>
                 <field name="is_b2b" optional="hide"/>
             </xpath>
         </field>
