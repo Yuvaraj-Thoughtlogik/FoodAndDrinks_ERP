@@ -28,21 +28,93 @@ class ReportDeliveryNoteRound(models.AbstractModel):
         valid_parts = [p.strip() for p in parts if p and p.strip()]
         return " ".join(valid_parts)
 
-    def _format_customer_name(self, partner):
+    def _format_address_lines(self, partner):
+        if not partner:
+            return "", ""
+        state_name = partner.state_id.name if getattr(partner, 'state_id', False) and partner.state_id else ''
+        line1_parts = [
+            getattr(partner, 'street', '') or '',
+            getattr(partner, 'street2', '') or '',
+            getattr(partner, 'city', '') or '',
+        ]
+        line2_parts = [
+            state_name,
+            getattr(partner, 'zip', '') or '',
+        ]
+        line1 = " ".join([p.strip() for p in line1_parts if p and p.strip()])
+        line2 = " ".join([p.strip() for p in line2_parts if p and p.strip()])
+        return line1, line2
+
+    def _format_customer_name(self, partner, include_code=True):
         if not partner:
             return ""
         name_parts = []
         partner_title = getattr(partner, 'title', False)
         if partner_title and getattr(partner_title, 'name', False):
-            name_parts.append(partner_title.name)
+            t_name = partner_title.name.strip()
+            p_name = (partner.name or '').strip()
+            if not p_name.lower().startswith(t_name.lower()):
+                name_parts.append(t_name)
         if partner.name:
-            name_parts.append(partner.name)
+            name_parts.append(partner.name.strip())
         full_name = " ".join(name_parts).strip() or partner.name or ""
 
-        code = getattr(partner, 'customer_code', False) or getattr(partner, 'ref', False)
-        if code:
-            return f"{full_name} ({code})"
+        if include_code:
+            code = getattr(partner, 'customer_code', False) or getattr(partner, 'ref', False)
+            if code:
+                return f"{full_name} ({code})"
         return full_name
+
+    def _get_order_category_lines(self, order, delivery_product_ids=None):
+        """Group an order's lines into categorized buckets (e.g. FROZEN, FRESH, etc.)."""
+        lines = order.order_line.filtered(lambda l: not l.display_type and l.product_id)
+        if delivery_product_ids:
+            lines = lines.filtered(lambda l: l.product_id.id in delivery_product_ids)
+
+        cat_dict = {}
+        for line in lines:
+            product = line.product_id
+            categ_name = product.categ_id.name.strip() if product.categ_id and product.categ_id.name else ''
+
+            c_upper = categ_name.upper()
+            if 'FROZEN' in c_upper or 'FREEZE' in c_upper or getattr(product, 'use_frozen', False):
+                cat_key = 'FROZEN'
+                priority = 1
+            elif 'FRESH' in c_upper or 'CHILLED' in c_upper or getattr(product, 'use_fresh', False):
+                cat_key = 'FRESH'
+                priority = 2
+            elif c_upper:
+                cat_key = c_upper
+                priority = 3
+            else:
+                cat_key = 'FRESH'
+                priority = 2
+
+            if cat_key not in cat_dict:
+                cat_dict[cat_key] = {
+                    'name': cat_key,
+                    'priority': priority,
+                    'lines': []
+                }
+
+            qty_val = getattr(line, 'product_uom_qty', 0)
+            qty = int(qty_val) if hasattr(qty_val, 'is_integer') and qty_val.is_integer() else (int(qty_val) if float(qty_val).is_integer() else qty_val)
+
+            prod_name = product.name or line.name or ''
+            line_desc = (getattr(line, 'name', '') or '').strip()
+            extra_note = ""
+            if '#' in line_desc:
+                match = re.search(r'(#.+?#)', line_desc)
+                if match:
+                    extra_note = match.group(1).strip()
+
+            cat_dict[cat_key]['lines'].append({
+                'qty': qty,
+                'product_name': prod_name,
+                'extra_note': extra_note,
+            })
+
+        return sorted(cat_dict.values(), key=lambda c: (c['priority'], c['name']))
 
     # --------------------------------------------------------------
     # DELIVERY (STOCK PICKING) HELPERS
@@ -177,33 +249,46 @@ class ReportDeliveryNoteRound(models.AbstractModel):
                     order='delivery_date asc, name asc'
                 )
 
-                # Group by delivery date
-                dates_dict = {}
+                courier_orders_data = []
                 for order in applicable_orders:
+                    pickings = self._get_delivery_pickings(order)
+                    delivery_product_ids = self._get_delivery_product_ids(pickings) if pickings else None
+
+                    categories = self._get_order_category_lines(order, delivery_product_ids)
+                    if not categories:
+                        continue
+
+                    ship_partner = order.partner_shipping_id or order.partner_id
+                    main_partner = order.partner_id
+
+                    cust_name = self._format_customer_name(main_partner, include_code=False)
+                    cust_code = getattr(main_partner, 'customer_code', False) or getattr(main_partner, 'ref', False) or str(main_partner.id)
+                    addr_line1, addr_line2 = self._format_address_lines(ship_partner)
+
                     d_date = order.delivery_date or wizard.delivery_date_from
-                    if d_date not in dates_dict:
-                        dates_dict[d_date] = []
-                    dates_dict[d_date].append(order)
+                    delivery_date_str = d_date.strftime('%d/%m/%Y') if d_date else ''
 
-                for d_date, date_orders in sorted(dates_dict.items(), key=lambda x: x[0]):
-                    drops = []
-                    for order in date_orders:
-                        drop = self._build_drop(order)
-                        if not drop:
-                            continue
-                        drop['zone'] = order.round_code or 'COURIER'
-                        drops.append(drop)
+                    courier_orders_data.append({
+                        'order': order,
+                        'order_no': order.client_order_ref or order.name or '',
+                        'customer_id': cust_code,
+                        'customer_name': cust_name,
+                        'address_line1': addr_line1,
+                        'address_line2': addr_line2,
+                        'delivery_date': delivery_date_str,
+                        'categories': categories,
+                        'company': order.company_id or self.env.company,
+                    })
 
-                    if drops:
-                        all_batch_groups.append({
-                            'batch_name': 'COURIER DELIVERY',
-                            'batch_code': '(COURIER)',
-                            'depot_name': 'GRIMSBY',
-                            'delivery_date': d_date.strftime('%d/%m/%Y') if d_date else '',
-                            'total_deliveries': len(drops),
-                            'drops': drops,
-                        })
-                continue
+                return {
+                    'doc_ids': docids,
+                    'doc_model': 'delivery.note.round.wizard',
+                    'docs': docs,
+                    'delivery_channel': 'courier',
+                    'courier_orders': courier_orders_data,
+                    'batch_groups': [],
+                    'company': self.env.company,
+                }
 
             # ----------------------------------------------------
             # REGAL VAN DELIVERY FLOW
@@ -264,5 +349,8 @@ class ReportDeliveryNoteRound(models.AbstractModel):
             'doc_ids': docids,
             'doc_model': 'delivery.note.round.wizard',
             'docs': docs,
+            'delivery_channel': 'regal_van',
+            'courier_orders': [],
             'batch_groups': all_batch_groups,
+            'company': self.env.company,
         }
