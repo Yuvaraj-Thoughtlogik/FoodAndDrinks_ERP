@@ -155,7 +155,6 @@ class RoundManagementBatch(models.Model):
     user_id = fields.Many2one('res.users', string='Responsible')
     
     def _sanity_check(self):
-        """Dummy method to satisfy stock_picking_batch write override."""
         return True
     @api.depends('round_id','round_id.max_alt_drops')
     def _compute_max_alt_drops(self):
