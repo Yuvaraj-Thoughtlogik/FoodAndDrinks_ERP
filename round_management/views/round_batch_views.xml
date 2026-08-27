@@ -172,7 +172,7 @@
                                   <field name="round_id" column_invisible="1"/>
 
                                   <field name="is_late_order" string="Late?"/>
-                                  <field name="is_pickup" string="Pickup?"/>
+                                  <!--<field name="is_pickup" string="Pickup?"/>-->
                                   <!-- <field name="has_card_reader" string="Card Reader?"/>-->
                                   <field name="is_b2b" string="B2B?"/>
                                   <field name="amount_total"/>
