@@ -37,6 +37,14 @@ class SaleOrder(models.Model):
    
     is_pickup = fields.Boolean(string="Pet Food / Pickup Order")
     is_b2b = fields.Boolean(string="B2B")
+
+    # Payment Modes
+    pay_card_reader = fields.Boolean(string="Card Reader", default=False)
+    pay_kb = fields.Boolean(string="K/B", default=False)
+    pay_lnp = fields.Boolean(string="LNP", default=False)
+    pay_cash = fields.Boolean(string="Cash", default=False)
+    pay_cheque = fields.Boolean(string="Cheque", default=False)
+    pay_card = fields.Boolean(string="Card", default=False)
    
     commitment_date = fields.Datetime(
         string='Delivery Date', 
@@ -136,11 +144,25 @@ class SaleOrder(models.Model):
         """Enforces Max. Alternative Drops limit during Sales Order confirmation."""
         for order in self:
             if order.is_alternative_round:
-             
                 if order.batch_id.is_alt_limit_reached:
                     raise UserError(_("Max Alternative Drops have been reached."))
 
-        return super(SaleOrder, self).action_confirm()
+        res = super(SaleOrder, self).action_confirm()
+        for order in self:
+            if order.batch_id:
+                pickings = order.picking_ids.filtered(lambda p: p.state != 'cancel')
+                if pickings:
+                    pickings.write({'batch_id': order.batch_id.id})
+        return res
+
+    def write(self, vals):
+        res = super(SaleOrder, self).write(vals)
+        if 'batch_id' in vals:
+            for order in self:
+                pickings = order.picking_ids.filtered(lambda p: p.state != 'cancel')
+                if pickings:
+                    pickings.write({'batch_id': order.batch_id.id if order.batch_id else False})
+        return res
 
    
 

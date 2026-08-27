@@ -52,10 +52,5 @@
         <field name="view_id" ref="view_packing_list_wizard_form"/>
     </record>
 
-    <!-- Packing List Menu Item under Round Management -> Reporting -->
-    <menuitem id="menu_report_packing_list"
-              name="Packing List"
-              parent="tl_rf_reports.menu_round_reporting_root"
-              action="action_packing_list_wizard"
-              sequence="20"/>
+
 </odoo>
