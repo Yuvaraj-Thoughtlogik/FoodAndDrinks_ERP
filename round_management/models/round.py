@@ -53,7 +53,87 @@ class RoundManagementRound(models.Model):
 
     # Link to Sale Orders to calculate active drops
     order_ids = fields.One2many('sale.order', 'round_id', string="Sales Orders")
+     # Inverse relation to res.partner
+    partner_ids = fields.One2many(
+        'res.partner', 
+        'round_id', 
+        string='Customers'
+    )
+
+    active_customers_count = fields.Integer(
+        string='Active Customers',
+        compute='_compute_customer_counts',
+        store=True
+    )
+    ftlt_customers_m_count = fields.Integer(
+        string='FTLT Customers M',
+        compute='_compute_customer_counts',
+        store=True
+    )
+    customer_f_count = fields.Integer(
+        string='Customer F',
+        compute='_compute_customer_counts',
+        store=True
+    )
+    ftlt_count = fields.Integer(
+        string='FTLT',
+        compute='_compute_customer_counts',
+        store=True
+    )
     
+    total_drops = fields.Integer(
+        string='Total Drops',
+        compute='_compute_total_drops',
+        store=True
+    )
+
+    @api.depends(
+        'partner_ids', 
+        'partner_ids.active', 
+        'partner_ids.customer_lifecycle_status'
+    )
+    def _compute_total_drops(self):
+        for rec in self:
+            if not rec.partner_ids:
+                rec.total_drops = 0
+                continue
+            
+            # Count active customers assigned to the round
+            active_partners = rec.partner_ids.filtered(
+                lambda p: p.active and getattr(p, 'customer_lifecycle_status', False) not in ('inactive', 'closed')
+            )
+            rec.total_drops = len(active_partners)
+
+    @api.depends(
+    'partner_ids', 
+    'partner_ids.active'
+)
+    def _compute_customer_counts(self):
+        for rec in self:
+            if not rec.partner_ids:
+                rec.active_customers_count = 0
+                rec.ftlt_customers_m_count = 0
+                rec.customer_f_count = 0
+                rec.ftlt_count = 0
+                continue
+
+            # Safely filter active partners
+            active_partners = rec.partner_ids.filtered(
+                lambda p: p.active and getattr(p, 'customer_lifecycle_status', False) not in ('inactive', 'closed')
+            )
+            
+            rec.active_customers_count = len(active_partners)
+            rec.ftlt_customers_m_count = len(active_partners.filtered(
+                lambda p: getattr(p, 'customer_lifecycle_status', False) == 'main_customer'
+            ))
+            rec.customer_f_count = len(active_partners.filtered(
+                lambda p: getattr(p, 'customer_lifecycle_status', False) == 'ftlt'
+            ))
+            rec.ftlt_count = len(active_partners.filtered(
+                lambda p: getattr(p, 'customer_lifecycle_status', False) in ('ftlt', 'old_ftlt')
+            ))
+            
+            
     
     @api.depends('max_alt_drops', 'order_ids', 'order_ids.state', 'order_ids.is_alternative_round')
     def _compute_drop_counts(self):

@@ -143,15 +143,18 @@
                             </field>
                         </page>
                         <page string="Round Batches" name="batches">
-                            <field name="batch_ids" readonly="1">
-                                <list>
-                                    <field name="code"/>
-                                    <field name="week_number"/>
-                                    <field name="delivery_date"/>
-                                    <field name="state"/>
-                                </list>
-                            </field>
-                        </page>
+                      <field name="batch_ids" readonly="1">
+                          <list>
+                              <field name="company_currency_id" column_invisible="True"/>
+                              <field name="code"/>
+                              <field name="week_number"/>
+                              <field name="delivery_date"/>
+                              <field name="total_drops" string="Total Drops" sum="Total Drops"/>
+                              <field name="total_revenue" string="Total Revenue" widget="monetary" options="{'currency_field': 'company_currency_id'}" sum="Total Revenue"/>
+                              <field name="state" widget="badge"/>
+                          </list>
+                      </field>
+                  </page>
                     </notebook>
                 </sheet>
             </form>
@@ -191,6 +194,10 @@
                 <field name="code"/>
                 <field name="name"/>
                 <field name="state"/>
+                <field name="total_drops" string="Total Drops" sum="Total Drops"/>
+                <field name="active_customers_count" string="Active Customers" sum="Total Active"/>
+                <field name="ftlt_customers_m_count" string="M" sum="Total M"/>
+                <field name="customer_f_count" string="F" sum="Total F"/>
 
             </list>
         </field>

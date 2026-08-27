@@ -78,6 +78,13 @@ class RoundManagementBatch(models.Model):
     total_drops = fields.Integer(string='Total Drops', compute='_compute_order_metrics', store=True)
 
     picking_type_id = fields.Many2one('stock.picking.type', string='Operation Type')
+    is_wave = fields.Boolean(string="Is Wave", default=False)
+    company_id = fields.Many2one(
+        'res.company', 
+        string='Company', 
+        default=lambda self: self.env.company,
+        index=True
+    )
     # order_ids = fields.One2many('sale.order', 'batch_id', string="Linked Orders")
    
     #card_reader_count = fields.Selection([
@@ -124,6 +131,26 @@ class RoundManagementBatch(models.Model):
         string="Max Alt Drops Reached", compute="_compute_batch_drops", store=True
     )
 
+     total_revenue = fields.Monetary(
+        string='Total Revenue', 
+        compute='_compute_order_metrics', 
+        currency_field='company_currency_id',
+        store=True
+    )
+    company_currency_id = fields.Many2one(
+        'res.currency', 
+        string='Currency', 
+        related='company_id.currency_id', 
+        readonly=True,
+        store=True
+    )
+    
+    company_id = fields.Many2one(
+        'res.company', 
+        string='Company', 
+        default=lambda self: self.env.company,
+        index=True
+    )
     @api.depends('round_id','round_id.max_alt_drops')
     def _compute_max_alt_drops(self):
         for rec in self:
@@ -439,8 +466,8 @@ class RoundManagementBatch(models.Model):
     @api.depends(
         'order_ids', 
         'order_ids.state', 
+        'order_ids.amount_total',
         'order_ids.is_late_order', 
-        #'order_ids.has_card_reader', 
         'order_ids.is_pickup', 
         'order_ids.is_b2b'
     )
@@ -455,16 +482,12 @@ class RoundManagementBatch(models.Model):
                 record.late_orders_count = len(active_orders.filtered(lambda o: getattr(o, 'is_late_order', False)))
                 record.pickups_count = len(active_orders.filtered(lambda o: getattr(o, 'is_pickup', False)))
                 record.total_drops = len(active_orders)
-                
-                
-                #has_card_req = any(getattr(o, 'has_card_reader', False) for o in active_orders)
-                #record.card_reader_count = 'Y' if has_card_req else 'N'
-                
+                record.total_revenue = sum(active_orders.mapped('amount_total'))
                 record.is_b2b_batch = any(getattr(o, 'is_b2b', False) for o in active_orders)
             else:
                 record.drops_count = 0
                 record.late_orders_count = 0
                 record.pickups_count = 0
                 record.total_drops = 0
-                #record.card_reader_count = False  
+                record.total_revenue = 0.0
                 record.is_b2b_batch = False
