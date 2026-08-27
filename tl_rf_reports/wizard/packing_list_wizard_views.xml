@@ -9,14 +9,12 @@
                 <sheet>
                     <!-- Row 1: Delivery Date From & To -->
                     <group>
-                        <group string="Delivery Date">
-                            <field name="delivery_date_from" widget="date" required="1"/>
-                            <field name="delivery_date_to" widget="date" required="1"/>
+                        <group>
+                            <field name="delivery_date_from" widget="date" required="1" />
                         </group>
-<!--                        <group string="Packing Date">-->
-<!--                            <field name="packing_date_from" widget="date"/>-->
-<!--                            <field name="packing_date_to" widget="date"/>-->
-<!--                        </group>-->
+                        <group>
+                            <field name="delivery_date_to" widget="date" required="1" />
+                        </group>
                     </group>
 
                     <!-- Row 2: Late Order, Delivery Channel & Depot Checkboxes -->
