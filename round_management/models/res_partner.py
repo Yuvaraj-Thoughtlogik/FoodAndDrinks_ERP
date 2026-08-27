@@ -46,3 +46,21 @@ class ResPartner(models.Model):
                 ])
             else:
                 rec.available_round_ids = Round.search([])
+                
+                
+    @api.model_create_multi
+    def create(self, vals_list):
+        partners = super().create(vals_list)
+        rounds = partners.mapped('round_id')
+        if rounds:
+            rounds._compute_customer_counts()
+        return partners
+
+    def write(self, vals):
+        old_rounds = self.mapped('round_id')
+        res = super().write(vals)
+        if any(field in vals for field in ['customer_lifecycle_status', 'round_id', 'active']):
+            new_rounds = self.mapped('round_id')
+            (old_rounds | new_rounds)._compute_customer_counts()
+            
+        return res
