@@ -37,6 +37,14 @@ class SaleOrder(models.Model):
    
     is_pickup = fields.Boolean(string="Pet Food / Pickup Order")
     is_b2b = fields.Boolean(string="B2B")
+
+    # Payment Modes
+    pay_card_reader = fields.Boolean(string="Card Reader", default=False)
+    pay_kb = fields.Boolean(string="K/B", default=False)
+    pay_lnp = fields.Boolean(string="LNP", default=False)
+    pay_cash = fields.Boolean(string="Cash", default=False)
+    pay_cheque = fields.Boolean(string="Cheque", default=False)
+    pay_card = fields.Boolean(string="Card", default=False)
    
     commitment_date = fields.Datetime(
         string='Delivery Date', 
@@ -149,6 +157,18 @@ class SaleOrder(models.Model):
                         dont_check_company=True
                     ).write({'batch_id': order.batch_id.id})
 
+        return res
+
+    def write(self, vals):
+        res = super().write(vals)
+        if 'batch_id' in vals:
+            for order in self:
+                valid_pickings = order.picking_ids.filtered(lambda p: p.state != 'cancel')
+                if valid_pickings:
+                    valid_pickings.with_context(
+                        building_backorder=True,
+                        dont_check_company=True
+                    ).write({'batch_id': order.batch_id.id if order.batch_id else False})
         return res
 
    

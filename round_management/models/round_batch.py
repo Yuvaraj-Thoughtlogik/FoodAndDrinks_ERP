@@ -31,6 +31,10 @@ class RoundManagementBatch(models.Model):
         ('cancel', 'Cancelled'),
     ], string='Status', default='pln', required=True, tracking=True)
     
+    user_id = fields.Many2one('res.users', string='Responsible', default=lambda self: self.env.user)
+    company_id = fields.Many2one('res.company', string='Company', default=lambda self: self.env.company)
+    currency_id = fields.Many2one('res.currency', string='Currency', default=lambda self: self.env.company.currency_id)
+    
     #pay_grade = fields.Char(string='Pay Grade', related='round_id.pay_grade', readonly=True)
 
     helper_needed = fields.Boolean(string='Helper Needed')
