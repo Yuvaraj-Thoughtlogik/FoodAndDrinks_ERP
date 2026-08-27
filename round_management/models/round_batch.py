@@ -79,12 +79,7 @@ class RoundManagementBatch(models.Model):
 
     picking_type_id = fields.Many2one('stock.picking.type', string='Operation Type')
     is_wave = fields.Boolean(string="Is Wave", default=False)
-    company_id = fields.Many2one(
-        'res.company', 
-        string='Company', 
-        default=lambda self: self.env.company,
-        index=True
-    )
+    
     # order_ids = fields.One2many('sale.order', 'batch_id', string="Linked Orders")
    
     #card_reader_count = fields.Selection([
@@ -131,7 +126,7 @@ class RoundManagementBatch(models.Model):
         string="Max Alt Drops Reached", compute="_compute_batch_drops", store=True
     )
 
-     total_revenue = fields.Monetary(
+    total_revenue = fields.Monetary(
         string='Total Revenue', 
         compute='_compute_order_metrics', 
         currency_field='company_currency_id',
