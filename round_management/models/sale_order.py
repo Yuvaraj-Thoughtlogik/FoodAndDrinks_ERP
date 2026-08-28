@@ -432,3 +432,45 @@ class SaleOrder(models.Model):
 
             pricelist_name = (pricelist.name or '').strip().lower()
             order.is_staff_order = 'staff' in pricelist_name
+            
+    @api.depends('partner_id', 'partner_id.round_id')
+    def _compute_partner_id_set_round(self):
+        for rec in self:
+            if rec.partner_id and rec.partner_id.round_id:
+                rec.round_id = rec.partner_id.round_id
+            else:
+                rec.round_id = False
+    
+    @api.depends('round_id')
+    def _compute_auto_select_batch_id(self):
+        today = fields.Date.context_today(self)
+        for order in self:
+            if not order.round_id:
+                order.batch_id = False
+                continue
+
+            # Find the nearest future or today's active batch
+            next_batch = self.env['round.management.batch'].search([
+                ('round_id', '=', order.round_id.id),
+                ('state', 'in', ['act', 'prt']),
+                ('delivery_date', '>=', today),
+            ], order='delivery_date asc, id asc', limit=1)
+
+            # Fallback to the most recent past batch if no upcoming batch exists
+            if not next_batch:
+                next_batch = self.env['round.management.batch'].search([
+                    ('round_id', '=', order.round_id.id),
+                    ('state', 'in', ['act', 'prt']),
+                ], order='delivery_date desc, id desc', limit=1)
+
+            order.batch_id = next_batch.id if next_batch else False
+            
+class SaleOrderLine(models.Model):
+    _inherit = 'sale.order.line'
+
+    has_special_requirements = fields.Boolean(
+        string="Check Notes"
+    )
+    special_requirements_notes = fields.Text(
+        string="Special Notes"
+    )
