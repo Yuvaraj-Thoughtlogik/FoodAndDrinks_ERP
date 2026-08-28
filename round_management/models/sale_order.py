@@ -4,37 +4,36 @@ from odoo.tools import _
 from datetime import datetime, time
 import pytz
 
-
 DEFAULT_DELIVERY_TIME = time(23, 59)  # 11:00 PM (local time)
+
 
 class SaleOrder(models.Model):
     _inherit = 'sale.order'
 
-    
     batch_id = fields.Many2one(
-        'round.management.batch', 
-        string='Round Batch', 
+        'round.management.batch',
+        string='Round Batch',
         ondelete='set null',
         index=True,
         domain="[('round_id', '=?', round_id), ('state', 'in', ['act', 'prt'])]",
     )
-    
+
     round_id = fields.Many2one(
-        'round.management.round', 
+        'round.management.round',
         string='Delivery Round',
         index=True, domain="[('state', '=', 'active')]",
         compute='_compute_partner_id_set_round',
         store=True,
     )
     round_code = fields.Char(related='round_id.code', string='Round Code', store=True)
-    
+
     is_late_order = fields.Boolean(
         string="Late Order",
         compute='_compute_is_late_order',
         readonly=False,
         store=True
     )
-   
+
     is_staff_order = fields.Boolean(
         string="Staff Order",
         compute='_compute_is_staff_order',
@@ -47,18 +46,18 @@ class SaleOrder(models.Model):
         store=True,
         readonly=False,
     )
-   
+
     commitment_date = fields.Datetime(
-        string='Delivery Date', 
-        compute='_compute_batch_delivery_info', 
-        store=True, 
+        string='Delivery Date',
+        compute='_compute_batch_delivery_info',
+        store=True,
         readonly=False,
         copy=True,
     )
     delivery_date = fields.Date(
         string="Delivery Date",
         compute='_compute_batch_delivery_info',
-        store=True, 
+        store=True,
         readonly=False,
         copy=True,
     )
@@ -69,11 +68,10 @@ class SaleOrder(models.Model):
     #     ('18:00_21:00', '18:00 to 21:00'),
     # ], string='Delivery Times', help="Independent delivery time selection")
 
-    
     week_number = fields.Char(
-        string='ISO Week No.', 
-        compute='_compute_batch_delivery_info', 
-        store=True, 
+        string='ISO Week No.',
+        compute='_compute_batch_delivery_info',
+        store=True,
         readonly=False,
         help="Calculated week and year format (e.g. 202631)"
     )
@@ -83,7 +81,6 @@ class SaleOrder(models.Model):
         store=True,
         readonly=True
     )
-
 
     requested_delivery_after = fields.Float(string="Requested Delivery After")
     requested_delivery_before = fields.Float(string="Requested Delivery Before")
@@ -128,26 +125,87 @@ class SaleOrder(models.Model):
         5: ('sat_active', 'sat_from', 'sat_to'),  # Saturday
         6: ('sun_active', 'sun_from', 'sun_to'),  # Sunday
     }
-    
+
     is_alternative_round = fields.Boolean(
         string="Is Alternative Round",
         default=False,
-        compute= "_compute_is_alternative_round",
+        compute="_compute_is_alternative_round",
         store=True,
     )
+    # Payment Modes
+    pay_card_reader = fields.Boolean(string="Card Reader", default=False)
+    pay_kb = fields.Boolean(string="K/B", default=False)
+    pay_lnp = fields.Boolean(string="LNP", default=False)
+    pay_cash = fields.Boolean(string="Cash", default=False)
+    pay_cheque = fields.Boolean(string="Cheque", default=False)
+    pay_card = fields.Boolean(string="Card", default=False)
 
-    @api.depends('batch_id','batch_id.round_id','round_id')
+    @api.onchange('pay_card_reader')
+    def _onchange_pay_card_reader(self):
+        if self.pay_card_reader:
+            self.pay_kb = False
+            self.pay_lnp = False
+            self.pay_cash = False
+            self.pay_cheque = False
+            self.pay_card = False
+
+    @api.onchange('pay_kb')
+    def _onchange_pay_kb(self):
+        if self.pay_kb:
+            self.pay_card_reader = False
+            self.pay_lnp = False
+            self.pay_cash = False
+            self.pay_cheque = False
+            self.pay_card = False
+
+    @api.onchange('pay_lnp')
+    def _onchange_pay_lnp(self):
+        if self.pay_lnp:
+            self.pay_card_reader = False
+            self.pay_kb = False
+            self.pay_cash = False
+            self.pay_cheque = False
+            self.pay_card = False
+
+    @api.onchange('pay_cash')
+    def _onchange_pay_cash(self):
+        if self.pay_cash:
+            self.pay_card_reader = False
+            self.pay_kb = False
+            self.pay_lnp = False
+            self.pay_cheque = False
+            self.pay_card = False
+
+    @api.onchange('pay_cheque')
+    def _onchange_pay_cheque(self):
+        if self.pay_cheque:
+            self.pay_card_reader = False
+            self.pay_kb = False
+            self.pay_lnp = False
+            self.pay_cash = False
+            self.pay_card = False
+
+    @api.onchange('pay_card')
+    def _onchange_pay_card(self):
+        if self.pay_card:
+            self.pay_card_reader = False
+            self.pay_kb = False
+            self.pay_lnp = False
+            self.pay_cash = False
+            self.pay_cheque = False
+
+    @api.depends('batch_id', 'batch_id.round_id', 'round_id')
     def _compute_is_alternative_round(self):
         for rec in self:
             rec.is_alternative_round = True if rec.batch_id.round_id != rec.round_id else False
-    
 
     def action_confirm(self):
         """Enforces Max. Alternative Drops limit and links round batch to delivery pickings."""
-        
+
         for order in self:
             if order.is_alternative_round and order.batch_id.is_alt_limit_reached:
-                raise UserError(_("Max Alternative Drops have been reached for batch '%s'.") % order.batch_id.display_name)
+                raise UserError(
+                    _("Max Alternative Drops have been reached for batch '%s'.") % order.batch_id.display_name)
         res = super().action_confirm()
         for order in self:
             if order.batch_id:
@@ -155,20 +213,18 @@ class SaleOrder(models.Model):
                 if valid_pickings:
                     # Pass context to bypass stock_picking_batch sanity checks and user assignments
                     valid_pickings.with_context(
-                        building_backorder=True, 
+                        building_backorder=True,
                         dont_check_company=True
                     ).write({'batch_id': order.batch_id.id})
 
         return res
-
-   
 
     @api.depends('batch_id', 'batch_id.delivery_times')
     def _compute_delivery_times(self):
         for order in self:
             order.delivery_times = order.batch_id.delivery_times if order.batch_id else False
 
-    @api.depends('partner_id', 'partner_shipping_id','partner_id.comment')
+    @api.depends('partner_id', 'partner_shipping_id', 'partner_id.comment')
     def _compute_permanent_notes(self):
         for order in self:
             partner = order.partner_shipping_id or order.partner_id
@@ -188,7 +244,6 @@ class SaleOrder(models.Model):
         localized_dt = local_tz.localize(naive_local_dt)
         utc_dt = localized_dt.astimezone(pytz.UTC).replace(tzinfo=None)
         return utc_dt
-
 
     @staticmethod
     def _format_time(value):
@@ -343,16 +398,14 @@ class SaleOrder(models.Model):
 
         return super().write(vals)
 
-
-    @api.depends('partner_id','partner_id.round_id')
+    @api.depends('partner_id', 'partner_id.round_id')
     def _compute_partner_id_set_round(self):
         for rec in self:
             if rec.partner_id and rec.partner_id.round_id:
                 rec.round_id = rec.partner_id.round_id
             else:
                 rec.round_id = False
-            
-            
+
     def action_select_alt_delivery_round(self):
         """Populates wizard lines with Round Batches and opens the modal."""
         self.ensure_one()
@@ -407,7 +460,7 @@ class SaleOrder(models.Model):
             'view_mode': 'form',
             'target': 'current',
         }
-        
+
     @api.depends('partner_id', 'partner_id.customer_type')
     def _compute_is_b2b(self):
         for order in self:
@@ -415,17 +468,17 @@ class SaleOrder(models.Model):
                 order.is_b2b = False
                 continue
             is_b2b_customer = (
-                order.partner_id.customer_type == 'b2b_trade'
-                #order.partner_id.customer_source == 'b2b'
+                    order.partner_id.customer_type == 'b2b_trade'
+                # order.partner_id.customer_source == 'b2b'
             )
             order.is_b2b = bool(is_b2b_customer)
-            
+
     @api.depends('pricelist_id', 'partner_id', 'partner_id.property_product_pricelist')
     def _compute_is_staff_order(self):
         """Computes whether the order uses a Staff pricelist based on SO pricelist or Partner default pricelist."""
         for order in self:
             pricelist = order.pricelist_id or (order.partner_id and order.partner_id.property_product_pricelist)
-            
+
             if not pricelist:
                 order.is_staff_order = False
                 continue
