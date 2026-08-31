@@ -32,6 +32,7 @@
         'report/dock_weight_breakdown_report_views.xml',
         'report/packing_list_report_views.xml',
         'report/delivery_note_round_report_views.xml',
+        'views/delivery_dispatch_report.xml',
         'views/sale_order_views.xml',
         'views/menus.xml',
     ],
