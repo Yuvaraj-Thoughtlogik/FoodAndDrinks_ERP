@@ -71,3 +71,18 @@ class StockPicking(models.Model):
                 picking.delivery_date = sale_order.commitment_date if sale_order and sale_order.commitment_date else (picking.scheduled_date or fields.Datetime.now())
             else:
                 picking.delivery_date = picking.scheduled_date or fields.Datetime.now()
+                
+
+
+class MrpProduction(models.Model):
+    _inherit = 'mrp.production'
+
+    batch_id = fields.Many2one(
+        'round.management.batch',
+        string='Round Batch',
+    )
+    delivery_date = fields.Date(
+        string='Delivery Date',
+        related='batch_id.delivery_date',
+        store=True,
+    )

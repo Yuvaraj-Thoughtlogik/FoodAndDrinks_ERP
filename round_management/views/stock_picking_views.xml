@@ -99,5 +99,19 @@
 
         </field>
     </record>
+    
+     <record id="view_mrp_production_filter_inherit_delivery_date" model="ir.ui.view">
+        <field name="name">mrp.production.select.inherit.delivery.date</field>
+        <field name="model">mrp.production</field>
+        <field name="inherit_id" ref="mrp.view_mrp_production_filter"/>
+        <field name="arch" type="xml">
+            <!-- Add custom filter inside the search view -->
+            <xpath expr="//search" position="inside">
+                <filter string="Delivery Date: Today"
+                        name="filter_delivery_date_today"
+                        domain="[('delivery_date', '=', context_today().strftime('%Y-%m-%d'))]"/>
+            </xpath>
+        </field>
+    </record>
 
 </odoo>
