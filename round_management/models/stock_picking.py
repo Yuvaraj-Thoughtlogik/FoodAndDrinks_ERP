@@ -86,3 +86,10 @@ class MrpProduction(models.Model):
         related='batch_id.delivery_date',
         store=True,
     )
+    
+    product_categ_id = fields.Many2one(
+        'product.category',
+        string='Product Category',
+        related='product_id.categ_id',
+        store=True,
+    )
