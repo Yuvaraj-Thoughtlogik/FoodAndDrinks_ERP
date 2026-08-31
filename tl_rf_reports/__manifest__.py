@@ -31,7 +31,7 @@
         'wizard/delivery_note_round_wizard_views.xml',
         'report/dock_weight_breakdown_report_views.xml',
         'report/packing_list_report_views.xml',
-        'report/delivery_note_round_report_views.xml',
+        # 'report/delivery_note_round_report_views.xml',
         'views/delivery_dispatch_report.xml',
         'report/report_delivery_note_round_courier_views.xml',
         'report/report_delivery_note_round_van_views.xml',
