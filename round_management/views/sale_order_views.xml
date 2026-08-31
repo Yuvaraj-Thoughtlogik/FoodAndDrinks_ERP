@@ -16,15 +16,23 @@
                 </div>
 
                 <!-- Batch Code -->
-                <label for="batch_id" string="Batch Code" context="{'list_view_ref': 'round_management.view_round_batch_tree'}"/>
-                <div class="o_row">
-                    <field name="batch_id" string="Batch Code" context="{'list_view_ref': 'round_management.view_round_batch_tree'}"/>
-                    <button name="action_select_alt_delivery_round"
-                            string="Alt Delivery Rnd"
-                            type="object"
-                            icon="fa-truck"
-                            class="oe_highlight o_alt_round_btn ms-1"/>
-                </div>
+                
+                <label for="batch_id" string="Batch Code"/>
+                  <div class="o_row">
+                      <field name="batch_id" 
+                             string="Batch Code" 
+                             context="{
+                                 'list_view_ref': 'round_management.view_round_batch_tree',
+                                 'order': 'delivery_date asc'
+                             }"
+                             options="{'no_create': True}"/>
+                      <button name="action_select_alt_delivery_round"
+                              string="Alt Delivery Rnd"
+                              type="object"
+                              icon="fa-truck"
+                              class="oe_highlight o_alt_round_btn ms-1"/>
+                  </div>
+
 
                 <!-- Delivery Date + Day Name -->
                 <label for="commitment_date" string="Delivery Date"/>
@@ -70,7 +78,7 @@
                         </div>
                        <div class="col-4 d-flex align-items-baseline">
                             <field name="is_staff_order" class="me-1"/>
-                            <label for="is_staff_order" string="Pet Food Order" class="mb-0 text-nowrap"/>
+                            <label for="is_staff_order" string="Staff Order" class="mb-0 text-nowrap"/>
                         </div>
                         <div class="col-4 d-flex align-items-baseline">
                             <field name="is_b2b" class="me-1"/>
@@ -218,4 +226,19 @@
 
         </field>
     </record>
+    
+    
+    <record id="view_order_form_inherit_special_notes" model="ir.ui.view">
+    <field name="name">sale.order.form.inherit.special.notes</field>
+    <field name="model">sale.order</field>
+    <field name="inherit_id" ref="sale.view_order_form"/>
+    <field name="arch" type="xml">
+        <xpath expr="//field[@name='order_line']/list/field[@name='name']" position="after">
+            <field name="has_special_requirements" widget="boolean_toggle" optional="show"/>
+            <field name="special_requirements_notes" 
+       invisible="not has_special_requirements" 
+       required="has_special_requirements"/>
+        </xpath>
+    </field>
+</record>
 </odoo>
