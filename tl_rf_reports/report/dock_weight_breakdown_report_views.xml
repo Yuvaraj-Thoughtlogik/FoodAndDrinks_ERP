@@ -38,6 +38,12 @@
           footers.children[<body index>]. Therefore there must be EXACTLY ONE
           div.footer per div.article, in the same order - otherwise the footer
           container is cleared and nothing is printed.
+        * Because each category/page is its own explicit div.article + div.footer
+          pair (rather than one continuous flowing body), wkhtmltopdf's built-in
+          <span class="page"/>/<span class="topage"/> counters do NOT accumulate
+          correctly across them. Page numbers below are therefore computed
+          manually from the QWeb loop (t-foreach's automatic *_index / *_size
+          variables) instead of relying on class="page"/"topage".
     -->
     <template id="report_dock_weight_breakdown">
         <t t-call="web.html_container">
@@ -59,7 +65,7 @@
                                                 </span>
                                             </td>
                                             <td style="width: 42%; vertical-align: bottom; text-align: left; padding-left: 15px; font-size: 14px; font-weight: 500; color: #000; line-height: 1.5; border: none !important;">
-                                                <div>For Packing between <t t-esc="res.get('packing_date_from_str', '')"/> and <t t-esc="res.get('packing_date_to_str', '')"/></div>
+                                                <div>For Packing between <t t-esc="datetime.date.today().strftime('%d/%m/%Y')"/> and <t t-esc="datetime.date.today().strftime('%d/%m/%Y')"/></div>
                                                 <div>(Delivery <t t-esc="res.get('delivery_date_from_str', '')"/>-<t t-esc="res.get('delivery_date_to_str', '')"/>)</div>
                                             </td>
                                         </tr>
@@ -103,10 +109,13 @@
                                     <table style="width: 100%; border-collapse: collapse; border: none !important;">
                                         <tr style="border: none !important;">
                                             <td style="width: 50%; text-align: left; vertical-align: middle; border: none !important; padding: 0;">
-                                                <span t-esc="res.get('print_date_str', '')"/>
+                                                <t t-esc="datetime.date.today().strftime('%d %B %Y')"/>
                                             </td>
                                             <td style="width: 50%; text-align: right; vertical-align: middle; border: none !important; padding: 0;">
-                                                Page <span class="page"/> of <span class="topage"/>
+                                                Page
+                                                <t t-esc="cat_page_index + 1"/>
+<!--                                                of -->
+<!--                                                <t t-esc="cat_page_size"/>-->
                                             </td>
                                         </tr>
                                     </table>
@@ -130,10 +139,10 @@
                                 <table style="width: 100%; border-collapse: collapse; border: none !important;">
                                     <tr style="border: none !important;">
                                         <td style="width: 50%; text-align: left; border: none !important; padding: 0;">
-                                            <span t-esc="res.get('print_date_str', '')"/>
+                                            <t t-esc="datetime.date.today().strftime('%d %B %Y')"/>
                                         </td>
                                         <td style="width: 50%; text-align: right; border: none !important; padding: 0;">
-                                            Page <span class="page"/> of <span class="topage"/>
+                                            Page 1
                                         </td>
                                     </tr>
                                 </table>
@@ -199,7 +208,10 @@
                                                 Printed at: <span t-esc="res.get('printed_at_str', '')"/>
                                             </td>
                                             <td style="width: 50%; text-align: right; vertical-align: middle; border: none !important; padding: 0;">
-                                                Page <span class="page"/> of <span class="topage"/>
+                                                Page
+                                                <t t-esc="combo_page_index + 1"/>
+<!--                                                of-->
+<!--                                                <t t-esc="combo_page_size"/>-->
                                             </td>
                                         </tr>
                                     </table>
@@ -224,7 +236,7 @@
                                             Printed at: <span t-esc="res.get('printed_at_str', '')"/>
                                         </td>
                                         <td style="width: 50%; text-align: right; border: none !important; padding: 0;">
-                                            Page <span class="page"/> of <span class="topage"/>
+                                            Page 1
                                         </td>
                                     </tr>
                                 </table>
