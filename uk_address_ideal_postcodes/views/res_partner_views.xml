@@ -17,12 +17,12 @@
 
                     <!-- Street -->
                     <field name="street"
-                           placeholder="Street..."
+                           placeholder="Door No..."
                            class="o_address_street"/>
 
                     <!-- Street 2 -->
                     <field name="street2"
-                           placeholder="Street 2..."
+                           placeholder="Street..."
                            class="o_address_street"/>
 
                     <!-- City -->
