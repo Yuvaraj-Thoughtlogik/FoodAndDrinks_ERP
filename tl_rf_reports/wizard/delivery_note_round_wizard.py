@@ -55,7 +55,7 @@ class DeliveryNoteRoundWizard(models.TransientModel):
                     self.delivery_date_from.strftime('%d/%m/%Y'),
                     self.delivery_date_to.strftime('%d/%m/%Y'),
                 ))
-            return self.env.ref('tl_rf_reports.action_report_delivery_note_round').report_action(self)
+            return self.env.ref('tl_rf_reports.action_report_delivery_note_round_courier').report_action(self)
 
         # Regal Van Delivery
         domain = [
@@ -82,4 +82,4 @@ class DeliveryNoteRoundWizard(models.TransientModel):
                 "Eligible batches were found, but they do not contain any matching Regal Van Delivery sale orders within the selected criteria."
             ))
 
-        return self.env.ref('tl_rf_reports.action_report_delivery_note_round').report_action(self)
+        return self.env.ref('tl_rf_reports.action_report_delivery_note_round_van').report_action(self)
