@@ -12,6 +12,13 @@
               parent="menu_round_reporting_root"
               action="action_dock_weight_breakdown_wizard"
               sequence="10"/>
+    <!-- Requirement Report Menu Item under Round Management -> Reporting -->
+    <menuitem id="menu_report_requirement"
+              name="Requirement Report"
+              parent="menu_round_reporting_root"
+              action="action_requirement_report_wizard"
+              sequence="15"/>
+
     <!-- Packing List Menu Item under Round Management -> Reporting -->
     <menuitem id="menu_report_packing_list"
               name="Packing List Report"
