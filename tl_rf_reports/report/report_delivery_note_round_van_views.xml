@@ -44,20 +44,22 @@
                             <!-- ==================== HEADER ==================== -->
                             <div style="width: 100%; margin-bottom: 4px;">
                                 <div
-                                    style="float: left; width: 33%; font-size: 17px; font-weight: bold; white-space: nowrap;">
+                                    style="float: left; width: 34%; font-size: 15px; font-weight: bold; white-space: nowrap; padding-right: 6px; box-sizing: border-box;">
                                     DELIVERY NOTE FOR ROUND:
                                 </div>
                                 <div
-                                    style="float: left; width: 25%; font-size: 17px; font-weight: bold; white-space: nowrap;">
+                                    style="float: left; width: 12%; font-size: 15px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                                     <t t-esc="group['batch_name']" />
                                 </div>
                                 <div
-                                    style="float: left; width: 24%; font-size: 17px; font-weight: bold; white-space: nowrap;">
+                                    style="float: left; width: 16%; font-size: 15px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                                     <t t-esc="group['batch_code']" />
                                 </div>
-                                <div
-                                    style="float: right; width: 18%; font-size: 15px; font-weight: bold; text-align: right; white-space: nowrap;">
-                                    <t t-esc="group['depot_name']" />
+                                <div class="depot-name-wrap"
+                                    style="float: right; width: 36%; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                    <span class="depot-name-text" style="font-weight: bold;">
+                                        <t t-esc="group['depot_name']" />
+                                    </span>
                                 </div>
                                 <div style="clear: both;" />
                             </div>
@@ -168,6 +170,24 @@
                         </div>
                     </div>
                 </t>
+
+                <!-- Auto-fit: shrinks each depot name to the largest font size that
+                     still fits on one line, instead of truncating it with an ellipsis. -->
+                <script type="text/javascript"><![CDATA[
+                    (function () {
+                        var spans = document.querySelectorAll('.depot-name-text');
+                        for (var i = 0; i < spans.length; i++) {
+                            var span = spans[i];
+                            var wrap = span.parentElement;
+                            var size = 15;
+                            span.style.fontSize = size + 'px';
+                            while (span.scrollWidth > wrap.clientWidth && size > 8) {
+                                size -= 0.5;
+                                span.style.fontSize = size + 'px';
+                            }
+                        }
+                    })();
+                ]]></script>
             </t>
         </t>
     </template>
