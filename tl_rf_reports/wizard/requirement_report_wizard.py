@@ -117,7 +117,7 @@ class RequirementReportWizard(models.TransientModel):
 
         context = {
             'search_default_group_by_category': 1,
-            'search_default_group_by_delivery_date': 1,
+            # 'search_default_group_by_delivery_date': 1,
         }
         return {
             'name': _('Requirement Report - Order Lines'),
