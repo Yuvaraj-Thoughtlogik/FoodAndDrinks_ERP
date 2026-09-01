@@ -119,14 +119,15 @@ class MrpProduction(models.Model):
 class StockRule(models.Model):
     _inherit = 'stock.rule'
 
-    def _prepare_mo_vals(self, product_id, product_qty, product_uom, location_id, name, origin, company_id, values):
-        res = super()._prepare_mo_vals(product_id, product_qty, product_uom, location_id, name, origin, company_id, values)
-        
-        # Pull batch_id from the originating Sale Order if available in values
-        if values.get('sale_line_id'):
-            sale_order = self.env['sale.order.line'].browse(values['sale_line_id']).order_id
-            if sale_order.batch_id:
-                res['batch_id'] = sale_order.batch_id.id
+    def _prepare_mo_vals(self, *args, **kwargs):
+        res = super()._prepare_mo_vals(*args, **kwargs)
+        values = kwargs.get('values')
+        if not values and len(args) >= 8:   
+            values = args[7]
+        if values and values.get('sale_line_id'):
+            sale_line = self.env['sale.order.line'].browse(values['sale_line_id'])
+            if sale_line.order_id and sale_line.order_id.batch_id:
+                res['batch_id'] = sale_line.order_id.batch_id.id
                 
         return res
     
