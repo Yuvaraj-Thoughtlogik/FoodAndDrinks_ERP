@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Requirement Report Wizard Form View -->
+    <record id="view_requirement_report_wizard_form" model="ir.ui.view">
+        <field name="name">requirement.report.wizard.form</field>
+        <field name="model">requirement.report.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Requirement Report">
+                <sheet>
+                    <!-- Row 1: Delivery Date From & To -->
+                    <group>
+                        <group>
+                            <field name="delivery_date_from" widget="date" required="1" />
+                        </group>
+                        <group>
+                            <field name="delivery_date_to" widget="date" required="1" />
+                        </group>
+                    </group>
+
+                    <!-- Row 2: Delivery Channel Selection -->
+                    <group>
+                        <group colspan="4">
+                            <field name="delivery_channel" widget="radio"
+                                options="{'horizontal': true}" required="1" />
+                        </group>
+                    </group>
+
+                    <!-- Row 3: Depot Checkboxes -->
+                    <group string="Depot" colspan="4" invisible="delivery_channel == 'courier'">
+                        <field name="depot_ids"
+                            widget="many2many_checkboxes"
+                            class="o_horizontal_checkboxes"
+                            nolabel="1" />
+                    </group>
+
+                    <!-- Row 4: Product Category Multi-Select -->
+                    <group>
+                        <group colspan="4">
+                            <field name="categ_ids"
+                                widget="many2many_tags"
+                                placeholder="Select Product Categories..." />
+                        </group>
+                    </group>
+                </sheet>
+                <footer>
+                    <button name="action_print_report" string="Print PDF" type="object"
+                        class="btn-secondary" icon="fa-print" data-hotkey="p" />
+                    <button name="action_view_lines" string="View Lines" type="object"
+                        class="btn-primary" icon="fa-list" data-hotkey="q" />
+                    <button string="Cancel" class="btn-secondary" special="cancel" data-hotkey="x" />
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <!-- Action to open Requirement Report Wizard -->
+    <record id="action_requirement_report_wizard" model="ir.actions.act_window">
+        <field name="name">Requirement Report</field>
+        <field name="res_model">requirement.report.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+        <field name="view_id" ref="view_requirement_report_wizard_form" />
+    </record>
+</odoo>
