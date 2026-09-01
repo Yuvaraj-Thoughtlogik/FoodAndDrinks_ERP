@@ -155,3 +155,13 @@ class ReportRequirement(models.AbstractModel):
             'docs': docs,
             'report_results': report_results,
         }
+
+
+class ReportRequirementCourier(models.AbstractModel):
+    _name = 'report.tl_rf_reports.report_requirement_courier'
+    _description = 'Courier Requirement Report Generator'
+
+    @api.model
+    def _get_report_values(self, docids, data=None):
+        return self.env['report.tl_rf_reports.report_requirement']._get_report_values(docids, data=data)
+
