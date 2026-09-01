@@ -97,7 +97,9 @@ class RequirementReportWizard(models.TransientModel):
             ))
 
         if self.delivery_channel == 'courier':
-            return self.env.ref('tl_rf_reports.action_report_requirement_courier').report_action(self)
+            courier_action = self.env.ref('tl_rf_reports.action_report_requirement_courier', raise_if_not_found=False)
+            if courier_action:
+                return courier_action.report_action(self)
         return self.env.ref('tl_rf_reports.action_report_requirement').report_action(self)
 
     def action_view_lines(self):
