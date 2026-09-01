@@ -80,16 +80,54 @@ class MrpProduction(models.Model):
     batch_id = fields.Many2one(
         'round.management.batch',
         string='Round Batch',
+        compute='_compute_batch_id',
+        store=True,
+        readonly=False,
     )
     delivery_date = fields.Date(
         string='Delivery Date',
         related='batch_id.delivery_date',
         store=True,
+        readonly=True,
     )
-    
     product_categ_id = fields.Many2one(
         'product.category',
         string='Product Category',
         related='product_id.categ_id',
         store=True,
     )
+
+    @api.depends('origin', 'move_dest_ids.sale_line_id.order_id.batch_id')
+    def _compute_batch_id(self):
+        for mo in self:
+            batch = False
+
+           
+            sale_orders = mo.move_dest_ids.mapped('sale_line_id.order_id')
+            if sale_orders and sale_orders[0].batch_id:
+                batch = sale_orders[0].batch_id
+
+            
+            elif mo.origin:
+                so = self.env['sale.order'].search([('name', '=', mo.origin)], limit=1)
+                if so and so.batch_id:
+                    batch = so.batch_id
+
+            mo.batch_id = batch
+            
+            
+class StockRule(models.Model):
+    _inherit = 'stock.rule'
+
+    def _prepare_mo_vals(self, product_id, product_qty, product_uom, location_id, name, origin, company_id, values):
+        res = super()._prepare_mo_vals(product_id, product_qty, product_uom, location_id, name, origin, company_id, values)
+        
+        # Pull batch_id from the originating Sale Order if available in values
+        if values.get('sale_line_id'):
+            sale_order = self.env['sale.order.line'].browse(values['sale_line_id']).order_id
+            if sale_order.batch_id:
+                res['batch_id'] = sale_order.batch_id.id
+                
+        return res
+    
+    

@@ -14,7 +14,8 @@
         'sale_stock',
         'fleet',
         'hr',
-        'tl_rf_contact'
+        'tl_rf_contact',
+        'mrp',
     ],
 
     'data': [
