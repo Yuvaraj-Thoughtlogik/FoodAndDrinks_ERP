@@ -109,7 +109,10 @@
             <xpath expr="//search" position="inside">
                 <filter string="Delivery Date: Today"
                         name="filter_delivery_date_today"
-                        domain="[('delivery_date', '=', context_today().strftime('%Y-%m-%d'))]"/>
+                        domain="[
+                        ('delivery_date', '&gt;=', context_today()),
+                        ('delivery_date', '&lt;', context_today() + relativedelta(days=1))
+                    ]"/>
             </xpath>
             <xpath expr="//group" position="inside">
             <filter string="Product Category" 

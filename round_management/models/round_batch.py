@@ -391,10 +391,15 @@ class RoundManagementBatch(models.Model):
     
     
     def action_start_batch(self):
-        for batch in self:
-            if batch.state != 'pln':
-                raise UserError(_("Only Planned batches can be activated."))
-            batch.state = 'act'
+        """Triggers wizard if active batch exists, otherwise activates the batch."""
+        self.ensure_one()
+        if not self.env.context.get('skip_active_batch_check'):
+            active_batches = self._check_existing_active_batches(self.round_id.id, self.delivery_date)
+            if active_batches:
+                return self._open_active_batch_warning_wizard(active_batches, trigger_start=True)
+
+        self.write({'state': 'act'})
+        return True
 
     def action_print_manifest(self):
         for batch in self:
@@ -496,4 +501,98 @@ class RoundManagementBatch(models.Model):
                 record.total_drops = 0
                 record.total_revenue = 0.0
                 record.is_b2b_batch = False
+    
+    @api.model
+    def _name_search(self, name, domain=None, operator='ilike', limit=100, order=None):
+        domain = domain or []
+        order = order or 'delivery_date asc, id asc'
+        return super()._name_search(name, domain=domain, operator=operator, limit=limit, order=order)
+                
+    def _check_existing_active_batches(self, round_id, delivery_date):
+        """Finds active batches for the same round within the prior 4-week window."""
+        if not round_id or not delivery_date:
+            return self.env['round.management.batch']
+
+        start_date = delivery_date - timedelta(days=28)
+
+        domain = [
+            ('round_id', '=', round_id),
+            ('state', '=', 'act'),
+            ('delivery_date', '>=', start_date),
+            ('delivery_date', '<=', delivery_date),
+        ]
+        
+        batch_id = self._origin.id or self.id
+        if batch_id:
+            domain.append(('id', '!=', batch_id))
+
+        return self.search(domain)
+
+    def _open_active_batch_warning_wizard(self, active_batches, trigger_start=False):
+        """Opens the custom transient wizard with OK and Cancel buttons."""
+        date_strings = ", ".join(
+            b.delivery_date.strftime('%d/%m/%Y') for b in active_batches if b.delivery_date
+        )
+
+        if len(active_batches) > 1:
+            msg = _(
+                "There are existing round batches for this round with delivery dates of %s. Do you wish to continue?"
+            ) % date_strings
+        else:
+            msg = _(
+                "There is an existing round batch for this round with a delivery date of %s. Do you wish to continue?"
+            ) % date_strings
+
+        wizard = self.env['round.batch.warning.wizard'].create({
+            'message': msg,
+            'batch_id': self.id,
+        })
+
+        context = dict(self.env.context)
+        if trigger_start:
+            context['trigger_start_batch'] = True
+
+        return {
+            'name': _('Existing Active Batch Warning'),
+            'type': 'ir.actions.act_window',
+            'res_model': 'round.batch.warning.wizard',
+            'res_id': wizard.id,
+            'view_mode': 'form',
+            'target': 'new',
+            'context': context,
+        }
+
+   
+
+    @api.onchange('round_id', 'delivery_date')
+    def _onchange_check_existing_active_batches(self):
+        """Triggers a warning popup immediately when entering or changing Delivery Date/Round."""
+        if not self.round_id or not self.delivery_date:
+            return
+
+        active_batches = self._check_existing_active_batches(self.round_id.id, self.delivery_date)
+        if active_batches:
+            date_strings = ", ".join(
+                b.delivery_date.strftime('%d/%m/%Y') for b in active_batches if b.delivery_date
+            )
+
+            if len(active_batches) > 1:
+                msg = _(
+                    "There are existing round batches for this round with delivery dates of %s. Do you wish to continue?"
+                ) % date_strings
+            else:
+                msg = _(
+                    "There is an existing round batch for this round with a delivery date of %s. Do you wish to continue?"
+                ) % date_strings
+
+            return {
+                'warning': {
+                    'title': _("Existing Active Batch Warning"),
+                    'message': msg,
+                }
+            }
+
+    
+
+  
 
