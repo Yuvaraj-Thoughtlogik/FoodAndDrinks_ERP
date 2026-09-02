@@ -44,6 +44,12 @@
     'images': [
         'static/description/icon.png',
     ],
+    
+    'assets': {
+        'web.assets_backend': [
+            'round_management/static/src/scss/list_view_custom.scss',
+        ],
+    },
 
     'license': 'LGPL-3',
 
