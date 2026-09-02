@@ -3,7 +3,7 @@
     'version': '19.0.1.0.0',
     'category': 'Inventory/Packaging',
     'summary': 'Auto-allergen highlighting for product labels',
-    'depends': ['product', 'stock', 'sale'],
+    'depends': ['product', 'stock', 'sale', 'purchase'],
     'data': [
         'security/ir.model.access.csv',
         'views/product_template_views.xml',

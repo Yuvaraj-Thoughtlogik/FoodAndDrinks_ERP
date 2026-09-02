@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from odoo import api, models
+from odoo import api, fields, models
 from .report_delivery_note_common import DeliveryNoteReportMixin
 
 
@@ -122,4 +122,5 @@ class ReportDeliveryNoteRoundVan(DeliveryNoteReportMixin, models.AbstractModel):
             'docs': docs,
             'batch_groups': all_batch_groups,
             'company': self.env.company,
+            'printed_at': fields.Datetime.now().strftime('%d/%m/%Y %H:%M:%S'),
         }
