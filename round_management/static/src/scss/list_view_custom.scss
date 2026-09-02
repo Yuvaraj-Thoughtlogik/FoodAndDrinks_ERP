@@ -1,0 +1,27 @@
+/* Target the round management custom list view */
+.o_full_header_list {
+    /* 1. Force automatic table layout to allow column expansion */
+    table.o_list_table {
+        table-layout: auto !important;
+        width: 100% !important;
+
+        th {
+            white-space: normal !important;
+            overflow: visible !important;
+            text-overflow: unset !important;
+            word-break: normal !important;
+            vertical-align: middle !important;
+
+            /* 2. Target OWL's internal header title containers */
+            .o_column_title,
+            span,
+            div {
+                white-space: normal !important;
+                overflow: visible !important;
+                text-overflow: unset !important;
+                display: inline-block !important;
+                max-width: none !important;
+            }
+        }
+    }
+}

@@ -144,7 +144,7 @@
                         </page>
                         <page string="Round Batches" name="batches">
                       <field name="batch_ids" readonly="1">
-                          <list>
+                          <list class="o_full_header_list">
                               <field name="company_currency_id" column_invisible="True"/>
                               <field name="code"/>
                               <field name="week_number"/>
@@ -190,7 +190,7 @@
         <field name="name">round.management.round.list.select</field>
         <field name="model">round.management.round</field>
         <field name="arch" type="xml">
-            <list create="true" edit="true">
+            <list class="o_full_header_list" create="true" edit="true">
                 <field name="code"/>
                 <field name="name"/>
                 <field name="state"/>
