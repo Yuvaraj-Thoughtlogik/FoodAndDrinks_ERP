@@ -3,16 +3,16 @@
     <!-- Paper Format: A4 portrait, 10mm top/bottom, 9mm left/right -->
     <record id="paperformat_delivery_note_round_van_report" model="report.paperformat">
         <field name="name">Delivery Note Round Report (Van) A4</field>
-        <field name="default" eval="False" />
+        <field name="default" eval="False"/>
         <field name="format">A4</field>
         <field name="page_height">0</field>
         <field name="page_width">0</field>
         <field name="orientation">Portrait</field>
         <field name="margin_top">10</field>
-        <field name="margin_bottom">10</field>
+        <field name="margin_bottom">22</field>
         <field name="margin_left">9</field>
         <field name="margin_right">9</field>
-        <field name="header_line" eval="False" />
+        <field name="header_line" eval="False"/>
         <field name="header_spacing">0</field>
         <field name="dpi">90</field>
     </record>
@@ -25,9 +25,10 @@
         <field name="report_name">tl_rf_reports.report_delivery_note_round_van</field>
         <field name="report_file">tl_rf_reports.report_delivery_note_round_van</field>
         <field name="print_report_name">('Delivery_Note_Round_Van_' +
-            (object.delivery_date_from.strftime('%Y%m%d') if object.delivery_date_from else ''))</field>
-        <field name="paperformat_id" ref="paperformat_delivery_note_round_van_report" />
-        <field name="binding_model_id" eval="False" />
+            (object.delivery_date_from.strftime('%Y%m%d') if object.delivery_date_from else ''))
+        </field>
+        <field name="paperformat_id" ref="paperformat_delivery_note_round_van_report"/>
+        <field name="binding_model_id" eval="False"/>
         <field name="binding_type">report</field>
     </record>
 
@@ -37,113 +38,120 @@
             <t t-if="batch_groups">
                 <t t-foreach="batch_groups" t-as="group">
                     <div class="article"
-                        t-attf-style="#{'page-break-before: always;' if not group_first else ''}">
+                         t-attf-style="#{'page-break-before: always;' if not group_first else ''}">
                         <div
-                            style="font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif; font-size: 13.5px; line-height: 1.25; color: #000000; width: 100%; padding: 0; margin: 0; box-sizing: border-box;">
+                                style="font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif; font-size: 13.5px; line-height: 1.25; color: #000000; width: 100%; padding: 0; margin: 0; box-sizing: border-box;">
 
                             <!-- ==================== HEADER ==================== -->
                             <div style="width: 100%; margin-bottom: 4px;">
+                                <!-- NEW -->
                                 <div
-                                    style="float: left; width: 34%; font-size: 15px; font-weight: bold; white-space: nowrap; padding-right: 6px; box-sizing: border-box;">
+                                        style="float: left; width: 30%; font-size: 15px; font-weight: bold; white-space: nowrap; padding-right: 6px; box-sizing: border-box;">
                                     DELIVERY NOTE FOR ROUND:
                                 </div>
-                                <div
-                                    style="float: left; width: 12%; font-size: 15px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                                    <t t-esc="group['batch_name']" />
-                                </div>
-                                <div
-                                    style="float: left; width: 16%; font-size: 15px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                                    <t t-esc="group['batch_code']" />
-                                </div>
-                                <div class="depot-name-wrap"
-                                    style="float: right; width: 36%; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                                    <span class="depot-name-text" style="font-weight: bold;">
-                                        <t t-esc="group['depot_name']" />
+                                <div class="batch-name-wrap"
+                                     style="float: left; width: 22%; padding-right: 10px; box-sizing: border-box; overflow: hidden; white-space: nowrap;">
+                                    <span class="batch-name-text" style="font-size: 15px; font-weight: bold;">
+                                        <t t-esc="group['batch_name']"/>
                                     </span>
                                 </div>
-                                <div style="clear: both;" />
+                                <div
+                                        style="float: left; width: 12%; font-size: 15px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                    <t t-esc="group['batch_code']"/>
+                                </div>
+                                <div class="depot-name-wrap"
+                                     style="float: right; width: 36%; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                    <span class="depot-name-text" style="font-weight: bold;">
+                                        <t t-esc="group['depot_name']"/>
+                                    </span>
+                                </div>
+                                <div style="clear: both;"/>
                             </div>
 
                             <div style="width: 100%; margin-bottom: 12px;">
                                 <div
-                                    style="float: left; width: 70%; font-size: 13.5px; white-space: nowrap;">
-                                    For Delivery on: <t t-esc="group['delivery_date']" />
+                                        style="float: left; width: 70%; font-size: 13.5px; white-space: nowrap;">
+                                    For Delivery on:
+                                    <t t-esc="group['delivery_date']"/>
                                 </div>
                                 <div
-                                    style="float: left; width: 30%; font-size: 13.5px; white-space: nowrap;">
-                                    <t t-esc="group['total_deliveries']" />
-                                    &#160;&#160;&#160;Deliveries </div>
-                                <div style="clear: both;" />
+                                        style="float: left; width: 30%; font-size: 13.5px; white-space: nowrap;">
+                                    <t t-esc="group['total_deliveries']"/>
+                                    &#160;&#160;&#160;Deliveries
+                                </div>
+                                <div style="clear: both;"/>
                             </div>
 
                             <!-- ==================== DROPS ==================== -->
                             <t t-foreach="group['drops']" t-as="drop">
                                 <div
-                                    style="border-top: 1.5px solid #000000; padding: 6px 0 8px 0; margin-bottom: 4px; page-break-inside: avoid; width: 100%; box-sizing: border-box;">
+                                        style="border-top: 1.5px solid #000000; padding: 6px 0 8px 0; margin-bottom: 4px; page-break-inside: avoid; width: 100%; box-sizing: border-box;">
 
                                     <!-- Customer / Address / Phone -->
                                     <div style="width: 100%; margin-bottom: 3px;">
                                         <div
-                                            style="float: left; width: 28%; font-size: 13.5px; color: #000000; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                                            <t t-esc="drop['cust']" />
+                                                style="float: left; width: 28%; font-size: 13.5px; color: #000000; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                            <t t-esc="drop['cust']"/>
                                         </div>
                                         <div
-                                            style="float: left; width: 54%; font-size: 13.5px; font-weight: bold; color: #000000; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 8px; box-sizing: border-box;">
-                                            <t t-esc="drop['addr']" />
+                                                style="float: left; width: 54%; font-size: 13.5px; font-weight: bold; color: #000000; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 8px; box-sizing: border-box;">
+                                            <t t-esc="drop['addr']"/>
                                         </div>
                                         <div
-                                            style="float: right; width: 18%; font-size: 13.5px; font-weight: bold; color: #000000; text-align: right; white-space: nowrap;">
-                                            <t t-esc="drop['tel']" />
+                                                style="float: right; width: 18%; font-size: 13.5px; font-weight: bold; color: #000000; text-align: right; white-space: nowrap;">
+                                            <t t-esc="drop['tel']"/>
                                         </div>
-                                        <div style="clear: both;" />
+                                        <div style="clear: both;"/>
                                     </div>
 
                                     <!-- Items list & Delivery Note -->
                                     <div style="width: 100%;">
                                         <div
-                                            style="float: left; width: 68%; padding-left: 20px; box-sizing: border-box;">
+                                                style="float: left; width: 68%; padding-left: 20px; box-sizing: border-box;">
                                             <t t-foreach="drop['items']" t-as="item">
                                                 <div
-                                                    style="font-size: 13.5px; line-height: 1.5;">
-                                                    <t t-esc="item" />
+                                                        style="font-size: 13.5px; line-height: 1.5;">
+                                                    <t t-esc="item"/>
                                                 </div>
                                             </t>
                                         </div>
                                         <div
-                                            style="float: right; width: 32%; font-size: 13px; font-weight: bold; color: #000000; text-align: right;">
-                                            <t t-esc="drop['note']" />
+                                                style="float: right; width: 32%; font-size: 13px; font-weight: bold; color: #000000; text-align: right;">
+                                            <t t-esc="drop['note']"/>
                                         </div>
-                                        <div style="clear: both;" />
+                                        <div style="clear: both;"/>
                                     </div>
 
                                     <!-- Payment Methods / Order No / Price / Zone -->
                                     <div style="width: 100%; margin-top: 4px;">
                                         <!-- Order No -->
                                         <div
-                                            style="float: left; width: 15%; font-size: 13px; color: #000000; white-space: nowrap;">
-                                            Order No: <t t-esc="drop['order_no']" />
+                                                style="float: left; width: 15%; font-size: 13px; color: #000000; white-space: nowrap;">
+                                            Order No:
+                                            <t t-esc="drop['order_no']"/>
                                         </div>
 
                                         <!-- Payment Methods -->
                                         <div
-                                            style="float: left; width: 63%; text-align: left; padding-left: 20px;margin-top: 30px; box-sizing: border-box; white-space: nowrap;">
+                                                style="float: left; width: 63%; text-align: left; padding-left: 20px;margin-top: 30px; box-sizing: border-box; white-space: nowrap;">
                                             <t
-                                                t-foreach="[('Card Reader', drop['pay']['card_reader']), ('K/B', drop['pay']['kb']), ('LNP', drop['pay']['lnp']), ('Cash', drop['pay']['cash']), ('Cheque', drop['pay']['cheque']), ('Card', drop['pay']['card'])]"
-                                                t-as="pm">
+                                                    t-foreach="[('Card Reader', drop['pay']['card_reader']), ('K/B', drop['pay']['kb']), ('LNP', drop['pay']['lnp']), ('Cash', drop['pay']['cash']), ('Cheque', drop['pay']['cheque']), ('Card', drop['pay']['card'])]"
+                                                    t-as="pm">
                                                 <span
-                                                    style="display: inline-block; margin-right: 12px; font-size: 13px; color: #000000; white-space: nowrap;">
+                                                        style="display: inline-block; margin-right: 12px; font-size: 13px; color: #000000; white-space: nowrap;">
                                                     <span
-                                                        style="margin-right: 4px; vertical-align: middle;">
-                                                        <t t-esc="pm[0]" />
+                                                            style="margin-right: 4px; vertical-align: middle;">
+                                                        <t t-esc="pm[0]"/>
                                                     </span>
                                                     <t t-if="pm[1]">
                                                         <span
-                                                            style="display: inline-block; width: 13px; height: 13px; border: 1.5px solid #000000; text-align: center; line-height: 11px; font-size: 11px; font-weight: bold; vertical-align: middle;">
-                                                            &#10006;</span>
+                                                                style="display: inline-block; width: 13px; height: 13px; border: 1.5px solid #000000; text-align: center; line-height: 11px; font-size: 11px; font-weight: bold; vertical-align: middle;">
+                                                            &#10006;
+                                                        </span>
                                                     </t>
                                                     <t t-else="">
                                                         <span
-                                                            style="display: inline-block; width: 13px; height: 13px; border: 1.5px solid #000000; vertical-align: middle;" />
+                                                                style="display: inline-block; width: 13px; height: 13px; border: 1.5px solid #000000; vertical-align: middle;"/>
                                                     </t>
                                                 </span>
                                             </t>
@@ -151,22 +159,36 @@
 
                                         <!-- Price -->
                                         <div
-                                            style="float: left; width: 12%; text-align: right; font-size: 14.5px; font-weight: bold; color: #000000; white-space: nowrap;">
-                                            <t t-esc="drop['price']" />
+                                                style="float: left; width: 12%; text-align: right; font-size: 14.5px; font-weight: bold; color: #000000; white-space: nowrap;">
+                                            <t t-esc="drop['price']"/>
                                         </div>
 
                                         <!-- Zone -->
                                         <div
-                                            style="float: right; width: 10%; text-align: right; font-size: 14.5px; font-weight: bold; color: #000000; white-space: nowrap;">
+                                                style="float: right; width: 10%; text-align: right; font-size: 14.5px; font-weight: bold; color: #000000; white-space: nowrap;">
                                             <!-- <t t-esc="drop['zone']" /> -->
                                         </div>
 
-                                        <div style="clear: both;" />
+                                        <div style="clear: both;"/>
                                     </div>
 
                                 </div>
                             </t>
 
+                        </div>
+                    </div>
+
+                    <!-- FOOTER (one per article) -->
+                    <div class="footer"
+                         style="font-family: Arial, Helvetica, sans-serif; font-size: 10px; color: #000000; border-top: none; padding: 0; width: 100%;">
+                        <div style="position: relative; width: 100%; text-align: center;">
+                            <span style="font-size: 10px; font-weight: normal;">
+                                <t t-esc="group_index + 1"/>
+                            </span>
+                            <span style="position: absolute; right: 0; top: 0; font-size: 10px;">
+                                Printed at:
+                                <t t-esc="printed_at"/>
+                            </span>
                         </div>
                     </div>
                 </t>
@@ -175,7 +197,7 @@
                      still fits on one line, instead of truncating it with an ellipsis. -->
                 <script type="text/javascript"><![CDATA[
                     (function () {
-                        var spans = document.querySelectorAll('.depot-name-text');
+                        var spans = document.querySelectorAll('.depot-name-text, .batch-name-text');
                         for (var i = 0; i < spans.length; i++) {
                             var span = spans[i];
                             var wrap = span.parentElement;
