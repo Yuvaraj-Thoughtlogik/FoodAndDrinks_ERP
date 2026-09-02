@@ -98,6 +98,8 @@ class ReportRequirement(models.AbstractModel):
 
             # Format category pages and split products into 2 columns (for Regal Van)
             category_pages = []
+            MAX_ROWS_PER_COL = 26
+
             for c_key, c_val in sorted(categories_map.items(), key=lambda item: item[1]['categ_name']):
                 prod_list = []
                 for p_key, p_val in sorted(c_val['products'].items(), key=lambda item: item[1]['product_name']):
@@ -119,21 +121,56 @@ class ReportRequirement(models.AbstractModel):
                     })
 
                 if prod_list:
-                    # Split into 2 columns
-                    half = math.ceil(len(prod_list) / 2.0)
-                    col1 = prod_list[:half]
-                    col2 = prod_list[half:]
+                    if wizard.delivery_channel == 'courier':
+                        # Courier: 1-column layout, paginated by max rows
+                        COURIER_MAX_ROWS = 25
+                        for i in range(0, len(prod_list), COURIER_MAX_ROWS):
+                            chunk = prod_list[i:i + COURIER_MAX_ROWS]
+                            category_pages.append({
+                                'categ_id': c_val['categ_id'],
+                                'categ_name': c_val['categ_name'],
+                                'title': c_val['title'],
+                                'products': chunk,
+                                'total_qty': c_val['total_qty'],
+                                'formatted_total_qty': _format_qty(c_val['total_qty']),
+                            })
+                    else:
+                        # Regal Van: 2-column layout filling col1 completely before moving to col2
+                        idx = 0
+                        total_prods = len(prod_list)
+                        while idx < total_prods:
+                            col1 = []
+                            col1_rows = 0
+                            while idx < total_prods:
+                                prod = prod_list[idx]
+                                prod_rows = len(prod['dates']) + 1
+                                if col1 and (col1_rows + prod_rows > MAX_ROWS_PER_COL):
+                                    break
+                                col1.append(prod)
+                                col1_rows += prod_rows
+                                idx += 1
 
-                    category_pages.append({
-                        'categ_id': c_val['categ_id'],
-                        'categ_name': c_val['categ_name'],
-                        'title': c_val['title'],
-                        'products': prod_list,
-                        'col1': col1,
-                        'col2': col2,
-                        'total_qty': c_val['total_qty'],
-                        'formatted_total_qty': _format_qty(c_val['total_qty']),
-                    })
+                            col2 = []
+                            col2_rows = 0
+                            while idx < total_prods:
+                                prod = prod_list[idx]
+                                prod_rows = len(prod['dates']) + 1
+                                if col2 and (col2_rows + prod_rows > MAX_ROWS_PER_COL):
+                                    break
+                                col2.append(prod)
+                                col2_rows += prod_rows
+                                idx += 1
+
+                            category_pages.append({
+                                'categ_id': c_val['categ_id'],
+                                'categ_name': c_val['categ_name'],
+                                'title': c_val['title'],
+                                'products': col1 + col2,
+                                'col1': col1,
+                                'col2': col2,
+                                'total_qty': c_val['total_qty'],
+                                'formatted_total_qty': _format_qty(c_val['total_qty']),
+                            })
 
             report_results.append({
                 'wizard': wizard,
