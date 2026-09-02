@@ -75,7 +75,7 @@ class StockPicking(models.Model):
     def action_validate_batch_deliveries(self):
         """Validates all selected picking / delivery records from the list view."""
         for picking in self:
-            if picking.state not in ('assigned', 'confirmed'):
+            if picking.state not in ('draft','assigned', 'confirmed'):
                 continue
             
             picking.button_validate()
