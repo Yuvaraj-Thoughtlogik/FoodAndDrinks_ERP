@@ -521,9 +521,7 @@ class SaleOrder(models.Model):
 class SaleOrderLine(models.Model):
     _inherit = 'sale.order.line'
 
-    has_special_requirements = fields.Boolean(
-        string="Check Notes"
-    )
+    
     special_requirements_notes = fields.Text(
         string="Special Notes"
     )

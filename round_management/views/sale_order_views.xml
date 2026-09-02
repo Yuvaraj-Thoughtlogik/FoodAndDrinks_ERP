@@ -234,10 +234,8 @@
     <field name="inherit_id" ref="sale.view_order_form"/>
     <field name="arch" type="xml">
         <xpath expr="//field[@name='order_line']/list/field[@name='name']" position="after">
-            <field name="has_special_requirements" widget="boolean_toggle" optional="show"/>
-            <field name="special_requirements_notes" 
-       invisible="not has_special_requirements" 
-       required="has_special_requirements"/>
+            
+            <field name="special_requirements_notes" />
         </xpath>
     </field>
 </record>
