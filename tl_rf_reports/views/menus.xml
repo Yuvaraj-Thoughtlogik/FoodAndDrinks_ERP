@@ -25,4 +25,11 @@
               parent="menu_round_reporting_root"
               action="action_delivery_note_round_wizard"
               sequence="30"/>
+
+    <!-- Production Report Menu Item under Round Management -> Reporting -->
+    <menuitem id="menu_report_production_report"
+              name="Production Report"
+              parent="menu_round_reporting_root"
+              action="action_production_report_wizard"
+              sequence="40"/>
 </odoo>
