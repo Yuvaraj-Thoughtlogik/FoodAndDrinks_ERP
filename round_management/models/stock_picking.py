@@ -72,7 +72,14 @@ class StockPicking(models.Model):
             else:
                 picking.delivery_date = picking.scheduled_date or fields.Datetime.now()
                 
-
+    def action_validate_batch_deliveries(self):
+        """Validates all selected picking / delivery records from the list view."""
+        for picking in self:
+            if picking.state not in ('assigned', 'confirmed'):
+                continue
+            
+            picking.button_validate()
+        return True
 
 class MrpProduction(models.Model):
     _inherit = 'mrp.production'

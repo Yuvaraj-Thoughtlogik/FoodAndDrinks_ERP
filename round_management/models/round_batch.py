@@ -591,6 +591,66 @@ class RoundManagementBatch(models.Model):
                     'message': msg,
                 }
             }
+            
+            
+    def unlink(self):
+        """Prevent deletion of round batches that have linked sales orders."""
+
+        for batch in self:
+            if batch.order_ids:
+                order_names = batch.order_ids.mapped('name')
+                displayed_orders = order_names[:5]
+
+                orders_list_str = "\n".join(
+                    f"   • {name}" for name in displayed_orders
+                )
+
+                remaining_count = len(order_names) - len(displayed_orders)
+
+                if remaining_count > 0:
+                    orders_list_str += _(
+                        "\n   • ... and %(count)d more order(s)"
+                    ) % {
+                        'count': remaining_count,
+                    }
+
+                message = _(
+                    "[ WARNING ] BATCH CANNOT BE DELETED\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+
+                    "This batch is currently linked to one or more "
+                    "Sales Orders.\n"
+                    "Please remove the linked orders before deleting "
+                    "the batch.\n\n"
+
+                    "[ BATCH DETAILS ]\n"
+                "--------------------------------------------------\n"
+                    "• Batch Code: %(batch_code)s\n"
+                    "• Batch Description: %(batch_name)s\n"
+                    "• Linked Sales Orders: %(count)d\n\n"
+
+                    "LINKED SALES ORDERS\n"
+                    "--------------------------------------------------\n"
+                    "%(orders)s\n\n"
+
+                    "[ REQUIRED ACTION ]\n"
+                "--------------------------------------------------\n"
+                    "1. Open the linked Sales Order(s).\n"
+                    "2. Clear or change the Round Batch reference.\n"
+                    "3. Return to this batch and try deleting it again.\n\n"
+                    "[ SYSTEM INFO ]\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    "Deletion is blocked to prevent data inconsistency."
+                ) % {
+                    'batch_code': batch.code or '-',
+                    'batch_name': batch.display_name or '-',
+                    'count': len(batch.order_ids),
+                    'orders': orders_list_str,
+                }
+
+                raise UserError(message)
+
+        return super().unlink()
 
     
 
