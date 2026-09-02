@@ -17,6 +17,8 @@
         <field name="dpi">90</field>
     </record>
 
+    
+
     <!-- Paper Format: A4 Portrait for Courier -->
     <record id="paperformat_requirement_report_courier" model="report.paperformat">
         <field name="name">Requirement Report A4 Portrait (Courier)</field>
