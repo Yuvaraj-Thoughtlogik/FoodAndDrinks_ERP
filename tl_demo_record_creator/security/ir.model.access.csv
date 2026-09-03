@@ -1,0 +1,5 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_tl_demo_record_creator,tl.demo.record.creator,model_tl_demo_record_creator,base.group_system,1,1,1,1
+access_tl_demo_record_creator_line,tl.demo.record.creator.line,model_tl_demo_record_creator_line,base.group_system,1,1,1,1
+access_tl_demo_record_creator_child_line,tl.demo.record.creator.child.line,model_tl_demo_record_creator_child_line,base.group_system,1,1,1,1
+access_tl_demo_record_creator_ref,tl.demo.record.creator.ref,model_tl_demo_record_creator_ref,base.group_system,1,1,1,1
