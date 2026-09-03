@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+
+    <record id="view_list_filter_configuration_tree" model="ir.ui.view">
+        <field name="name">list.filter.configuration.list</field>
+        <field name="model">list.filter.configuration</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="name"/>
+                <field name="model_id"/>
+                <field name="view_id"/>
+                <field name="field_count" string="Fields"/>
+                <field name="active" widget="boolean_toggle"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_list_filter_configuration_form" model="ir.ui.view">
+        <field name="name">list.filter.configuration.form</field>
+        <field name="model">list.filter.configuration</field>
+        <field name="arch" type="xml">
+            <form string="List Filter Configuration">
+                <header>
+                    <button name="action_rebuild" type="object"
+                            string="Rebuild" class="btn-secondary"
+                            invisible="not model_id"/>
+                    <button name="action_open_filter" type="object"
+                            string="Preview Popup" class="btn-primary"
+                            invisible="not field_line_ids"/>
+                </header>
+                <sheet>
+                    <widget name="web_ribbon" title="Archived"
+                            bg_color="text-bg-danger" invisible="active"/>
+                    <div class="oe_title">
+                        <label for="name" string="Button Name"/>
+                        <h1><field name="name" placeholder="e.g. Filter Orders"/></h1>
+                    </div>
+                    <group>
+                        <group name="target_config" string="Target">
+                            <field name="model_id" options="{'no_create': True}"/>
+                            <field name="model_name" invisible="1"/>
+                            <field name="view_id" options="{'no_create': True}"
+                                   placeholder="Default list view"/>
+                            <field name="active" invisible="1"/>
+                            <field name="extra_domain"
+                                   placeholder="[('state', '!=', 'cancel')]"/>
+                        </group>
+                        <group name="popup_config" string="Popup">
+                            <field name="dialog_title" placeholder="Same as button name"/>
+                            <field name="apply_label"/>
+                            <field name="button_class"/>
+                            <field name="result_target"/>
+                        </group>
+                    </group>
+
+                    <notebook>
+                        <page string="Filter Fields" name="fields">
+                            <field name="field_line_ids">
+                                <list editable="bottom">
+                                    <field name="sequence" widget="handle"/>
+                                    <field name="model_id" column_invisible="1"/>
+                                    <field name="ttype" column_invisible="1"/>
+                                    <field name="field_id"
+                                           options="{'no_create': True}"/>
+                                    <field name="label" placeholder="Field label"/>
+                                    <field name="operator"/>
+                                    <field name="operator_hint" string="Allowed"
+                                           readonly="1" optional="hide"/>
+                                    <field name="placeholder" optional="hide"/>
+                                    <field name="wizard_field_id" string="Generated"
+                                           readonly="1" optional="hide"/>
+                                </list>
+                            </field>
+                            <div class="text-muted mt-2">
+                                Each row becomes one <b>label + input</b> line in the
+                                popup, in this order.
+                                The <b>Condition</b> decides both how the value is
+                                matched and which widget the user gets: a dropdown for
+                                Many2one, tags for "Is one of", two date pickers for
+                                "Is between".
+                            </div>
+                        </page>
+                        <page string="Technical" name="technical" groups="base.group_no_one">
+                            <group>
+                                <field name="created_view_id" readonly="1"/>
+                                <field name="wizard_view_id" readonly="1"/>
+                                <field name="wizard_action_id" readonly="1"/>
+                            </group>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_list_filter_configuration_search" model="ir.ui.view">
+        <field name="name">list.filter.configuration.search</field>
+        <field name="model">list.filter.configuration</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <field name="model_id"/>
+                <filter name="inactive" string="Archived"
+                        domain="[('active', '=', False)]"/>
+                <group>
+                    <filter name="group_model" string="Model"
+                            context="{'group_by': 'model_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_list_filter_configuration" model="ir.actions.act_window">
+        <field name="name">List Filter Configuration</field>
+        <field name="res_model">list.filter.configuration</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Create your first list filter</p>
+            <p>
+                Pick a model, list the fields users may filter on, and a button
+                appears on that model's list view opening a filter popup built
+                from those fields.
+            </p>
+        </field>
+    </record>
+
+    <menuitem id="menu_list_filter_configuration"
+              name="List Dynamic Filters"
+              parent="base.menu_automation"
+              action="action_list_filter_configuration"
+              sequence="1"/>
+
+</odoo>
