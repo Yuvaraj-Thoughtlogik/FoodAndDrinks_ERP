@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import re
 from odoo import api, fields, models
 from .report_delivery_note_common import DeliveryNoteReportMixin
 
@@ -6,6 +7,19 @@ from .report_delivery_note_common import DeliveryNoteReportMixin
 class ReportDeliveryNoteRoundVan(DeliveryNoteReportMixin, models.AbstractModel):
     _name = 'report.tl_rf_reports.report_delivery_note_round_van'
     _description = 'Delivery Note Round Report - Regal Van'
+
+    def _get_order_sort_key(self, order):
+        """Sort key to order drops by partner street2 (Street) then street (Door no)."""
+        partner = order.partner_shipping_id or order.partner_id
+        street2 = (partner.street2 or '').strip().lower() if partner else ''
+        street = (partner.street or '').strip() if partner else ''
+        # Natural sort helper for door number so "2" comes before "10"
+        door_key = [
+            (1, int(c)) if c.isdigit() else (0, c.lower())
+            for c in re.split(r'(\d+)', street)
+            if c
+        ] if street else []
+        return (street2, door_key, order.name or '')
 
     def _build_drop(self, order):
         """Build one drop dict for an order, or None when the order has no delivery
@@ -140,7 +154,7 @@ class ReportDeliveryNoteRoundVan(DeliveryNoteReportMixin, models.AbstractModel):
                 if not eligible_orders:
                     continue
 
-                sorted_orders = eligible_orders.sorted(key=lambda o: (o.round_code or '', o.name or ''))
+                sorted_orders = sorted(eligible_orders, key=self._get_order_sort_key)
 
                 drops = []
                 for order in sorted_orders:
