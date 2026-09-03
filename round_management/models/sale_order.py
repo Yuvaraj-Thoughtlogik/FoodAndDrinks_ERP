@@ -505,7 +505,7 @@ class SaleOrder(models.Model):
             # Find the nearest future or today's active batch
             next_batch = self.env['round.management.batch'].search([
                 ('round_id', '=', order.round_id.id),
-                ('state', 'in', ['act', 'prt']),
+                ('state', 'in', ['act']),
                 ('delivery_date', '>=', today),
             ], order='delivery_date asc, id asc', limit=1)
 
@@ -513,15 +513,45 @@ class SaleOrder(models.Model):
             if not next_batch:
                 next_batch = self.env['round.management.batch'].search([
                     ('round_id', '=', order.round_id.id),
-                    ('state', 'in', ['act', 'prt']),
+                    ('state', 'in', ['act']),
                 ], order='delivery_date desc, id desc', limit=1)
 
             order.batch_id = next_batch.id if next_batch else False
             
+    @api.onchange('round_id')
+    def _onchange_round_id_auto_select_next_batch(self):
+        """
+        Automatically selects the next active ('act') batch for the selected main round.
+        Picks the nearest upcoming active batch based on delivery date.
+        """
+        if not self.round_id:
+            self.batch_id = False
+            return
+
+        today = fields.Date.context_today(self)
+
+        # 1. Search for the nearest future or today's active batch ('act' only)
+        next_batch = self.env['round.management.batch'].search([
+            ('round_id', '=', self.round_id.id),
+            ('state', '=', 'act'),
+            ('delivery_date', '>=', today),
+        ], order='delivery_date asc, id asc', limit=1)
+
+        # 2. Fallback: if no future active batch exists, pick the most recent active batch
+        if not next_batch:
+            next_batch = self.env['round.management.batch'].search([
+                ('round_id', '=', self.round_id.id),
+                ('state', '=', 'act'),
+            ], order='delivery_date desc, id desc', limit=1)
+
+        self.batch_id = next_batch if next_batch else False
+            
 class SaleOrderLine(models.Model):
     _inherit = 'sale.order.line'
 
-    
+    has_special_requirements = fields.Boolean(
+        string="Check Notes"
+    )
     special_requirements_notes = fields.Text(
         string="Special Notes"
     )
