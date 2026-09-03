@@ -62,7 +62,7 @@
         <field name="res_model">res.partner</field>
         <field name="view_mode">list,form,kanban</field>
         <field name="domain">[('customer_rank', '>', 0)]</field>
-        <field name="context">{'search_default_group_by_round': 1}</field>
+        <field name="context">{'search_default_group_by_round': 1, 'default_customer_rank':1}</field>
     </record>
 
     <menuitem id="menu_round_customers_list"
@@ -279,4 +279,3 @@
 
 
 </odoo>
-

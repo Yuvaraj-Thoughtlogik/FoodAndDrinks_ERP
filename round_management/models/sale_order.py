@@ -15,6 +15,7 @@ class SaleOrder(models.Model):
         string='Round Batch',
         ondelete='set null',
         index=True,
+        copy=True,
         domain="[('round_id', '=?', round_id), ('state', 'in', ['act', 'prt'])]",
     )
 
@@ -437,17 +438,19 @@ class SaleOrder(models.Model):
         }
 
     def copy(self, default=None):
-        self.ensure_one()
-        default = dict(default or {})
-        if 'delivery_date' not in default and self.delivery_date:
-            default['delivery_date'] = self.delivery_date
-        if 'commitment_date' not in default and self.commitment_date:
-            default['commitment_date'] = self.commitment_date
-        if 'week_number' not in default and self.week_number:
-            default['week_number'] = self.week_number
-        if 'batch_id' not in default and self.batch_id:
-            default['batch_id'] = self.batch_id.id
-        return super().copy(default=default)
+        orders = self.browse()
+        for order in self:
+            order_default = dict(default or {})
+            if 'delivery_date' not in order_default and order.delivery_date:
+                order_default['delivery_date'] = order.delivery_date
+            if 'commitment_date' not in order_default and order.commitment_date:
+                order_default['commitment_date'] = order.commitment_date
+            if 'week_number' not in order_default and order.week_number:
+                order_default['week_number'] = order.week_number
+            if 'batch_id' not in order_default and order.batch_id:
+                order_default['batch_id'] = order.batch_id.id
+            orders |= super(SaleOrder, order).copy(default=order_default)
+        return orders
 
     def action_duplicate(self):
         self.ensure_one()

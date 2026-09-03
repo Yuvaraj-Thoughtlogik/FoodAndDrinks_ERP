@@ -213,20 +213,21 @@ class RoundManagementRound(models.Model):
     )
 
     def copy(self, default=None):
-        default = dict(default or {})
+        rounds = self.browse()
         time_fields = [
             'mon_from', 'mon_to', 'tue_from', 'tue_to', 'wed_from', 'wed_to',
             'thu_from', 'thu_to', 'fri_from', 'fri_to', 'sat_from', 'sat_to',
             'sun_from', 'sun_to'
         ]
-
-        # Clean up any legacy single-digit values stored in database records
-        for field in time_fields:
-            val = getattr(self, field)
-            if val and val.isdigit():
-                default[field] = f"{int(val):02d}:00"
-
-        return super().copy(default)
+        for round_rec in self:
+            rec_default = dict(default or {})
+            # Clean up any legacy single-digit values stored in database records
+            for field in time_fields:
+                val = getattr(round_rec, field)
+                if val and val.isdigit():
+                    rec_default[field] = f"{int(val):02d}:00"
+            rounds |= super(RoundManagementRound, round_rec).copy(rec_default)
+        return rounds
     
     def action_open_new_batch_wizard(self):
         """Opens a pop-up modal to create or view a Round Batch for this specific Round."""
