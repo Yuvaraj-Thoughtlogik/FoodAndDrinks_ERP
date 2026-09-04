@@ -19,3 +19,7 @@ access_round_region_user,round.region.user,model_round_region,base.group_user,1,
 access_round_region_pincode_user,round.region.pincode.user,model_round_region_pincode,base.group_user,1,1,1,1
 access_sale_order_batch_filter_wizard,sale.order.batch.filter.wizard,model_sale_order_batch_filter_wizard,base.group_user,1,1,1,1
 access_round_batch_warning_wizard,round.batch.warning.wizard,model_round_batch_warning_wizard,base.group_user,1,1,1,1
+access_stock_fresh_box_wizard,access_stock_fresh_box_wizard,model_stock_fresh_box_wizard,base.group_user,1,1,1,1
+access_stock_fresh_box_wizard_line,access_stock_fresh_box_wizard_line,model_stock_fresh_box_wizard_line,base.group_user,1,1,1,1
+access_stock_fresh_box_history,access_stock_fresh_box_history,model_stock_fresh_box_history,base.group_user,1,1,1,1
+access_stock_fresh_box_history_line,access_stock_fresh_box_history_line,model_stock_fresh_box_history_line,base.group_user,1,1,1,1
