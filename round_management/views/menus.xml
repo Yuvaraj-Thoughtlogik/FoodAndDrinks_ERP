@@ -111,11 +111,11 @@
         <field name="view_mode">list,form</field>
     </record>
 
-<!--    <menuitem id="menu_alternative_rounds"-->
-<!--              name="Alternative Rounds"-->
-<!--              parent="menu_round_config_categ"-->
-<!--              action="action_alternative_rounds"-->
-<!--              sequence="20"/>-->
+    <!--    <menuitem id="menu_alternative_rounds"-->
+    <!--              name="Alternative Rounds"-->
+    <!--              parent="menu_round_config_categ"-->
+    <!--              action="action_alternative_rounds"-->
+    <!--              sequence="20"/>-->
 
 
     <record id="action_driver_rounds_grid" model="ir.actions.act_window">
@@ -212,16 +212,16 @@
               action="action_picking_tree_round_management"
               parent="stock.menu_stock_warehouse_mgmt"
               sequence="15"/>
-              
-  <record id="action_round_management_deliveries" model="ir.actions.act_window">
+
+    <record id="action_round_management_deliveries" model="ir.actions.act_window">
         <field name="name">Deliveries</field>
         <field name="res_model">stock.picking</field>
         <field name="view_mode">list,kanban,form</field>
-        
+
         <field name="context">{
             'search_default_filter_delivery_date_today': 1,
             'search_default_groupby_round_batch': 1
-        }</field>
+            }</field>
         <field name="view_id" ref="round_management.view_picking_tree_round_management"/>
         <field name="search_view_id" ref="round_management.view_picking_search_round_management"/>
     </record>
@@ -229,53 +229,63 @@
     <menuitem id="menu_orders_dispatch_root"
               name="Orders Dispatch"
               parent="round_management.menu_round_management_root"
-             
+
               sequence="16"/>
-              
-     <menuitem id="menu_dispatch_management"
+
+    <menuitem id="menu_dispatch_management"
               name="Deliveries Dispatch"
               parent="menu_orders_dispatch_root"
               action="action_round_management_deliveries"
-              sequence="10"/>  
-              
-            
-      <record id="mrp_production_action_round_management" model="ir.actions.act_window">
-          <field name="name">Manufacturing Orders</field>
-          <field name="res_model">mrp.production</field>
-          <field name="view_mode">list,form,kanban,calendar,pivot,graph</field>
-          <field name="context">{
-              'search_default_filter_delivery_date_today': 1,
-              'search_default_group_by_product_category': 1
-          }</field>
-          <field name="search_view_id" ref="mrp.view_mrp_production_filter"/>
-      </record>
-
-      <!-- Top-Level Menu: Production -->
-      <menuitem id="menu_round_manufacturing_root"
-                name="Production"
-                parent="round_management.menu_round_management_root"
-                sequence="16"/>
-
-      <!-- Sub-Menu 1: Manufacturing Order (UPDATED ACTION REF) -->
-      <menuitem id="menu_round_mrp_production"
-                name="Manufacturing Order"
-                parent="menu_round_manufacturing_root"
-                action="mrp_production_action_round_management"
-                sequence="10"/>
-
-      <!-- Sub-Menu 2: Work Orders -->
-      <menuitem id="menu_round_mrp_workorder"
-                name="Work Orders"
-                parent="menu_round_manufacturing_root"
-                action="mrp.mrp_workorder_todo"
-                sequence="20"/>
-
-      <!-- Sub-Menu 3: Bill Of Materials -->
-      <menuitem id="menu_round_mrp_bom"
-                name="Bill Of Materials"
-                parent="menu_round_manufacturing_root"
-                action="mrp.mrp_bom_form_action"
-                sequence="30"/>
+              sequence="10"/>
 
 
+    <record id="mrp_production_action_round_management" model="ir.actions.act_window">
+        <field name="name">Manufacturing Orders</field>
+        <field name="res_model">mrp.production</field>
+        <field name="view_mode">list,form,kanban,calendar,pivot,graph</field>
+        <field name="context">{
+            'search_default_filter_delivery_date_today': 1,
+            'search_default_group_by_product_category': 1
+            }</field>
+        <field name="search_view_id" ref="mrp.view_mrp_production_filter"/>
+    </record>
+
+    <!-- Top-Level Menu: Production -->
+    <menuitem id="menu_round_manufacturing_root"
+              name="Production"
+              parent="round_management.menu_round_management_root"
+              sequence="16"/>
+
+    <!-- Sub-Menu 1: Manufacturing Order (UPDATED ACTION REF) -->
+    <menuitem id="menu_round_mrp_production"
+              name="Manufacturing Order"
+              parent="menu_round_manufacturing_root"
+              action="mrp_production_action_round_management"
+              sequence="10"/>
+
+    <!-- Sub-Menu 2: Work Orders -->
+    <menuitem id="menu_round_mrp_workorder"
+              name="Work Orders"
+              parent="menu_round_manufacturing_root"
+              action="mrp.mrp_workorder_todo"
+              sequence="20"/>
+
+    <!-- Sub-Menu 3: Bill Of Materials -->
+    <menuitem id="menu_round_mrp_bom"
+              name="Bill Of Materials"
+              parent="menu_round_manufacturing_root"
+              action="mrp.mrp_bom_form_action"
+              sequence="30"/>
+
+    <menuitem id="menu_stock_fresh_box_wizard"
+              name="Pack Box &amp; Generate MO"
+              parent="round_management.menu_round_management_order_management_root"
+              action="action_stock_fresh_box_wizard"
+              sequence="25"/>
+
+    <menuitem id="menu_stock_fresh_box_history_lines"
+              name="Pack Box Detailed History"
+              parent="round_management.menu_round_management_order_management_root"
+              action="action_stock_fresh_box_history_line_grouped"
+              sequence="27"/>
 </odoo>
