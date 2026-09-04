@@ -29,6 +29,7 @@
         'views/fleet_vehicle_views.xml',
         'views/round_sale_order_views.xml',
         'views/stock_picking_views.xml',
+        'views/stock_fresh_box_wizard_views.xml',
         'wizard/select_alt_round_wizard_views.xml',
         'wizard/batch_duplicator_view.xml',
         'wizard/bulk_round_change_views.xml',
