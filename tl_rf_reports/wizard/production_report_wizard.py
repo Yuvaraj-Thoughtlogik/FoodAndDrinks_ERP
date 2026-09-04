@@ -64,6 +64,21 @@ class ProductionReportWizard(models.TransientModel):
         help="When unchecked, normal Production Report is generated. When checked, separate Late Order Production Report is generated."
     )
 
+    @api.model
+    def _default_category_ids(self):
+        return self.env['product.category'].search([('name', 'in', ['Fresh', 'Chilled'])])
+
+    category_ids = fields.Many2many(
+        'product.category',
+        'production_report_wizard_category_rel',
+        'wizard_id',
+        'category_id',
+        string='Categories',
+        domain=[('name', 'in', ['Fresh', 'Chilled'])],
+        default=_default_category_ids,
+        help="Select Fresh, Chilled, or both product categories to include in the report."
+    )
+
     @api.onchange('delivery_date_from')
     def _onchange_delivery_date_from(self):
         if self.delivery_date_from:
@@ -96,6 +111,39 @@ class ProductionReportWizard(models.TransientModel):
             if record.packing_date_from and record.packing_date_to and record.packing_date_to < record.packing_date_from:
                 raise ValidationError(_("Packing Date To cannot be earlier than Packing Date From."))
 
+    def _get_matching_orders(self):
+        """Shared logic: returns the eligible sale.order recordset based on current wizard filters."""
+        self.ensure_one()
+
+        if self.delivery_channel == 'courier':
+            order_domain = [
+                ('delivery_channel', '=', 'courier'),
+                ('state', 'in', ['sale', 'done']),
+                ('delivery_date', '>=', self.delivery_date_from),
+                ('delivery_date', '<=', self.delivery_date_to),
+            ]
+            order_domain.append(('is_late_order', '=', self.include_late_orders))
+            return self.env['sale.order'].search(order_domain)
+
+        domain = [
+            ('delivery_date', '>=', self.delivery_date_from),
+            ('delivery_date', '<=', self.delivery_date_to),
+        ]
+        if self.depot_ids:
+            domain.append(('depot_id', 'in', self.depot_ids.ids))
+
+        batches = self.env['round.management.batch'].search(domain)
+        if not batches:
+            return self.env['sale.order']
+
+        eligible_orders = batches.mapped('order_ids').filtered(
+            lambda so: so.state in ('sale', 'done') and getattr(so, 'delivery_channel', False) in ('regal_van', False)
+        )
+        eligible_orders = eligible_orders.filtered(
+            lambda so: getattr(so, 'is_late_order', False) == self.include_late_orders
+        )
+        return eligible_orders
+
     def action_print_report(self):
         """Validates eligible batches or courier orders and triggers the Production Report."""
         self.ensure_one()
@@ -124,7 +172,6 @@ class ProductionReportWizard(models.TransientModel):
                 ))
             return self.env.ref('tl_rf_reports.action_report_production_report').report_action(self)
 
-        # Regal Van Delivery (Batch-based)
         domain = [
             ('delivery_date', '>=', self.delivery_date_from),
             ('delivery_date', '<=', self.delivery_date_to),
@@ -144,7 +191,6 @@ class ProductionReportWizard(models.TransientModel):
                 depot_label
             ))
 
-        # Check if batches have linked sale orders
         eligible_orders = batches.mapped('order_ids').filtered(
             lambda so: so.state in ('sale', 'done') and getattr(so, 'delivery_channel', False) in ('regal_van', False)
         )
@@ -158,17 +204,47 @@ class ProductionReportWizard(models.TransientModel):
 
         return self.env.ref('tl_rf_reports.action_report_production_report').report_action(self)
 
-    @api.model
-    def _default_category_ids(self):
-        return self.env['product.category'].search([('name', 'in', ['Fresh', 'Chilled'])])
+    def action_print_label(self):
+        """Triggers the Production Label report. Data is built in
+        report.tl_rf_reports.report_production_label_document._get_report_values()."""
+        self.ensure_one()
+        label_lines = self._get_label_data()
+        if not label_lines:
+            raise UserError(_("No matching records found to generate labels for the selected criteria."))
+        return self.env.ref('tl_rf_reports.action_report_production_label').report_action(self)
 
-    category_ids = fields.Many2many(
-        'product.category',
-        'production_report_wizard_category_rel',
-        'wizard_id',
-        'category_id',
-        string='Categories',
-        domain=[('name', 'in', ['Fresh', 'Chilled'])],
-        default=_default_category_ids,
-        help="Select Fresh, Chilled, or both product categories to include in the report."
-    )
+    def _get_label_data(self):
+        """Returns a list of dicts, one per label to print, based on the current wizard filters."""
+        self.ensure_one()
+        label_lines = []
+        orders = self._get_matching_orders()
+        category_ids = self.category_ids.ids
+
+        for order in orders:
+            batch = order.batch_id
+            warehouse = batch.depot_id if batch else False
+
+            for line in order.order_line:
+                product = line.product_id
+                if not product or not product.categ_id:
+                    continue
+                if category_ids and product.categ_id.id not in category_ids:
+                    continue
+
+                label_lines.append({
+                    'customer_name': order.partner_id.name or '',
+                    'customer_code': order.partner_id.customer_code or '',
+                    'delivery_date_display': order.delivery_date.strftime('%a, %d %B %Y') if order.delivery_date else '',
+                    'batch_code': batch.code if batch else '',
+                    'category_name': product.categ_id.name or '',
+                    'warehouse_name': warehouse.name if warehouse else '',
+                    'product_name': product.name or '',
+                    'origin_country': product.origin_country or '',
+                    # TODO: Shelf Life in Days field still pending confirmation.
+                    # Once confirmed, replace this with:
+                    # use_by_date = order.delivery_date + timedelta(days=product.<shelf_life_field>)
+                    # 'use_by_display': use_by_date.strftime('%a %d %B %Y') if use_by_date else '',
+                    'use_by_display': '',
+                })
+
+        return label_lines
