@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+
+    <!--
+        Fallback form. Every configuration generates its own primary form view
+        (label + input rows built from the whitelisted fields) and its own
+        action, so this one is only used when a popup is opened without a
+        generated view.
+    -->
+    <record id="view_list_filter_wizard_form" model="ir.ui.view">
+        <field name="name">list.filter.wizard.form</field>
+        <field name="model">list.filter.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Filter">
+                <sheet>
+                    <field name="config_id" invisible="1"/>
+                    <group name="filter_fields">
+                        <div class="text-muted" colspan="2">
+                            This filter has no fields configured yet.
+                        </div>
+                    </group>
+                </sheet>
+                <footer>
+                    <button name="action_apply" type="object"
+                            string="Apply" class="btn-primary"/>
+                    <button string="Cancel" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_list_filter_wizard" model="ir.actions.act_window">
+        <field name="name">Filter</field>
+        <field name="res_model">list.filter.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="view_id" ref="view_list_filter_wizard_form"/>
+        <field name="target">new</field>
+    </record>
+
+</odoo>
