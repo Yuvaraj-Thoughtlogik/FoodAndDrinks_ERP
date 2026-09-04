@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <menuitem id="menu_tl_demo_record_creator"
+              name="Demo Record Templates"
+              parent="base.menu_custom"
+              action="action_tl_demo_record_creator"
+              groups="base.group_system"
+              sequence="90"/>
+
+</odoo>

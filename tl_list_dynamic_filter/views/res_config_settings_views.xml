@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+
+    <record id="res_config_settings_view_form" model="ir.ui.view">
+        <field name="name">res.config.settings.form.inherit.list.dynamic.filter</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="base_setup.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <form position="inside">
+                <app string="List Dynamic Filters"
+                     name="tl_list_dynamic_filter"
+                     logo="/tl_list_dynamic_filter/static/description/icon.png">
+                    <block title="Filter Popup"
+                           name="tl_list_dynamic_filter_popup_block">
+                        <setting id="tl_list_dynamic_filter_studio_setting"
+                                 string="Design with Studio"
+                                 help="Lay the filter popups out by hand in Odoo Studio instead of using the generated layout.">
+                            <field name="module_tl_list_dynamic_filter_studio"/>
+                        </setting>
+                    </block>
+                </app>
+            </form>
+        </field>
+    </record>
+
+</odoo>

@@ -1,0 +1,413 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ==============================================================
+         Records explicitly chosen for a Many2many field
+         ============================================================== -->
+    <record id="view_tl_demo_record_creator_ref_list" model="ir.ui.view">
+        <field name="name">tl.demo.record.creator.ref.list</field>
+        <field name="model">tl.demo.record.creator.ref</field>
+        <field name="arch" type="xml">
+            <list string="Selected Records">
+                <field name="sequence" widget="handle"/>
+                <field name="field_id" string="Many2many Field"/>
+                <field name="comodel_name" string="Model" optional="show"/>
+                <field name="record_ref" string="Record"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_tl_demo_record_creator_ref_form" model="ir.ui.view">
+        <field name="name">tl.demo.record.creator.ref.form</field>
+        <field name="model">tl.demo.record.creator.ref</field>
+        <field name="arch" type="xml">
+            <form string="Selected Record">
+                <sheet>
+                    <group col="4">
+                        <field name="field_id" colspan="4"
+                               string="Many2many Field"
+                               options="{'no_create': True, 'no_open': True}"
+                               domain="[('id', 'in', parent.m2m_field_ids)]"/>
+                        <field name="comodel_name" colspan="4" readonly="1"
+                               string="Records must belong to"
+                               invisible="not comodel_name"/>
+                        <field name="record_ref" colspan="4" string="Record"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- ==============================================================
+         Child (One2many) field configuration
+         ============================================================== -->
+    <record id="view_tl_demo_record_creator_child_line_list" model="ir.ui.view">
+        <field name="name">tl.demo.record.creator.child.line.list</field>
+        <field name="model">tl.demo.record.creator.child.line</field>
+        <field name="arch" type="xml">
+            <list string="Child Fields" decoration-info="field_required">
+                <field name="sequence" widget="handle"/>
+                <field name="field_required" column_invisible="1"/>
+                <field name="field_id" string="Child Field"/>
+                <field name="field_name" string="Technical Name" optional="hide"/>
+                <field name="ttype" string="Type"/>
+                <field name="use_random" widget="boolean_toggle"/>
+                <field name="value_display" string="Value"/>
+                <field name="value_count" string="Number of Values"
+                       optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_tl_demo_record_creator_child_line_form" model="ir.ui.view">
+        <field name="name">tl.demo.record.creator.child.line.form</field>
+        <field name="model">tl.demo.record.creator.child.line</field>
+        <field name="arch" type="xml">
+            <form string="Child Field">
+                <sheet>
+                    <field name="model_id" invisible="1"/>
+                    <field name="inverse_name" invisible="1"/>
+                    <field name="selection_is_dynamic" invisible="1"/>
+                    <field name="can_use_random" invisible="1"/>
+                    <group col="4" string="Field">
+                        <field name="field_id" colspan="4"
+                               string="Child Field"
+                               options="{'no_create': True, 'no_open': True}"
+                               domain="[('id', 'in', parent.allowed_child_field_ids),
+                                        ('model_id', '=', model_id)]"/>
+                        <field name="ttype" readonly="1" string="Technical Type"/>
+                        <field name="field_required" readonly="1"/>
+                        <field name="field_help" colspan="4" readonly="1"
+                               invisible="not field_help"/>
+                    </group>
+                    <group col="4" string="Value Configuration" invisible="not ttype">
+                        <field name="use_random" colspan="4"
+                               invisible="not can_use_random"/>
+                        <div class="alert alert-info py-2" role="status" colspan="4"
+                             invisible="not can_use_random or not use_random">
+                            A fresh random value will be generated automatically for every record. Untick Random to enter a specific value.
+                        </div>
+
+                        <!-- Value inputs shown only when Random is unchecked (or cannot be randomized) -->
+                        <field name="value_char" colspan="4"
+                               invisible="ttype != 'char' or (can_use_random and use_random)"/>
+                        <field name="value_text" colspan="4"
+                               invisible="ttype not in ['text', 'html'] or (can_use_random and use_random)"/>
+                        <field name="value_integer"
+                               invisible="ttype != 'integer' or (can_use_random and use_random)"/>
+                        <field name="value_float"
+                               invisible="ttype not in ['float', 'monetary'] or (can_use_random and use_random)"/>
+                        <field name="value_boolean"
+                               invisible="ttype != 'boolean' or (can_use_random and use_random)"/>
+                        <field name="value_date"
+                               invisible="ttype != 'date' or (can_use_random and use_random)"/>
+                        <field name="value_datetime"
+                               invisible="ttype != 'datetime' or (can_use_random and use_random)"/>
+                        <field name="value_selection_id" colspan="4"
+                               options="{'no_create': True, 'no_open': True}"
+                               domain="[('field_id', '=', field_id)]"
+                               invisible="ttype != 'selection' or selection_is_dynamic or (can_use_random and use_random)"/>
+                        <field name="value_selection_free" colspan="4"
+                               invisible="ttype != 'selection' or not selection_is_dynamic or (can_use_random and use_random)"/>
+                        <field name="selection_hint" colspan="4" readonly="1"
+                               invisible="ttype != 'selection' or not selection_hint or (can_use_random and use_random)"/>
+                        <field name="value_reference" colspan="4"
+                               invisible="ttype not in ['many2one', 'reference'] or (can_use_random and use_random)"/>
+                        <field name="comodel_hint" colspan="4" readonly="1"
+                               invisible="ttype not in ['many2one', 'many2many'] or not comodel_hint or (can_use_random and use_random)"/>
+                        <field name="value_binary_filename" invisible="1"/>
+                        <field name="value_binary" colspan="4"
+                               filename="value_binary_filename"
+                               invisible="ttype != 'binary' or (can_use_random and use_random)"/>
+                        <field name="value_count"
+                               invisible="ttype != 'many2many'"/>
+                        <div class="text-muted" colspan="4"
+                             invisible="ttype != 'many2many'">
+                            Records are picked in the
+                            <em>Selected Records</em> table of the template.
+                            Leave this field out of it and tick Random to link
+                            <em>Number of Values</em> randomly chosen records.
+                        </div>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- ==============================================================
+         Template configuration line (Parent Field)
+         ============================================================== -->
+    <record id="view_tl_demo_record_creator_line_list" model="ir.ui.view">
+        <field name="name">tl.demo.record.creator.line.list</field>
+        <field name="model">tl.demo.record.creator.line</field>
+        <field name="arch" type="xml">
+            <list string="Fields" decoration-info="field_required">
+                <field name="sequence" widget="handle"/>
+                <field name="field_required" column_invisible="1"/>
+                <field name="field_id" string="Field"/>
+                <field name="field_name" string="Technical Name" optional="show"/>
+                <field name="ttype" string="Type"/>
+                <field name="use_random" widget="boolean_toggle"/>
+                <field name="value_display" string="Value"/>
+                <field name="value_count" string="Number of Values"
+                       optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_tl_demo_record_creator_line_form" model="ir.ui.view">
+        <field name="name">tl.demo.record.creator.line.form</field>
+        <field name="model">tl.demo.record.creator.line</field>
+        <field name="arch" type="xml">
+            <form string="Field">
+                <sheet>
+                    <field name="selection_is_dynamic" invisible="1"/>
+                    <field name="allowed_child_field_ids" invisible="1"/>
+                    <field name="can_use_random" invisible="1"/>
+                    <group col="4" string="Field">
+                        <field name="field_id" colspan="4"
+                               options="{'no_create': True, 'no_open': True}"
+                               domain="[('id', 'in', parent.allowed_field_ids)]"/>
+                        <field name="ttype" readonly="1" string="Technical Type"/>
+                        <field name="field_required" readonly="1"/>
+                        <field name="field_help" colspan="4" readonly="1"
+                               invisible="not field_help"/>
+                    </group>
+
+                    <!-- Standard value inputs for scalar/relational fields -->
+                    <group col="4" string="Value Configuration" invisible="not ttype or ttype == 'one2many'">
+                        <field name="use_random" colspan="4"
+                               invisible="not can_use_random"/>
+                        <div class="alert alert-info py-2" role="status" colspan="4"
+                             invisible="not can_use_random or not use_random">
+                            A fresh random value will be generated automatically for every record. Untick Random to enter a specific value.
+                        </div>
+
+                        <!-- Value inputs shown only when Random is unchecked (or cannot be randomized) -->
+                        <field name="value_char" colspan="4"
+                               invisible="ttype != 'char' or (can_use_random and use_random)"/>
+                        <field name="value_text" colspan="4"
+                               invisible="ttype not in ['text', 'html'] or (can_use_random and use_random)"/>
+                        <field name="value_integer"
+                               invisible="ttype != 'integer' or (can_use_random and use_random)"/>
+                        <field name="value_float"
+                               invisible="ttype not in ['float', 'monetary'] or (can_use_random and use_random)"/>
+                        <field name="value_boolean"
+                               invisible="ttype != 'boolean' or (can_use_random and use_random)"/>
+                        <field name="value_date"
+                               invisible="ttype != 'date' or (can_use_random and use_random)"/>
+                        <field name="value_datetime"
+                               invisible="ttype != 'datetime' or (can_use_random and use_random)"/>
+                        <field name="value_selection_id" colspan="4"
+                               options="{'no_create': True, 'no_open': True}"
+                               domain="[('field_id', '=', field_id)]"
+                               invisible="ttype != 'selection' or selection_is_dynamic or (can_use_random and use_random)"/>
+                        <field name="value_selection_free" colspan="4"
+                               invisible="ttype != 'selection' or not selection_is_dynamic or (can_use_random and use_random)"/>
+                        <field name="selection_hint" colspan="4" readonly="1"
+                               invisible="ttype != 'selection' or not selection_hint or (can_use_random and use_random)"/>
+                        <field name="value_reference" colspan="4"
+                               invisible="ttype not in ['many2one', 'reference'] or (can_use_random and use_random)"/>
+                        <field name="comodel_hint" colspan="4" readonly="1"
+                               invisible="ttype not in ['many2one', 'many2many'] or not comodel_hint or (can_use_random and use_random)"/>
+                        <field name="value_binary_filename" invisible="1"/>
+                        <field name="value_binary" colspan="4"
+                               filename="value_binary_filename"
+                               invisible="ttype != 'binary' or (can_use_random and use_random)"/>
+                        <field name="value_count"
+                               invisible="ttype != 'many2many'"/>
+                        <div class="text-muted" colspan="4"
+                             invisible="ttype != 'many2many'">
+                            Records are picked in the
+                            <em>Selected Records</em> table of the template.
+                            Leave this field out of it and tick Random to link
+                            <em>Number of Values</em> randomly chosen records.
+                        </div>
+                    </group>
+
+                    <!-- One2many inline child record configuration -->
+                    <group col="4" string="One2many Child Records Configuration"
+                           invisible="ttype != 'one2many'">
+                        <field name="value_count" string="Number of Child Records" colspan="2"/>
+                        <field name="comodel_hint" colspan="2" readonly="1" invisible="not comodel_hint"/>
+                        <div class="text-muted" colspan="4">
+                            <em>Number of Child Records</em> will be created for each parent record.
+                            Configure the fields of each child record below using the same Field, Value, and Number of Values approach.
+                        </div>
+                        <div class="d-flex gap-2 my-2" colspan="4">
+                            <button name="action_load_required_child_fields" type="object"
+                                    string="Load Required Child Fields" class="btn btn-secondary btn-sm"/>
+                            <button name="action_load_all_child_fields" type="object"
+                                    string="Load All Child Fields" class="btn btn-secondary btn-sm"/>
+                            <button name="action_clear_child_fields" type="object"
+                                    string="Clear Child Fields" class="btn btn-secondary btn-sm"/>
+                        </div>
+                        <field name="child_line_ids" colspan="4" nolabel="1">
+                            <list string="Child Fields" decoration-info="field_required">
+                                <field name="sequence" widget="handle"/>
+                                <field name="field_required" column_invisible="1"/>
+                                <field name="field_id" string="Child Field"/>
+                                <field name="field_name" string="Technical Name" optional="hide"/>
+                                <field name="ttype" string="Type"/>
+                                <field name="use_random" widget="boolean_toggle"/>
+                                <field name="value_display" string="Value"/>
+                                <field name="value_count" string="Number of Values" optional="hide"/>
+                            </list>
+                        </field>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- ==============================================================
+         The template
+         ============================================================== -->
+    <record id="view_tl_demo_record_creator_list" model="ir.ui.view">
+        <field name="name">tl.demo.record.creator.list</field>
+        <field name="model">tl.demo.record.creator</field>
+        <field name="arch" type="xml">
+            <list string="Demo Record Templates">
+                <field name="name"/>
+                <field name="model_id"/>
+                <field name="model_name" optional="show"/>
+                <field name="record_count"/>
+                <field name="line_count" string="Fields"/>
+                <field name="last_run_date" optional="show"/>
+                <field name="last_created_count" optional="show"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_tl_demo_record_creator_search" model="ir.ui.view">
+        <field name="name">tl.demo.record.creator.search</field>
+        <field name="model">tl.demo.record.creator</field>
+        <field name="arch" type="xml">
+            <search string="Demo Record Templates">
+                <field name="name"/>
+                <field name="model_id"/>
+                <filter name="never_run" string="Never Run"
+                        domain="[('last_run_date', '=', False)]"/>
+                <filter name="inactive" string="Archived"
+                        domain="[('active', '=', False)]"/>
+                <group>
+                    <filter name="group_model" string="Model"
+                            context="{'group_by': 'model_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="view_tl_demo_record_creator_form" model="ir.ui.view">
+        <field name="name">tl.demo.record.creator.form</field>
+        <field name="model">tl.demo.record.creator</field>
+        <field name="arch" type="xml">
+            <form string="Demo Record Template">
+                <header>
+                    <button name="action_create_records" type="object"
+                            string="Create Records" class="oe_highlight"
+                            invisible="not model_id"/>
+                    <button name="action_load_required_fields" type="object"
+                            string="Load Required Fields"
+                            invisible="not model_id"/>
+                    <button name="action_load_all_fields" type="object"
+                            string="Load All Fields"
+                            invisible="not model_id"/>
+                    <button name="action_clear_fields" type="object"
+                            string="Clear Fields"
+                            invisible="not model_id"/>
+                </header>
+                <sheet>
+                    <widget name="web_ribbon" title="Archived"
+                            bg_color="text-bg-danger" invisible="active"/>
+                    <div class="oe_title">
+                        <label for="name"/>
+                        <h1>
+                            <field name="name"
+                                   placeholder="e.g. Sales Order demo batch"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="active" invisible="1"/>
+                            <field name="model_id"
+                                   options="{'no_create': True, 'no_open': True}"/>
+                            <field name="model_name" readonly="1"
+                                   invisible="not model_id"/>
+                            <field name="record_count"/>
+                        </group>
+                        <group>
+                            <field name="apply_model_defaults"/>
+                            <field name="open_records"/>
+                            <field name="last_run_date"
+                                   invisible="not last_run_date"/>
+                            <field name="last_created_count"
+                                   invisible="not last_run_date"/>
+                            <field name="line_count" invisible="1"/>
+                            <field name="o2m_line_count" invisible="1"/>
+                            <field name="m2m_line_count" invisible="1"/>
+                            <field name="total_child_count" invisible="1"/>
+                            <!-- feed the Field dropdowns of the tables below -->
+                            <field name="allowed_field_ids" invisible="1"
+                                   widget="many2many_tags"/>
+                            <field name="m2m_field_ids" invisible="1"
+                                   widget="many2many_tags"/>
+                        </group>
+                    </group>
+
+                    <div class="alert alert-info" role="status"
+                         invisible="total_child_count == 0">
+                        This configuration will also create
+                        <field name="total_child_count" class="oe_inline"
+                               nolabel="1" readonly="1"/>
+                        child record(s) in total.
+                    </div>
+
+                    <notebook>
+                        <page string="Fields to Populate" name="fields">
+                            <field name="line_ids" nolabel="1"/>
+                            <div class="text-muted mt-2">
+                                Click a line to set its value with the input its
+                                field type calls for. Untick Random on a line to
+                                set a specific value. For One2many fields, child
+                                records are configured directly inside the line's configuration.
+                            </div>
+                        </page>
+                        <page string="Selected Records" name="records"
+                              invisible="m2m_line_count == 0">
+                            <div class="text-muted mb-2">
+                                Pick the records to link. Leave a Many2many field
+                                out of this table and tick Random on its line to
+                                link randomly chosen records instead.
+                            </div>
+                            <field name="ref_ids" nolabel="1"/>
+                        </page>
+                    </notebook>
+
+                    <div class="text-muted" invisible="model_id">
+                        Select a model to start. Its required fields are loaded
+                        automatically.
+                    </div>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_tl_demo_record_creator" model="ir.actions.act_window">
+        <field name="name">Demo Record Templates</field>
+        <field name="res_model">tl.demo.record.creator</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_tl_demo_record_creator_search"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Create your first demo record template
+            </p>
+            <p>
+                Pick a model, configure the fields you care about and press
+                Create Records. Templates are saved, so a configuration can be
+                duplicated and re-run whenever you need more demo data.
+            </p>
+        </field>
+    </record>
+
+</odoo>

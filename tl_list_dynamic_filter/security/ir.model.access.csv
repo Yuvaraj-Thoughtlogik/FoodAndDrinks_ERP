@@ -1,0 +1,6 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_list_filter_configuration_admin,list.filter.configuration.admin,model_list_filter_configuration,base.group_system,1,1,1,1
+access_list_filter_configuration_user,list.filter.configuration.user,model_list_filter_configuration,base.group_user,1,0,0,0
+access_list_filter_config_field_admin,list.filter.config.field.admin,model_list_filter_config_field,base.group_system,1,1,1,1
+access_list_filter_config_field_user,list.filter.config.field.user,model_list_filter_config_field,base.group_user,1,0,0,0
+access_list_filter_wizard,list.filter.wizard,model_list_filter_wizard,base.group_user,1,1,1,1
