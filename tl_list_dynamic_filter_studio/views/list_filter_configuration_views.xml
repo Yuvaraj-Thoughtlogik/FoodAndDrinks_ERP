@@ -9,8 +9,7 @@
         <field name="arch" type="xml">
 
             <xpath expr="//header" position="inside">
-                <button name="action_open_studio" type="object"
-                        string="Design with Studio" class="btn-secondary"
+                <widget name="tl_studio_design_button"
                         invisible="not field_line_ids"/>
                 <button name="action_reset_design" type="object"
                         string="Reset Design" class="btn-secondary"
@@ -35,5 +34,4 @@
 
         </field>
     </record>
-
 </odoo>

@@ -1,6 +1,6 @@
 {
     'name': 'List Dynamic Filter - Studio Design',
-    'version': '19.0.1.0.0',
+    'version': '19.0.1.2.0',
     'summary': 'Lay out generated filter popups by hand in Odoo Studio',
     'description': """
 List Dynamic Filter - Studio Design
@@ -27,6 +27,12 @@ and hands the popup back to the generator.
     'data': [
         'views/list_filter_configuration_views.xml',
     ],
+    'assets': {
+        'web.assets_backend': [
+            'tl_list_dynamic_filter_studio/static/src/js/studio_design_button.js',
+            'tl_list_dynamic_filter_studio/static/src/xml/studio_design_button.xml',
+        ],
+    },
     'installable': True,
     'auto_install': False,
 }

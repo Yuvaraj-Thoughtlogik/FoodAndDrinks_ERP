@@ -429,7 +429,8 @@ class ListFilterConfigField(models.Model):
             return ('<field name="%s" string="%s"%s %s/>'
                     % (name, label, placeholder, options))
 
-        # range: one label, two inputs side by side
+        # range placed on a single line: kept for a range that ends up outside
+        # the dedicated from/to block
         return (
             '<label for="{main}" string="{label}"/>'
             '<div class="o_row">'
@@ -442,4 +443,26 @@ class ListFilterConfigField(models.Model):
             second=self.wizard_field_to_id.name,
             label=label,
             opts=options,
+        )
+
+    def _arch_range_from(self):
+        """The lower bound of a range, for the left column of the popup."""
+        self.ensure_one()
+        if not self.wizard_field_id.name or not self.wizard_field_to_id:
+            return ''
+        return '<field name="%s" string="%s From" %s/>' % (
+            self.wizard_field_id.name,
+            escape(self.display_label),
+            self._field_options(),
+        )
+
+    def _arch_range_to(self):
+        """The upper bound of a range, for the right column of the popup."""
+        self.ensure_one()
+        if not self.wizard_field_to_id.name:
+            return ''
+        return '<field name="%s" string="%s To" %s/>' % (
+            self.wizard_field_to_id.name,
+            escape(self.display_label),
+            self._field_options(),
         )

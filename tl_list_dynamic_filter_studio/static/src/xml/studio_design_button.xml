@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <t t-name="tl_list_dynamic_filter_studio.StudioDesignButton">
+        <button type="button" class="btn btn-secondary" t-on-click="onClick">
+            Design with Studio
+        </button>
+    </t>
+
+</templates>

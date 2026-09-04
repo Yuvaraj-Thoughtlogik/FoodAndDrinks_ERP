@@ -81,7 +81,14 @@ class ListFilterConfiguration(models.Model):
         readonly=True, ondelete='set null', copy=False)
     wizard_action_id = fields.Many2one(
         'ir.actions.act_window', string="Generated Action",
-        readonly=True, ondelete='set null', copy=False)
+        readonly=True, ondelete='set null', copy=False,
+        help="Action opening the popup as a dialog (target=new). This is the "
+             "one the list view button calls.")
+    wizard_page_action_id = fields.Many2one(
+        'ir.actions.act_window', string="Generated Page Action",
+        readonly=True, ondelete='set null', copy=False,
+        help="Same popup view, opened full page in the current window "
+             "(target=current). Used to design the layout in Studio.")
 
     # ------------------------------------------------------------------
     @api.depends('field_line_ids')
@@ -136,7 +143,8 @@ class ListFilterConfiguration(models.Model):
         )
         (self.mapped('created_view_id')
          | self.mapped('wizard_view_id')).sudo().unlink()
-        self.mapped('wizard_action_id').sudo().unlink()
+        (self.mapped('wizard_action_id')
+         | self.mapped('wizard_page_action_id')).sudo().unlink()
         res = super().unlink()
         generated_fields.sudo().unlink()
         return res
@@ -145,7 +153,7 @@ class ListFilterConfiguration(models.Model):
         vals_list = super().copy_data(default=default)
         for vals in vals_list:
             vals.update(created_view_id=False, wizard_view_id=False,
-                        wizard_action_id=False)
+                        wizard_action_id=False, wizard_page_action_id=False)
         return vals_list
 
     def _rebuild_all(self):
@@ -155,13 +163,41 @@ class ListFilterConfiguration(models.Model):
     # ==================================================================
     # 1. the popup: a generated form view + its own action
     # ==================================================================
-    def _wizard_arch(self):
-        """Build the form arch of the filter popup: one label + input per row."""
+    def _wizard_body_arch(self):
+        """Two-column body of the popup.
+
+        Range conditions ("is between") come first in their own block, the
+        ``from`` inputs in the left column and the ``to`` inputs in the right
+        one, so every range reads as a single line across the popup. The
+        remaining fields are then split in half over two columns.
+        """
         self.ensure_one()
         lines = self.field_line_ids.filtered('wizard_field_id').sorted(
             lambda l: (l.sequence, l.id))
-        body = ('<group name="filter_fields">%s</group>'
-                % ''.join(l._arch_row() for l in lines))
+        ranges = lines.filtered('wizard_field_to_id')
+        singles = lines - ranges
+        half = (len(singles) + 1) // 2
+
+        return (
+            '<group name="date_filters_between">'
+            '<group>{range_from}</group>'
+            '<group>{range_to}</group>'
+            '</group>'
+            '<group name="other_fields">'
+            '<group>{left}</group>'
+            '<group>{right}</group>'
+            '</group>'
+        ).format(
+            range_from=''.join(l._arch_range_from() for l in ranges),
+            range_to=''.join(l._arch_range_to() for l in ranges),
+            left=''.join(l._arch_row() for l in singles[:half]),
+            right=''.join(l._arch_row() for l in singles[half:]),
+        )
+
+    def _wizard_arch(self):
+        """Build the form arch of the filter popup."""
+        self.ensure_one()
+        body = self._wizard_body_arch()
 
         # The sheet/group skeleton is what Studio expects to drop widgets into,
         # so the popup is a regular editable form rather than a bare dialog.
@@ -206,7 +242,12 @@ class ListFilterConfiguration(models.Model):
             views.sudo().write({
                 'arch': '<form><sheet>'
                         '<field name="config_id" invisible="1"/>'
-                        '<group name="filter_fields"/>'
+                        '<group name="date_filters_between">'
+                        '<group/><group/>'
+                        '</group>'
+                        '<group name="other_fields">'
+                        '<group/><group/>'
+                        '</group>'
                         '</sheet></form>',
             })
 
@@ -231,23 +272,35 @@ class ListFilterConfiguration(models.Model):
             else:
                 view = View.create(values)
 
-            action_values = {
+            # Two actions share the generated view:
+            #  * the dialog one, called by the list view button;
+            #  * the full page one, which Studio can be pointed at by URL.
+            base_values = {
                 'name': rec.dialog_title or rec.name or 'Filter',
                 'res_model': WIZARD_MODEL,
                 'view_mode': 'form',
-                'target': 'new',
                 'view_id': view.id,
                 'context': "{'default_config_id': %s}" % rec.id,
             }
+
+            action_values = dict(base_values, target='new')
             if rec.wizard_action_id:
                 rec.wizard_action_id.write(action_values)
                 action = rec.wizard_action_id
             else:
                 action = Action.create(action_values)
 
+            page_values = dict(base_values, target='current')
+            if rec.wizard_page_action_id:
+                rec.wizard_page_action_id.write(page_values)
+                page_action = rec.wizard_page_action_id
+            else:
+                page_action = Action.create(page_values)
+
             rec.with_context(**{SKIP: True}).write({
                 'wizard_view_id': view.id,
                 'wizard_action_id': action.id,
+                'wizard_page_action_id': page_action.id,
             })
 
     # ==================================================================
@@ -341,9 +394,21 @@ class ListFilterConfiguration(models.Model):
         return True
 
     def action_open_filter(self):
+        """Open the popup as a dialog (generated action, target=new)."""
         self.ensure_one()
         if not self.wizard_action_id:
             self._rebuild_all()
         action = self.wizard_action_id.sudo().read()[0]
         action['context'] = {'default_config_id': self.id}
+        return action
+
+    def action_open_filter_page(self):
+        """Open the very same generated view full page in the current window."""
+        self.ensure_one()
+        if not self.wizard_page_action_id:
+            self._rebuild_all()
+        action = self.wizard_page_action_id.sudo().read()[0]
+        action['context'] = {'default_config_id': self.id}
+        action['target'] = 'current'
+        action['views'] = [(self.wizard_view_id.id, 'form')]
         return action
