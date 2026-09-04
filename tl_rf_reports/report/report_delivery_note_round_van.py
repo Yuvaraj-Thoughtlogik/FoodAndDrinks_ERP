@@ -1,12 +1,54 @@
 # -*- coding: utf-8 -*-
+import base64
+import logging
 import re
+
 from odoo import api, fields, models
 from .report_delivery_note_common import DeliveryNoteReportMixin
+
+_logger = logging.getLogger(__name__)
 
 
 class ReportDeliveryNoteRoundVan(DeliveryNoteReportMixin, models.AbstractModel):
     _name = 'report.tl_rf_reports.report_delivery_note_round_van'
     _description = 'Delivery Note Round Report - Regal Van'
+
+    # Barcode rendering: the image is generated server-side and embedded as a
+    # data URI rather than pointing at /report/barcode/, so wkhtmltopdf never
+    # has to make an authenticated HTTP call back into Odoo to fetch it.
+    BARCODE_SYMBOLOGY = 'Code128'
+    BARCODE_RENDER_WIDTH = 600     # source image px (downscaled by the template)
+    BARCODE_RENDER_HEIGHT = 100
+
+    def _barcode_data_uri(self, value):
+        """Return a base64 PNG data URI for `value`, or '' when it can't be encoded."""
+        if not value:
+            return ''
+        try:
+            png = self.env['ir.actions.report'].barcode(
+                self.BARCODE_SYMBOLOGY,
+                value,
+                width=self.BARCODE_RENDER_WIDTH,
+                height=self.BARCODE_RENDER_HEIGHT,
+                humanreadable=0,
+            )
+        except Exception:  # noqa: BLE001 - a bad barcode must not kill the print
+            _logger.warning("Delivery note (van): cannot encode barcode for %r", value)
+            return ''
+        return 'data:image/png;base64,%s' % base64.b64encode(png).decode('ascii')
+
+    def _get_delivery_picking_for_barcode(self, pickings):
+        """The single outgoing picking whose barcode goes on the note.
+
+        The warehouse is configured for one-step (direct) delivery, so there is
+        normally exactly one. If a backorder ever produces more than one, the
+        first still-open picking wins, falling back to the lowest id.
+        """
+        if not pickings:
+            return pickings
+        open_pickings = pickings.filtered(lambda p: p.state not in ('done', 'cancel'))
+        candidates = open_pickings or pickings
+        return candidates.sorted('id')[0]
 
     def _get_order_sort_key(self, order):
         """Sort key to order drops by partner street2 (Street) then street (Door no)."""
@@ -62,6 +104,11 @@ class ReportDeliveryNoteRoundVan(DeliveryNoteReportMixin, models.AbstractModel):
         currency_sym = order.currency_id.symbol if order.currency_id else '£'
         price_str = f"{currency_sym}{order.amount_total:,.2f}"
 
+        # Delivery order barcode (scannable in the warehouse / on the van).
+        picking = self._get_delivery_picking_for_barcode(pickings)
+        picking_name = (picking.name or '') if picking else ''
+        barcode_value = (getattr(picking, 'barcode', False) or picking_name) if picking else ''
+
         return {
             'cust': cust_str,
             'addr': addr_str,
@@ -72,9 +119,63 @@ class ReportDeliveryNoteRoundVan(DeliveryNoteReportMixin, models.AbstractModel):
             'pay': pay_flags,
             'price': price_str,
             'zone': '',
+            'picking_name': picking_name,
+            'barcode_src': self._barcode_data_uri(barcode_value),
         }
 
-    def _paginate_drops(self, drops, max_page_weight=22):
+    # ------------------------------------------------------------------
+    # PAGINATION CALIBRATION
+    # ------------------------------------------------------------------
+    # All values below are expressed in "rows", where 1 row = the height of
+    # one printed item line (measured at 12.6pt on the generated PDF with the
+    # current paperformat: A4 portrait, 10mm top / 20mm bottom margin, 90 dpi).
+    #
+    #   printable height   = 842pt (A4) - 28.35pt (10mm top) - 56.7pt (20mm bottom)
+    #   repeated header    = ~34pt  (round line + "For Delivery on" line + margin)
+    #   space for drops    = ~722pt  ->  722 / 12.6 = ~57 rows
+    #
+    # PAGE_ROW_BUDGET is kept just under that measured 57 so a line that wraps
+    # unexpectedly cannot push the last drop onto an unnumbered overflow page.
+    PAGE_ROW_BUDGET = 55.0
+
+    # Fixed vertical cost of a drop, on top of its item lines: top border +
+    # padding, customer/address/phone line, the Order No / payment-method block
+    # and the bottom margin. Measured at ~56pt -> 56 / 12.6 = ~4.4 rows.
+    DROP_BASE_ROWS = 4.5
+
+    # Approximate characters that fit on one line in each column, used only to
+    # predict wrapping (item column = 68% width @13.5px, note column = 32% @13px).
+    ITEM_CHARS_PER_LINE = 62
+    NOTE_CHARS_PER_LINE = 30
+
+    # The delivery-order barcode sits at the top of the right-hand column
+    # (38px image + ~12px caption + margin = ~52px = ~42pt = ~3.3 rows).
+    BARCODE_ROWS = 3.5
+
+    def _estimate_wrapped_lines(self, text, chars_per_line):
+        """How many printed lines a piece of text will occupy once wrapped."""
+        if not text:
+            return 0
+        lines = 0
+        for raw_line in str(text).splitlines() or ['']:
+            lines += max(1, -(-len(raw_line) // chars_per_line))  # ceil division
+        return max(lines, 1)
+
+    def _drop_row_weight(self, drop):
+        """Estimated height of a single drop, in rows."""
+        item_rows = sum(
+            self._estimate_wrapped_lines(item, self.ITEM_CHARS_PER_LINE)
+            for item in drop['items']
+        )
+        # The barcode and the note are stacked in a column beside the items,
+        # so they only add height when together they are taller than the
+        # item list itself.
+        right_col_rows = self._estimate_wrapped_lines(drop.get('note'), self.NOTE_CHARS_PER_LINE)
+        if drop.get('barcode_src'):
+            right_col_rows += self.BARCODE_ROWS
+        return self.DROP_BASE_ROWS + max(item_rows, right_col_rows)
+
+    def _paginate_drops(self, drops, max_page_weight=None):
         """Splits a batch's drops into distinct pages so that:
         1. Every page break is decided here in Python, not left to the browser
            to figure out mid-render - so each page dict below maps to exactly
@@ -82,20 +183,25 @@ class ReportDeliveryNoteRoundVan(DeliveryNoteReportMixin, models.AbstractModel):
         2. A single very large drop (many items) still gets its own page rather
            than being split apart or silently overflowing onto the next one.
 
-        NOTE: MAX_PAGE_WEIGHT is a proxy for vertical space, not a real mm/px
+        A new page is only started when the current one is genuinely full; a
+        new *batch* always starts a new page, but that break is applied in the
+        QWeb template (page-break-before on each group's first page), not here.
+
+        NOTE: the weights are a proxy for vertical space, not a real mm/px
         measurement - same idea as _paginate_batch_categories in the packing
-        list report. drop_base_cost estimates the fixed rows every drop takes
-        (customer/address/phone row + order/payment row + spacing) on top of
-        one row per item. Tune this against real print output if pages still
-        break too early or too late.
+        list report. See the PAGE_ROW_BUDGET / DROP_BASE_ROWS comments above
+        for how they were calibrated; re-measure them if the paperformat,
+        font size or the drop layout in the template changes.
         """
-        drop_base_cost = 3
+        if max_page_weight is None:
+            max_page_weight = self.PAGE_ROW_BUDGET
+
         pages = []
         current_page_drops = []
-        current_weight = 0
+        current_weight = 0.0
 
         for drop in drops:
-            drop_weight = drop_base_cost + len(drop['items'])
+            drop_weight = self._drop_row_weight(drop)
             # If a single drop is heavier than a whole page on its own, let it
             # have the page to itself instead of looping forever trying to fit it.
             effective_max = max(max_page_weight, drop_weight)
@@ -103,7 +209,7 @@ class ReportDeliveryNoteRoundVan(DeliveryNoteReportMixin, models.AbstractModel):
             if current_page_drops and (current_weight + drop_weight > effective_max):
                 pages.append({'drops': current_page_drops, 'is_last_page': False})
                 current_page_drops = []
-                current_weight = 0
+                current_weight = 0.0
 
             current_page_drops.append(drop)
             current_weight += drop_weight

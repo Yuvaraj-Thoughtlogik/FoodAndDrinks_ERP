@@ -110,7 +110,37 @@
                                         </div>
                                         <div
                                             style="float: right; width: 32%; font-size: 13px; font-weight: bold; color: #000000; text-align: right;">
-                                            <t t-esc="drop['note']" />
+
+                                            <!-- Delivery order barcode (Code128 of the
+                                                 outgoing picking, e.g. WH/OUT/00012).
+                                                 The image is a base64 data URI built in
+                                                 Python, so wkhtmltopdf does not have to
+                                                 call /report/barcode/ over HTTP. -->
+                                            <t t-if="drop['barcode_src']">
+                                                <div style="margin-bottom: 4px;">
+                                                    <!-- Fixed-width inline-block wrapper: it is
+                                                         right-aligned by the parent column, while
+                                                         its own text-align centres the caption
+                                                         under the barcode instead of letting the
+                                                         caption inherit the right alignment. -->
+                                                    <div
+                                                        style="display: inline-block; width: 190px; text-align: center;">
+                                                        <img t-att-src="drop['barcode_src']"
+                                                            t-att-alt="drop['picking_name']"
+                                                            style="display: block; width: 190px; height: 38px;" />
+                                                        <div
+                                                            style="font-size: 10px; font-weight: normal; letter-spacing: 0.4px; line-height: 1.2; margin-top: 1px; text-align: center;">
+                                                            <t t-esc="drop['picking_name']" />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </t>
+
+                                            <t t-if="drop['note']">
+                                                <div>
+                                                    <t t-esc="drop['note']" />
+                                                </div>
+                                            </t>
                                         </div>
                                         <div style="clear: both;" />
                                     </div>
