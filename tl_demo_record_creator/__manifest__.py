@@ -1,6 +1,6 @@
 {
     'name': 'Demo Record Creator',
-    'version': '19.0.3.0.0',
+    'version': '19.0.5.0.0',
     'summary': 'Saved, re-runnable templates that create demo records for any model',
     'description': """
 Demo Record Creator
@@ -11,8 +11,10 @@ Model-agnostic templates that generate records for any model in the database.
 * Pick a model, pick how many records you want, press Create Records.
 * Templates are saved records, so a configuration can be named, kept,
   duplicated and re-run whenever more demo data is needed.
-* The required fields of the model are loaded automatically as configuration
-  lines; add or remove any other writable field.
+* Nothing is loaded for you. Add the fields you want to control, or use
+  *Load Required Fields* / *Load All Fields* to pull them in, and remove any
+  line you do not need. The same is true of a One2many's child fields: they
+  are loaded only when you ask for them inside the line.
 * Each line renders the *native* Odoo input for the selected field's technical
   type - no single generic text box:
 
@@ -40,13 +42,26 @@ Model-agnostic templates that generate records for any model in the database.
   value for that type, freshly generated for every record: random text sized
   to the column, random numbers, random dates, a random option of a Selection,
   a random existing record for a relation.
+* Relational lines pick their own model. Untick Random on a Many2one or
+  Reference line and the record selector is already pointing at the right
+  model, with its first record filled in, so only the record itself has to be
+  changed. Empty the selector and it stays empty.
+* Relational lines also take a **Domain**, edited with Odoo's own domain
+  editor, restricting the records the line may draw on - both the ones Random
+  picks and the one filled in for you. A Many2one can be filled from confirmed
+  orders only, or a Many2many from active partners.
 * One2many relations are configured directly within the field configuration area
   (inline without separate pages or tabs), with child records using the same
   Field, Value, and Number of Values approach.
-* Everything is validated before the first record is written - types,
-  Selection options, relational models, required fields, access rights - and
-  the whole batch runs in a single transaction, so a failure leaves nothing
-  half-created.
+* A field's *Required* flag is shown for information but never enforced here.
+  Plenty of required fields are filled in by the model itself
+  (``sale.order.name`` comes from a sequence), so a blank line writes nothing
+  and lets the model decide.
+* Only the configuration itself is checked before the run - types, Selection
+  options, relational models, duplicate lines, access rights. Everything else
+  is the model's verdict: the batch runs in a single transaction, and if the
+  model refuses, its own message is shown together with the values that were
+  sent, so the line to fix is obvious. A failure leaves nothing half-created.
 * Each template records when it last ran and how many records it produced.
     """,
     'author': "Thoughtlogik Technology Solutions",
