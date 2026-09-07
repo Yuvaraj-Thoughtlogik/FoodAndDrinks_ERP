@@ -140,7 +140,22 @@ class SaleOrder(models.Model):
     pay_cash = fields.Boolean(string="Cash", default=False)
     pay_cheque = fields.Boolean(string="Cheque", default=False)
     pay_card = fields.Boolean(string="Card", default=False)
+    
+    delivery_channel = fields.Selection(
+        selection=[
+            ('regal_van', 'Regal Van Delivery'),
+            ('courier', 'Courier Delivery'),
+        ],
+        string='Delivery Channels',
+    )
 
+    @api.onchange('batch_id')
+    def _onchange_batch_id(self):
+        if self.batch_id:
+            self.delivery_channel = self.batch_id.delivery_channel
+        else:
+            self.delivery_channel = False
+    
     @api.onchange('pay_card_reader')
     def _onchange_pay_card_reader(self):
         if self.pay_card_reader:
