@@ -159,7 +159,7 @@
                                             </span>
                                         </div>
 
-                                        <div style="float: left;">
+                                        <!-- <div style="float: left;">
                                             <div style="margin-bottom: 6px; line-height: 24px;">
                                                 <div style="width: 75px; height: 24px; border: 2px solid #000000; display: inline-block; vertical-align: middle; margin-right: 10px; background-color: #ffffff;">
                                                     &#160;
@@ -184,7 +184,7 @@
                                                     Dry Ice
                                                 </span>
                                             </div>
-                                        </div>
+                                        </div> -->
                                         <div style="clear: both;"/>
                                     </div>
                                 </t>
