@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Paper Format: A4 Portrait for Active Batch Report -->
+    <record id="paperformat_active_batch_report" model="report.paperformat">
+        <field name="name">Active Batch Report A4</field>
+        <field name="default" eval="False"/>
+        <field name="format">A4</field>
+        <field name="page_height">0</field>
+        <field name="page_width">0</field>
+        <field name="orientation">Portrait</field>
+        <field name="margin_top">12</field>
+        <field name="margin_bottom">15</field>
+        <field name="margin_left">12</field>
+        <field name="margin_right">12</field>
+        <field name="header_line" eval="False"/>
+        <field name="header_spacing">0</field>
+        <field name="dpi">90</field>
+    </record>
+
+    <!-- Report Action -->
+    <record id="action_report_active_batch" model="ir.actions.report">
+        <field name="name">Active Batch Report</field>
+        <field name="model">active.batch.report.wizard</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">tl_rf_reports.report_active_batch</field>
+        <field name="report_file">tl_rf_reports.report_active_batch</field>
+        <field name="print_report_name">'Active_Batch_Report_' + time.strftime('%Y%m%d')</field>
+        <field name="paperformat_id" ref="paperformat_active_batch_report"/>
+        <field name="binding_model_id" eval="False"/>
+        <field name="binding_type">report</field>
+    </record>
+
+    <!-- QWeb Template (Div-based Layout with Inline CSS) -->
+    <template id="report_active_batch">
+        <t t-call="web.html_container">
+            <t t-foreach="reports_data" t-as="data">
+                <div class="article" style="font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif; color: #111; padding: 0 10px; background: #fff; width: 100%;">
+                    
+                    <!-- Report Header (Div-based with Larger Font &amp; Spacing) -->
+                    <div style="display: table; width: 100%; margin-bottom: 12px;">
+                        <div style="display: table-row;">
+                            <div style="display: table-cell; width: 50%; vertical-align: top; text-align: left;">
+                                <div style="font-size: 28px; font-weight: bold; color: #004080; text-transform: uppercase; line-height: 1.2;">
+                                    Regal Fish
+                                </div>
+                                <div style="font-size: 22px; font-weight: bold; color: #222; margin-top: 6px;">
+                                    Active Batch Report
+                                </div>
+                            </div>
+                            <div style="display: table-cell; width: 50%; vertical-align: top; text-align: right; font-size: 14px; color: #333; line-height: 1.8;">
+                                <div><strong>As On Date:</strong> <t t-esc="data.get('as_on_date')"/></div>
+                                <div><strong>Within Weeks:</strong> <t t-esc="data.get('weeks')"/> Weeks</div>
+                                <div><strong>Date Range:</strong> <t t-esc="data.get('from_date_str')"/> &#8594; <t t-esc="data.get('to_date_str')"/></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="border-bottom: 2px solid #004080; margin-bottom: 22px;"/>
+
+                    <!-- Main Report Body: Grouped by Round -->
+                    <t t-if="not data.get('round_items')">
+                        <div style="padding: 24px; text-align: center; font-size: 15px; color: #666; background-color: #f9f9f9; border: 1px solid #ddd; border-radius: 4px; margin-top: 24px;">
+                            No active batches found for the selected period.
+                        </div>
+                    </t>
+                    <t t-else="">
+                        <t t-foreach="data.get('round_items')" t-as="r_item">
+                            <div style="margin-bottom: 28px; page-break-inside: avoid;">
+                                
+                                <!-- Round Banner -->
+                                <div style="background-color: #f0f4f8; border-left: 5px solid #004080; padding: 9px 14px; margin-bottom: 12px;">
+                                    <span style="font-size: 17px; font-weight: bold; color: #004080;">Round: </span>
+                                    <span style="font-size: 17px; font-weight: bold; color: #111;"><t t-esc="r_item.get('round_display') or r_item.get('round_name')"/></span>
+                                </div>
+
+                                <!-- If round has no batches across all periods, show notice -->
+                                <t t-if="not r_item.get('has_batches')">
+                                    <div style="padding: 6px 12px; font-size: 13px; color: #777; font-style: italic; margin-bottom: 16px;">
+                                        No active batches found.
+                                    </div>
+                                </t>
+                                <t t-else="">
+                                    <!-- 1. Before Section (Only shown if batches exist) -->
+                                    <t t-if="r_item.get('before_batches')">
+                                        <div style="margin-bottom: 18px; padding-left: 4px;">
+                                            <div style="font-size: 16px; font-weight: bold; color: #004080; margin-bottom: 8px; border-bottom: 1px solid #ddd; padding-bottom: 4px;">
+                                                Before <span style="font-size: 14px; font-weight: normal; color: #555;">(<t t-esc="data.get('before_range_str')"/>)</span>
+                                            </div>
+                                            <div style="display: table; width: 100%; margin-bottom: 8px;">
+                                                <div style="display: table-row; font-size: 13px; font-weight: bold; color: #333;">
+                                                    <div style="display: table-cell; width: 20%; text-align: left; padding: 7px 8px; vertical-align: middle;">Batch Code</div>
+                                                    <div style="display: table-cell; width: 44%; text-align: left; padding: 7px 6px; vertical-align: middle;">Batch Name</div>
+                                                    <div style="display: table-cell; width: 18%; text-align: center; padding: 7px 6px; vertical-align: middle;">Delivery Date</div>
+                                                    <div style="display: table-cell; width: 18%; text-align: right; padding: 7px 8px; vertical-align: middle;">Batch Age</div>
+                                                </div>
+                                                <t t-foreach="r_item.get('before_batches')" t-as="b">
+                                                    <div style="display: table-row; font-size: 13px; line-height: 1.4;">
+                                                        <div style="display: table-cell; width: 20%; text-align: left; padding: 7px 8px; font-weight: 600; vertical-align: middle;"><t t-esc="b.get('code')"/></div>
+                                                        <div style="display: table-cell; width: 44%; text-align: left; padding: 7px 6px; vertical-align: middle;"><t t-esc="b.get('name')"/></div>
+                                                        <div style="display: table-cell; width: 18%; text-align: center; padding: 7px 6px; vertical-align: middle;"><t t-esc="b.get('delivery_date')"/></div>
+                                                        <div style="display: table-cell; width: 18%; text-align: right; padding: 7px 8px; font-weight: 500; color: #444; vertical-align: middle;"><t t-esc="b.get('batch_age')"/></div>
+                                                    </div>
+                                                </t>
+                                            </div>
+                                        </div>
+                                    </t>
+
+                                    <!-- 2. Today Section (Only shown if batches exist) -->
+                                    <t t-if="r_item.get('today_batches')">
+                                        <div style="margin-bottom: 18px; padding-left: 4px;">
+                                            <div style="font-size: 16px; font-weight: bold; color: #004080; margin-bottom: 8px; border-bottom: 1px solid #ddd; padding-bottom: 4px;">
+                                                Today <span style="font-size: 14px; font-weight: normal; color: #555;">(<t t-esc="data.get('today_str')"/>)</span>
+                                            </div>
+                                            <div style="display: table; width: 100%; margin-bottom: 8px;">
+                                                <div style="display: table-row; font-size: 13px; font-weight: bold; color: #333;">
+                                                    <div style="display: table-cell; width: 20%; text-align: left; padding: 7px 8px; vertical-align: middle;">Batch Code</div>
+                                                    <div style="display: table-cell; width: 44%; text-align: left; padding: 7px 6px; vertical-align: middle;">Batch Name</div>
+                                                    <div style="display: table-cell; width: 18%; text-align: center; padding: 7px 6px; vertical-align: middle;">Delivery Date</div>
+                                                    <div style="display: table-cell; width: 18%; text-align: right; padding: 7px 8px; vertical-align: middle;">Batch Age</div>
+                                                </div>
+                                                <t t-foreach="r_item.get('today_batches')" t-as="b">
+                                                    <div style="display: table-row; font-size: 13px; line-height: 1.4;">
+                                                        <div style="display: table-cell; width: 20%; text-align: left; padding: 7px 8px; font-weight: 600; vertical-align: middle;"><t t-esc="b.get('code')"/></div>
+                                                        <div style="display: table-cell; width: 44%; text-align: left; padding: 7px 6px; vertical-align: middle;"><t t-esc="b.get('name')"/></div>
+                                                        <div style="display: table-cell; width: 18%; text-align: center; padding: 7px 6px; vertical-align: middle;"><t t-esc="b.get('delivery_date')"/></div>
+                                                        <div style="display: table-cell; width: 18%; text-align: right; padding: 7px 8px; font-weight: 500; color: #444; vertical-align: middle;"><t t-esc="b.get('batch_age')"/></div>
+                                                    </div>
+                                                </t>
+                                            </div>
+                                        </div>
+                                    </t>
+
+                                    <!-- 3. After Section (Only shown if batches exist) -->
+                                    <t t-if="r_item.get('after_batches')">
+                                        <div style="margin-bottom: 18px; padding-left: 4px;">
+                                            <div style="font-size: 16px; font-weight: bold; color: #004080; margin-bottom: 8px; border-bottom: 1px solid #ddd; padding-bottom: 4px;">
+                                                After <span style="font-size: 14px; font-weight: normal; color: #555;">(<t t-esc="data.get('after_range_str')"/>)</span>
+                                            </div>
+                                            <div style="display: table; width: 100%; margin-bottom: 8px;">
+                                                <div style="display: table-row; font-size: 13px; font-weight: bold; color: #333;">
+                                                    <div style="display: table-cell; width: 20%; text-align: left; padding: 7px 8px; vertical-align: middle;">Batch Code</div>
+                                                    <div style="display: table-cell; width: 44%; text-align: left; padding: 7px 6px; vertical-align: middle;">Batch Name</div>
+                                                    <div style="display: table-cell; width: 18%; text-align: center; padding: 7px 6px; vertical-align: middle;">Delivery Date</div>
+                                                    <div style="display: table-cell; width: 18%; text-align: right; padding: 7px 8px; vertical-align: middle;">Batch Age</div>
+                                                </div>
+                                                <t t-foreach="r_item.get('after_batches')" t-as="b">
+                                                    <div style="display: table-row; font-size: 13px; line-height: 1.4;">
+                                                        <div style="display: table-cell; width: 20%; text-align: left; padding: 7px 8px; font-weight: 600; vertical-align: middle;"><t t-esc="b.get('code')"/></div>
+                                                        <div style="display: table-cell; width: 44%; text-align: left; padding: 7px 6px; vertical-align: middle;"><t t-esc="b.get('name')"/></div>
+                                                        <div style="display: table-cell; width: 18%; text-align: center; padding: 7px 6px; vertical-align: middle;"><t t-esc="b.get('delivery_date')"/></div>
+                                                        <div style="display: table-cell; width: 18%; text-align: right; padding: 7px 8px; font-weight: 500; color: #444; vertical-align: middle;"><t t-esc="b.get('batch_age')"/></div>
+                                                    </div>
+                                                </t>
+                                            </div>
+                                        </div>
+                                    </t>
+                                </t>
+                            </div>
+                        </t>
+                    </t>
+                </div>
+
+                <!-- Report Footer (Div-based with Inline Styles) -->
+                <div class="footer">
+                    <div class="o_footer_content" style="font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #666; border-top: 1px solid #ccc; padding-top: 4px; width: 100%; display: table;">
+                        <div style="display: table-row;">
+                            <div style="display: table-cell; width: 50%; text-align: left; vertical-align: middle;">
+                                Printed on <t t-esc="data.get('printed_at')"/>
+                            </div>
+                            <div style="display: table-cell; width: 50%; text-align: right; vertical-align: middle;">
+                                Page <span class="page"/> of <span class="topage"/>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </t>
+        </t>
+    </template>
+</odoo>

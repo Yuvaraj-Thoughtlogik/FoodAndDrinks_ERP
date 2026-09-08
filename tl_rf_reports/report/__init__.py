@@ -5,5 +5,5 @@ from . import report_delivery_note_common
 from . import report_delivery_note_round_courier
 from . import report_delivery_note_round_van
 from . import requirement_report
-# from . import delivery_note_round_report
 from . import production_label_report
+from . import active_batch_report
