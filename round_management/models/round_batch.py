@@ -534,6 +534,7 @@ class RoundManagementBatch(models.Model):
         domain = [
             ('round_id', '=', round_id),
             ('state', '=', 'act'),
+            ('delivery_channel','!=','courier'),
             ('delivery_date', '>=', start_date),
             ('delivery_date', '<=', end_date),
         ]
