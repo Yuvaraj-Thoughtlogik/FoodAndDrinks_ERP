@@ -140,22 +140,7 @@ class SaleOrder(models.Model):
     pay_cash = fields.Boolean(string="Cash", default=False)
     pay_cheque = fields.Boolean(string="Cheque", default=False)
     pay_card = fields.Boolean(string="Card", default=False)
-    
-    delivery_channel = fields.Selection(
-        selection=[
-            ('regal_van', 'Regal Van Delivery'),
-            ('courier', 'Courier Delivery'),
-        ],
-        string='Delivery Channels',
-    )
 
-    @api.onchange('batch_id')
-    def _onchange_batch_id(self):
-        if self.batch_id:
-            self.delivery_channel = self.batch_id.delivery_channel
-        else:
-            self.delivery_channel = False
-    
     @api.onchange('pay_card_reader')
     def _onchange_pay_card_reader(self):
         if self.pay_card_reader:
@@ -565,7 +550,6 @@ class SaleOrderLine(models.Model):
     
     special_requirements_notes = fields.Text(
         string="Special Notes"
-<<<<<<< HEAD
     )
     
 class Pricelist(models.Model):
@@ -576,6 +560,3 @@ class Pricelist(models.Model):
         ('b2b', 'B2B'),
         ('standard', 'Standard'),
     ], string="Pricelist Category", default='standard', required=True)
-=======
-    )
->>>>>>> 939736303d7b772d3ce9816646e6dd534b831bdd
