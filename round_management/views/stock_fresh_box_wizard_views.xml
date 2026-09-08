@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <!-- Wizard View -->
-   <record id="view_stock_fresh_box_wizard_form" model="ir.ui.view">
+    <record id="view_stock_fresh_box_wizard_form" model="ir.ui.view">
         <field name="name">stock.fresh.box.wizard.form</field>
         <field name="model">stock.fresh.box.wizard</field>
         <field name="arch" type="xml">
@@ -22,9 +22,9 @@
                         * All product categories will be analyzed in the table below. Manufacturing Orders will be generated <b>strictly for Fresh category items</b>.
                     </div>
 
-                    <button name="action_analyze_orders" 
-                            string="Analyze Orders &amp; Calculate Boxes" 
-                            type="object" 
+                    <button name="action_analyze_orders"
+                            string="Analyze Orders &amp; Calculate Boxes"
+                            type="object"
                             class="btn-secondary mb-3"/>
 
                     <notebook>
@@ -42,9 +42,9 @@
                     </notebook>
                 </sheet>
                 <footer>
-                    <button name="action_generate_mo" 
-                            string="Packbox Generate MO (Fresh Only)" 
-                            type="object" 
+                    <button name="action_generate_mo"
+                            string="Packbox Generate MO (Fresh Only)"
+                            type="object"
                             class="btn-primary"/>
                     <button string="Cancel" class="btn-secondary" special="cancel"/>
                 </footer>
@@ -127,40 +127,40 @@
                 <filter string="Courier Delivery" name="filter_courier" domain="[('delivery_channel', '=', 'courier')]"/>
                 <filter string="Regal Van Delivery" name="filter_regal_van" domain="[('delivery_channel', '=', 'regal_van')]"/>
 
-               
-                    <filter string="User" name="groupby_user" context="{'group_by': 'user_id'}"/>
-                    <filter string="Delivery Channel" name="groupby_delivery_channel" context="{'group_by': 'delivery_channel'}"/>
-                    <filter string="Run Date" name="groupby_wizard_date" context="{'group_by': 'wizard_date:day'}"/>
-                    <filter string="Start Date" name="groupby_start_date" context="{'group_by': 'start_date:day'}"/>
-                    <filter string="End Date" name="groupby_end_date" context="{'group_by': 'end_date:day'}"/>
-               
+
+                <filter string="User" name="groupby_user" context="{'group_by': 'user_id'}"/>
+                <filter string="Delivery Channel" name="groupby_delivery_channel" context="{'group_by': 'delivery_channel'}"/>
+                <filter string="Run Date" name="groupby_wizard_date" context="{'group_by': 'wizard_date:day'}"/>
+                <filter string="Start Date" name="groupby_start_date" context="{'group_by': 'start_date:day'}"/>
+                <filter string="End Date" name="groupby_end_date" context="{'group_by': 'end_date:day'}"/>
+
             </search>
         </field>
     </record>
 
     <!-- History Line Search View -->
     <record id="view_stock_fresh_box_history_line_search" model="ir.ui.view">
-    <field name="name">stock.fresh.box.history.line.search</field>
-    <field name="model">stock.fresh.box.history.line</field>
-    <field name="arch" type="xml">
-        <search string="Search Box History Lines">
-            <field name="sale_order_id"/>
-            <field name="product_id"/>
-            <field name="category_id"/>
-            <field name="delivery_channel"/>
-            <field name="delivery_date"/>
+        <field name="name">stock.fresh.box.history.line.search</field>
+        <field name="model">stock.fresh.box.history.line</field>
+        <field name="arch" type="xml">
+            <search string="Search Box History Lines">
+                <field name="sale_order_id"/>
+                <field name="product_id"/>
+                <field name="category_id"/>
+                <field name="delivery_channel"/>
+                <field name="delivery_date"/>
 
-            <filter string="Courier Delivery" name="filter_courier" domain="[('delivery_channel', '=', 'courier')]"/>
-            <filter string="Regal Van Delivery" name="filter_regal_van" domain="[('delivery_channel', '=', 'regal_van')]"/>
+                <filter string="Courier Delivery" name="filter_courier" domain="[('delivery_channel', '=', 'courier')]"/>
+                <filter string="Regal Van Delivery" name="filter_regal_van" domain="[('delivery_channel', '=', 'regal_van')]"/>
 
-           
+
                 <filter string="Delivery Date" name="groupby_delivery_date" context="{'group_by': 'delivery_date:day'}"/>
                 <filter string="Product Category" name="groupby_product_category" context="{'group_by': 'category_id'}"/>
                 <filter string="Delivery Channel" name="groupby_delivery_channel" context="{'group_by': 'delivery_channel'}"/>
-            
-        </search>
-    </field>
-</record>
+
+            </search>
+        </field>
+    </record>
 
     <!-- MO List View Inheritance -->
     <record id="view_mrp_production_tree_inherit_delivery" model="ir.ui.view">
@@ -193,16 +193,16 @@
 
                 <filter string="Late Orders" name="filter_late_orders" domain="[('is_late_order', '=', True)]"/>
 
-                
-                    <filter string="Delivery Date" name="groupby_delivery_date" context="{'group_by': 'delivery_date:day'}"/>
-                    <filter string="Product Category" name="groupby_product_category" context="{'group_by': 'product_category_id'}"/>
-                    <filter string="Delivery Channel" name="groupby_delivery_channel" context="{'group_by': 'delivery_channel'}"/>
-                    <filter string="Round Batch" name="groupby_round_batch" context="{'group_by': 'round_batch_id'}"/>
-                
+
+                <filter string="Delivery Date" name="groupby_delivery_date" context="{'group_by': 'delivery_date:day'}"/>
+                <filter string="Product Category" name="groupby_product_category" context="{'group_by': 'product_category_id'}"/>
+                <filter string="Delivery Channel" name="groupby_delivery_channel" context="{'group_by': 'delivery_channel'}"/>
+                <filter string="Round Batch" name="groupby_round_batch" context="{'group_by': 'round_batch_id'}"/>
+
             </xpath>
         </field>
     </record>
-    
+
     <record id="view_stock_fresh_box_history_line_list" model="ir.ui.view">
         <field name="name">stock.fresh.box.history.line.list</field>
         <field name="model">stock.fresh.box.history.line</field>
@@ -218,18 +218,18 @@
             </list>
         </field>
     </record>
-    
+
     <record id="action_stock_fresh_box_history_line_grouped" model="ir.actions.act_window">
-    <field name="name">Pack Box Split Fresh History Lines</field>
-    <field name="res_model">stock.fresh.box.history.line</field>
-    <field name="view_mode">list,form</field>
-    <field name="search_view_id" ref="view_stock_fresh_box_history_line_search"/>
-    <field name="context">{
-        'search_default_groupby_delivery_date': 1,
-        'search_default_groupby_product_category': 1,
-        'search_default_groupby_delivery_channel': 1
-    }</field>
-</record>
+        <field name="name">Pack Box Split Fresh History Lines</field>
+        <field name="res_model">stock.fresh.box.history.line</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_stock_fresh_box_history_line_search"/>
+        <field name="context">{
+            'search_default_groupby_delivery_date': 1,
+            'search_default_groupby_product_category': 1,
+            'search_default_groupby_delivery_channel': 1
+            }</field>
+    </record>
 
     <!-- Actions & Menus -->
     <record id="action_stock_fresh_box_wizard" model="ir.actions.act_window">
@@ -247,15 +247,5 @@
         <field name="search_view_id" ref="view_stock_fresh_box_history_search"/>
     </record>
 
-    <menuitem id="menu_stock_fresh_box_wizard"
-              name="Pack Box &amp; Generate MO"
-              parent="round_management.menu_round_management_order_management_root"
-              action="action_stock_fresh_box_wizard"
-              sequence="25"/>
 
-   <menuitem id="menu_stock_fresh_box_history_lines"
-          name="Pack Box Detailed History"
-          parent="round_management.menu_round_management_order_management_root"
-          action="action_stock_fresh_box_history_line_grouped"
-          sequence="27"/>
 </odoo>

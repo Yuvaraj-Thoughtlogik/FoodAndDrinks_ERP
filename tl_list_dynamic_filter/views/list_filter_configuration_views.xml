@@ -36,7 +36,9 @@
                             bg_color="text-bg-danger" invisible="active"/>
                     <div class="oe_title">
                         <label for="name" string="Button Name"/>
-                        <h1><field name="name" placeholder="e.g. Filter Orders"/></h1>
+                        <h1>
+                            <field name="name" placeholder="e.g. Filter Orders"/>
+                        </h1>
                     </div>
                     <group>
                         <group name="target_config" string="Target">
@@ -45,8 +47,7 @@
                             <field name="view_id" options="{'no_create': True}"
                                    placeholder="Default list view"/>
                             <field name="active" invisible="1"/>
-                            <field name="extra_domain"
-                                   placeholder="[('state', '!=', 'cancel')]"/>
+
                         </group>
                         <group name="popup_config" string="Popup">
                             <field name="dialog_title" placeholder="Same as button name"/>
@@ -54,8 +55,14 @@
                             <field name="button_class"/>
                             <field name="result_target"/>
                         </group>
-                    </group>
 
+                    </group>
+                    <hr/>
+                    <group>
+                        <field name="extra_domain" widget="domain" options="{'model':'model_name'}"
+                               placeholder="[('state', '!=', 'cancel')]"/>
+                    </group>
+                    <hr/>
                     <notebook>
                         <page string="Filter Fields" name="fields">
                             <field name="field_line_ids">

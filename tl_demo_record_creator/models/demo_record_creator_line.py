@@ -57,15 +57,21 @@ class DemoRecordCreatorLine(models.Model):
     # ------------------------------------------------------------------
     @api.onchange('field_id')
     def _onchange_field_id_reset_value(self):
+        """Clear child configuration that cannot belong to the new field.
+
+        Nothing is loaded in its place, not even the child model's required
+        fields: use the Load buttons inside the line to pull in the child
+        fields you actually want to set.
+        """
         super()._onchange_field_id_reset_value()
         for line in self:
-            if line.field_id and line.field_id.ttype == 'one2many':
-                if not line.child_line_ids:
-                    line.child_line_ids = [(5, 0, 0)] + line._child_line_vals(required_only=True)
-                if line.value_count <= 0:
-                    line.value_count = 1
-            elif line.field_id:
-                line.child_line_ids = [(5, 0, 0)]
+            if not line.field_id:
+                continue
+            # child lines were configured against the previous field's
+            # comodel, so they can never survive the change
+            line.child_line_ids = [(5, 0, 0)]
+            if line.field_id.ttype == 'one2many' and line.value_count <= 0:
+                line.value_count = 1
 
     # ------------------------------------------------------------------
     # Actions for Child Lines
@@ -129,6 +135,11 @@ class DemoRecordCreatorLine(models.Model):
     # validation
     # ------------------------------------------------------------------
     def _validate_one2many(self):
+        """Structural checks on the child configuration only.
+
+        Which child fields the child model insists on is the child model's
+        business, answered when the run writes the records.
+        """
         self.ensure_one()
         label = self._label()
         child_model = self._child_model()
@@ -142,13 +153,6 @@ class DemoRecordCreatorLine(models.Model):
             return
 
         children = self.child_line_ids
-        if not children:
-            raise UserError(
-                _("'%(label)s' asks for %(count)s child record(s) but no child "
-                  "field is configured. Configure child fields inside '%(label)s', or "
-                  "set Number of Values to zero.",
-                  label=label, count=self.value_count))
-
         for child in children:
             if child.field_id.model != self.relation:
                 raise UserError(
@@ -159,27 +163,21 @@ class DemoRecordCreatorLine(models.Model):
 
         children._validate_for_creation()
 
-        configured = set(children.mapped('field_name'))
-        inverse = self._child_inverse_name()
-        if inverse:
-            configured.add(inverse)
-        missing = [
-            f for f in futils.required_fields(child_model)
-            if f.name not in configured
-        ]
-        if missing:
-            raise UserError(
-                _("These required fields of %(model)s are not configured under "
-                  "'%(label)s':\n%(fields)s",
-                  model=self.relation, label=label,
-                  fields='\n'.join(
-                      '- %s (%s)' % (f.string, f.name) for f in missing)))
-
     # ------------------------------------------------------------------
     # value resolution
     # ------------------------------------------------------------------
     def _resolve_one2many(self, field):
-        """One ``(0, 0, vals)`` command per child record to create."""
+        """One ``(0, 0, vals)`` command per child record to create.
+
+        A child record that ends up with no values at all is dropped rather
+        than sent as ``(0, 0, {})``: a permissive child model would create it
+        silently, and nobody asked for a blank record. Values are resolved
+        per child record, so one iteration can come up empty while its
+        neighbours do not - a random Reference picks a different model each
+        time, and that model can turn out to have no readable records. If
+        every iteration comes up empty, or no child field is configured at
+        all, the One2many is left out of the values entirely.
+        """
         self.ensure_one()
         children = self.child_line_ids
         count = self.value_count
@@ -193,5 +191,6 @@ class DemoRecordCreatorLine(models.Model):
                 if value is SKIP:
                     continue
                 child_vals[child.field_name] = value
-            commands.append((0, 0, child_vals))
-        return commands
+            if child_vals:
+                commands.append((0, 0, child_vals))
+        return commands or SKIP

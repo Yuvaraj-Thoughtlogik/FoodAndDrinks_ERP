@@ -44,6 +44,8 @@
                 <footer>
                     <button name="action_print_report" string="Print PDF" type="object"
                             class="btn-primary" icon="fa-print" data-hotkey="p"/>
+                    <button name="action_print_label" string="Print Label" type="object"
+                            class="btn-primary" icon="fa-tag" data-hotkey="l"/>
                     <button string="Cancel" class="btn-secondary" special="cancel" data-hotkey="x"/>
                 </footer>
             </form>

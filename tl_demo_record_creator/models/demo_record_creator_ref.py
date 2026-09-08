@@ -3,6 +3,8 @@
 from odoo import _, api, fields, models
 from odoo.exceptions import ValidationError
 
+from .demo_value_mixin import clear_stale_references, reference_state
+
 
 class DemoRecordCreatorRef(models.Model):
     _name = 'tl.demo.record.creator.ref'
@@ -39,11 +41,30 @@ class DemoRecordCreatorRef(models.Model):
             [('transient', '=', False)], order='name')
         return [(m.model, m.name) for m in models_]
 
+    def init(self):
+        """Called on install and on every module update.
+
+        ``record_ref`` is required, so its column is NOT NULL and a stale row
+        has to go rather than be blanked - which is right anyway, since a
+        chosen record is all this row is.
+        """
+        super().init()
+        clear_stale_references(self.env, self._table, 'record_ref',
+                               delete_row=True)
+
     @api.constrains('record_ref', 'field_id')
     def _check_record_model(self):
         for ref in self:
-            record = ref.record_ref
+            # a raw read would raise KeyError once the target model has been
+            # uninstalled, which would block writing any other field of the row
+            record, broken = reference_state(ref, 'record_ref')
             expected = ref.comodel_name
+            if broken:
+                raise ValidationError(
+                    _("The record chosen for '%(field)s' can no longer be "
+                      "read. It was deleted, its model was uninstalled, or "
+                      "you do not have access to it. Choose another one.",
+                      field=ref.field_id.field_description or ref.field_id.name))
             if not record or not expected:
                 continue
             if record._name != expected:

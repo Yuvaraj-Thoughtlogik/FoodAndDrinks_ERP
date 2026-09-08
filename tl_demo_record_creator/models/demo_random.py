@@ -180,6 +180,9 @@ def random_binary(field):
 def random_record_ids(env, comodel_name, count=1, domain=None):
     """``count`` ids picked at random from ``comodel_name``.
 
+    ``domain`` narrows the pool - it is the domain typed on the line, so a
+    Random value can be restricted to, say, only confirmed orders.
+
     Reads with ``sudo`` deliberately left off: if the user cannot see the
     related records, the wizard should say so rather than quietly linking
     records they have no access to.
@@ -194,8 +197,32 @@ def random_record_ids(env, comodel_name, count=1, domain=None):
     return random.sample(records.ids, count)
 
 
+def first_record_id(env, comodel_name, domain=None):
+    """The id of the first record of ``comodel_name``, or ``None``.
+
+    Used to seed a relational line with something concrete, so the model half
+    of the record picker is filled in and only the record itself has to be
+    chosen. Follows the model's own ``_order``, so "first" is what the user
+    would see at the top of a list view.
+    """
+    comodel = env.get(comodel_name)
+    if comodel is None:
+        return None
+    try:
+        record = comodel.search(domain or [], limit=1)
+    except Exception:
+        return None
+    return record.id or None
+
+
 def random_reference_model(env, allowed_models=None):
-    """A model name usable as the target of a Reference field."""
+    """A model name usable as the target of a Reference field.
+
+    Takes no domain on purpose. A domain is written against one model and
+    means nothing on the others, so a line that has one narrows itself to that
+    model rather than asking for a model here - see
+    ``_random_relational_value``.
+    """
     candidates = list(allowed_models or [])
     if not candidates:
         models = env['ir.model'].sudo().search([('transient', '=', False)])

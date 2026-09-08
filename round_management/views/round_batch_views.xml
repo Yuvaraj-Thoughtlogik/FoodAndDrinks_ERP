@@ -44,6 +44,7 @@
                 <field name="delivery_date"/>
                 <field name="delivery_times"/>
                 <field name="week_number" readonly="1" optional="hide"/>
+                <field name="delivery_channel"/>
                 <field name="driver_id"/>
                 <field name="vehicle_id"/>
                 <field name="total_drops" sum="Total Drops"/>
@@ -112,6 +113,7 @@
                             </div>
                             <field name="reference"/>
                             <field name="depot_id"/>
+                            <field name="delivery_channel"/>
                             <field name="delivery_date"/>
                             <field name="delivery_times"/>
                             <field name="week_number" readonly="1"/>

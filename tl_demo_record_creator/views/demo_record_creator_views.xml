@@ -76,7 +76,8 @@
                                domain="[('id', 'in', parent.allowed_child_field_ids),
                                         ('model_id', '=', model_id)]"/>
                         <field name="ttype" readonly="1" string="Technical Type"/>
-                        <field name="field_required" readonly="1"/>
+                        <field name="field_required" readonly="1"
+                               string="Required on the model"/>
                         <field name="field_help" colspan="4" readonly="1"
                                invisible="not field_help"/>
                     </group>
@@ -114,7 +115,19 @@
                         <field name="value_reference" colspan="4"
                                invisible="ttype not in ['many2one', 'reference'] or (can_use_random and use_random)"/>
                         <field name="comodel_hint" colspan="4" readonly="1"
-                               invisible="ttype not in ['many2one', 'many2many'] or not comodel_hint or (can_use_random and use_random)"/>
+                               invisible="ttype not in ['many2one', 'many2many'] or not comodel_hint"/>
+                        <field name="value_domain" colspan="4" widget="domain"
+                               options="{'model': 'domain_model'}"
+                               invisible="ttype not in ['many2one', 'many2many', 'reference'] or not domain_model or (ttype == 'many2many' and not (can_use_random and use_random))"/>
+                        <div class="text-muted" colspan="4"
+                             invisible="ttype not in ['many2one', 'many2many', 'reference'] or not domain_model or (ttype == 'many2many' and not (can_use_random and use_random))">
+                            Restricts the records this line may draw on - both
+                            the ones Random picks and the one filled in above.
+                            Leave it empty to draw from everything you can read.
+                            Written against
+                            <field name="domain_model" readonly="1" nolabel="1"
+                                   class="oe_inline"/>.
+                        </div>
                         <field name="value_binary_filename" invisible="1"/>
                         <field name="value_binary" colspan="4"
                                filename="value_binary_filename"
@@ -169,7 +182,8 @@
                                options="{'no_create': True, 'no_open': True}"
                                domain="[('id', 'in', parent.allowed_field_ids)]"/>
                         <field name="ttype" readonly="1" string="Technical Type"/>
-                        <field name="field_required" readonly="1"/>
+                        <field name="field_required" readonly="1"
+                               string="Required on the model"/>
                         <field name="field_help" colspan="4" readonly="1"
                                invisible="not field_help"/>
                     </group>
@@ -209,7 +223,19 @@
                         <field name="value_reference" colspan="4"
                                invisible="ttype not in ['many2one', 'reference'] or (can_use_random and use_random)"/>
                         <field name="comodel_hint" colspan="4" readonly="1"
-                               invisible="ttype not in ['many2one', 'many2many'] or not comodel_hint or (can_use_random and use_random)"/>
+                               invisible="ttype not in ['many2one', 'many2many'] or not comodel_hint"/>
+                        <field name="value_domain" colspan="4" widget="domain"
+                               options="{'model': 'domain_model'}"
+                               invisible="ttype not in ['many2one', 'many2many', 'reference'] or not domain_model or (ttype == 'many2many' and not (can_use_random and use_random))"/>
+                        <div class="text-muted" colspan="4"
+                             invisible="ttype not in ['many2one', 'many2many', 'reference'] or not domain_model or (ttype == 'many2many' and not (can_use_random and use_random))">
+                            Restricts the records this line may draw on - both
+                            the ones Random picks and the one filled in above.
+                            Leave it empty to draw from everything you can read.
+                            Written against
+                            <field name="domain_model" readonly="1" nolabel="1"
+                                   class="oe_inline"/>.
+                        </div>
                         <field name="value_binary_filename" invisible="1"/>
                         <field name="value_binary" colspan="4"
                                filename="value_binary_filename"
@@ -233,6 +259,8 @@
                         <div class="text-muted" colspan="4">
                             <em>Number of Child Records</em> will be created for each parent record.
                             Configure the fields of each child record below using the same Field, Value, and Number of Values approach.
+                            Nothing is loaded here automatically: use the buttons to pull in the child fields you want.
+                            Leave the table empty and this One2many is left out of the values altogether.
                         </div>
                         <div class="d-flex gap-2 my-2" colspan="4">
                             <button name="action_load_required_child_fields" type="object"
@@ -365,12 +393,22 @@
 
                     <notebook>
                         <page string="Fields to Populate" name="fields">
+                            <div class="text-muted mb-2">
+                                Add the fields you want to control, or use
+                                <em>Load Required Fields</em> / <em>Load All Fields</em>
+                                above to pull them in. Fields you leave out are
+                                filled in by the model itself.
+                            </div>
                             <field name="line_ids" nolabel="1"/>
                             <div class="text-muted mt-2">
                                 Click a line to set its value with the input its
                                 field type calls for. Untick Random on a line to
                                 set a specific value. For One2many fields, child
                                 records are configured directly inside the line's configuration.
+                                A line left blank writes nothing, even for a field
+                                marked <em>Required</em> - many of those are filled in
+                                by the model, and anything genuinely missing is
+                                reported when you press <em>Create Records</em>.
                             </div>
                         </page>
                         <page string="Selected Records" name="records"
@@ -385,8 +423,8 @@
                     </notebook>
 
                     <div class="text-muted" invisible="model_id">
-                        Select a model to start. Its required fields are loaded
-                        automatically.
+                        Select a model to start, then load or add the fields you
+                        want to set.
                     </div>
                 </sheet>
             </form>
