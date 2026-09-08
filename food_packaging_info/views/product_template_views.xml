@@ -5,17 +5,17 @@
         <record id="product_template_form_view_inherit_fish_specs" model="ir.ui.view">
             <field name="name">product.template.form.inherit.fish.specs</field>
             <field name="model">product.template</field>
-            <field name="inherit_id" ref="product.product_template_form_view"/>
+            <field name="inherit_id" ref="product.product_template_form_view" />
             <field name="priority">99</field>
             <field name="arch" type="xml">
 
 
                 <xpath expr="//field[@name='qty_available']/.." position="after">
-                    <field name="assembly_type" widget="radio" options="{'horizontal': true}"/>
-                    <field name="species_id" options="{'no_create_edit': False}"/>
-                    <field name="stk_type_id"/>
-                    <field name="cut_id" options="{'no_create_edit': False}"/>
-                    <field name="origin_country" placeholder="e.g. Salmon / FARMED in Norway"/>
+                    <field name="assembly_type" widget="radio" options="{'horizontal': true}" />
+                    <field name="species_id" options="{'no_create_edit': False}" />
+                    <field name="stk_type_id" />
+                    <field name="cut_id" options="{'no_create_edit': False}" />
+                    <field name="origin_country" placeholder="e.g. Salmon / FARMED in Norway" />
                 </xpath>
 
             </field>
@@ -24,18 +24,18 @@
         <record id="product_template_form_view_inherit_bingo_tagon" model="ir.ui.view">
             <field name="name">product.template.form.inherit.bingo.tagon</field>
             <field name="model">product.template</field>
-            <field name="inherit_id" ref="product.product_template_form_view"/>
+            <field name="inherit_id" ref="product.product_template_form_view" />
             <field name="arch" type="xml">
 
 
                 <xpath expr="//div[@name='options']" position="inside">
                     <span class="d-inline-block">
-                        <field name="bingo"/>
-                        <label for="bingo"/>
+                        <field name="bingo" />
+                        <label for="bingo" />
                     </span>
                     <span class="d-inline-block">
-                        <field name="tagon"/>
-                        <label for="tagon"/>
+                        <field name="tagon" />
+                        <label for="tagon" />
                     </span>
                 </xpath>
 
@@ -44,21 +44,23 @@
         <record id="product_template_form_view_legacy_goldmine" model="ir.ui.view">
             <field name="name">product.template.form.legacy.goldmine</field>
             <field name="model">product.template</field>
-            <field name="inherit_id" ref="product.product_template_form_view"/>
+            <field name="inherit_id" ref="product.product_template_form_view" />
             <field name="arch" type="xml">
 
 
                 <xpath expr="//sheet" position="before">
                     <header>
-                        <button name="action_alternative_fish" type="object" string="Alternative Fish" class="btn-primary"/>
+                        <button name="action_alternative_fish" type="object"
+                            string="Alternative Fish" class="btn-primary" />
                     </header>
                 </xpath>
 
 
                 <xpath expr="//field[@name='categ_id']" position="after">
-                    <field name="staff_price"/>
-                    <field name="offer_saving"/>
-                    <field name="stock_available" string="Stock Available" class="oe_subtotal_footer_separator"/>
+                    <field name="staff_price" />
+                    <field name="offer_saving" />
+                    <field name="stock_available" string="Stock Available"
+                        class="oe_subtotal_footer_separator" />
                 </xpath>
 
 
@@ -70,34 +72,41 @@
                             <div class="col-lg-8 pe-lg-4">
                                 <group>
                                     <group string="Storage &amp; Serving">
-                                        <field name="min_qty"/>
-                                        <field name="weight" string="Weight (Kg)"/>
-                                        <field name="avg_serving"/>
-                                        <field name="use_frozen"/>
-                                        <field name="use_fresh"/>
+                                        <field name="min_qty" />
+                                        <field name="weight" string="Weight (Kg)" />
+                                        <field name="avg_serving" />
+                                        <field name="use_frozen" />
+                                        <field name="use_frozen_days" />
+                                        <field name="use_fresh" />
+                                        <field name="use_fresh_days" />
                                     </group>
                                     <group string="Packaging &amp; Metadata">
-                                        <field name="packing_info"/>
-                                        <field name="allergens_notice"/>
-                                        <field name="check_notes"/>
-                                        <field name="mix_code"/>
-                                        <field name="sort_seq"/>
+                                        <field name="packing_info" />
+                                        <field name="allergens_notice" />
+                                        <field name="check_notes" />
+                                        <field name="mix_code" />
+                                        <field name="sort_seq" />
                                     </group>
                                 </group>
 
-                                <!--<group string="Sales Description (Quotation Line)">
-                                    <field name="description_sale" nolabel="1" placeholder="Sales line text printed on Quotations and Invoices..."/>
+                                <!--<group
+                                string="Sales Description (Quotation Line)">
+                                    <field name="description_sale" nolabel="1" placeholder="Sales line text printed on Quotations and
+                                Invoices..."/>
                                 </group>-->
 
                                 <group string="Fish Information">
-                                    <field name="fish_info" nolabel="1" placeholder="Enter fish origin, species, or catch data..."/>
+                                    <field name="fish_info" nolabel="1"
+                                        placeholder="Enter fish origin, species, or catch data..." />
                                 </group>
 
                                 <group string="Product Packaging &amp; Cooking Details">
-                                    <field name="ingredients_html" widget="html" class="oe_memo"/>
-                                    <field name="notes_html" widget="html" class="oe_memo"/>
-                                    <field name="cooking_instructions_html" widget="html" class="oe_memo"/>
-                                    <field name="nutritional_info_html" widget="html" class="oe_memo"/>
+                                    <field name="ingredients_html" widget="html" class="oe_memo" />
+                                    <field name="notes_html" widget="html" class="oe_memo" />
+                                    <field name="cooking_instructions_html" widget="html"
+                                        class="oe_memo" />
+                                    <field name="nutritional_info_html" widget="html"
+                                        class="oe_memo" />
                                 </group>
                             </div>
 
@@ -117,20 +126,20 @@
         <record id="view_product_template_form_additional_fields" model="ir.ui.view">
             <field name="name">product.template.form.additional.fields</field>
             <field name="model">product.template</field>
-            <field name="inherit_id" ref="product.product_template_form_view"/>
+            <field name="inherit_id" ref="product.product_template_form_view" />
             <field name="arch" type="xml">
 
                 <!-- Sales tab: Sales Analysis, right after Extra Info, before Quotation Description -->
                 <xpath expr="//field[@name='description_sale']/ancestor::group[1]" position="before">
                     <group string="Reporting">
-                        <field name="stk_sales_analysis"/>
+                        <field name="stk_sales_analysis" />
                     </group>
                 </xpath>
 
                 <!-- Purchase tab: Purchase Analysis, right before Vendor Bills -->
                 <xpath expr="//field[@name='purchase_method']/ancestor::group[1]" position="before">
                     <group string="Reporting">
-                        <field name="stk_purchase_analysis"/>
+                        <field name="stk_purchase_analysis" />
                     </group>
                 </xpath>
 
