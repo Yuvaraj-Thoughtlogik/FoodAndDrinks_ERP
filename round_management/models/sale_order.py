@@ -464,30 +464,25 @@ class SaleOrder(models.Model):
             'target': 'current',
         }
 
-    @api.depends('partner_id', 'partner_id.customer_type')
+    @api.depends('pricelist_id', 'pricelist_id.pricelist_category', 'partner_id', 'partner_id.customer_type')
     def _compute_is_b2b(self):
+        """Computes whether the order is B2B using Pricelist Category or Partner Customer Type."""
         for order in self:
-            if not order.partner_id:
+            if order.pricelist_id and order.pricelist_id.pricelist_category == 'b2b':
+                order.is_b2b = True
+            elif order.partner_id and order.partner_id.customer_type == 'b2b_trade':
+                order.is_b2b = True
+            else:
                 order.is_b2b = False
-                continue
-            is_b2b_customer = (
-                    order.partner_id.customer_type == 'b2b_trade'
-                # order.partner_id.customer_source == 'b2b'
-            )
-            order.is_b2b = bool(is_b2b_customer)
 
-    @api.depends('pricelist_id', 'partner_id', 'partner_id.property_product_pricelist')
+    @api.depends('pricelist_id', 'pricelist_id.pricelist_category')
     def _compute_is_staff_order(self):
-        """Computes whether the order uses a Staff pricelist based on SO pricelist or Partner default pricelist."""
+        """Computes whether the order uses a Staff pricelist based on Pricelist Category."""
         for order in self:
-            pricelist = order.pricelist_id or (order.partner_id and order.partner_id.property_product_pricelist)
-
-            if not pricelist:
+            if order.pricelist_id:
+                order.is_staff_order = (order.pricelist_id.pricelist_category == 'staff')
+            else:
                 order.is_staff_order = False
-                continue
-
-            pricelist_name = (pricelist.name or '').strip().lower()
-            order.is_staff_order = 'staff' in pricelist_name
             
     @api.depends('partner_id', 'partner_id.round_id')
     def _compute_partner_id_set_round(self):
@@ -556,3 +551,12 @@ class SaleOrderLine(models.Model):
     special_requirements_notes = fields.Text(
         string="Special Notes"
     )
+    
+class Pricelist(models.Model):
+    _inherit = 'product.pricelist'
+
+    pricelist_category = fields.Selection([
+        ('staff', 'Staff'),
+        ('b2b', 'B2B'),
+        ('standard', 'Standard'),
+    ], string="Pricelist Category", default='standard', required=True)
