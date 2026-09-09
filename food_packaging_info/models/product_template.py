@@ -73,9 +73,9 @@ class ProductTemplate(models.Model):
     #avail_to_date = fields.Date(string="Avail To")
 
     assembly_type = fields.Selection([
-    ('A', 'Assembly A'),
-    ('C', 'Assembly C'),
-    ], string="Assembly Type")
+    ('A', 'Assembly'),
+    ('C', 'Component'),
+    ], string="Assembly Type" , default='C')
 
     species_id = fields.Many2one(
         'fish.species',
@@ -111,6 +111,37 @@ class ProductTemplate(models.Model):
         help='Product classification type. Add new types directly from this field.',
     )
 
+    # 1. Automatically assign Assembly ('A') when a BoM is created/attached
+    @api.onchange('bom_ids')
+    def _onchange_bom_ids_set_assembly(self):
+        if self.bom_ids and self.assembly_type != 'A':
+            self.assembly_type = 'A'
+
+    # 2. Block changing Assembly ('A') to Component ('C') if a BoM exists
+    @api.constrains('assembly_type', 'bom_ids')
+    def _check_assembly_type_bom_restriction(self):
+        for product in self:
+            if product.bom_ids and product.assembly_type == 'C':
+                raise ValidationError(_(
+                    "Warning: Product '%s' has an active Bill of Materials (BoM) "
+                    "and cannot be set to 'Component'. It must remain as 'Assembly'."
+                ) % product.name)
+    
+    @api.onchange('default_code')
+    def _onchange_default_code_update_barcode(self):
+        if self.default_code:
+            self.barcode = self.default_code
+
+    @api.onchange('assembly_type')
+    def _onchange_assembly_type_warning(self):
+        if self.bom_ids and self.assembly_type == 'C':
+            self.assembly_type = 'A'
+            return {
+                'warning': {
+                    'title': _("Action Restricted"),
+                    'message': _("This product has a BoM attached. Assembly Type cannot be changed to Component!"),
+                }
+            }
                 
     @api.depends('list_price', 'staff_price')
     def _compute_offer_saving(self):
