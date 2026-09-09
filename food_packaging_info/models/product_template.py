@@ -48,7 +48,9 @@ class ProductTemplate(models.Model):
     packing_info = fields.Char(string="Packing")
     avg_serving = fields.Char(string="Average Serving")
     use_frozen = fields.Char(string="Use Frozen")
+    use_frozen_days = fields.Integer(string="Use Frozen Days")
     use_fresh = fields.Char(string="Use Fresh")
+    use_fresh_days = fields.Integer(string="Use Fresh Days")
  
     fish_info = fields.Text(string="Fish Information")
     check_notes = fields.Char(string="Check Notes")
