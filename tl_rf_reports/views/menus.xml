@@ -19,6 +19,13 @@
               action="action_requirement_report_wizard"
               sequence="15"/>
 
+    <!-- Prediction Report Menu Item under Round Management -> Reporting (placed right after Requirement Report) -->
+    <menuitem id="menu_report_prediction"
+              name="Prediction Report"
+              parent="menu_round_reporting_root"
+              action="action_prediction_report_wizard"
+              sequence="16"/>
+
     <!-- Packing List Menu Item under Round Management -> Reporting -->
     <menuitem id="menu_report_packing_list"
               name="Packing List Report"

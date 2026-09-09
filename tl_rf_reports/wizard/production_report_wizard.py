@@ -266,8 +266,11 @@ class ProductionReportWizard(models.TransientModel):
                     'warehouse_name': warehouse.name if warehouse else '',
                     'product_name': product.name or '',
                     'origin_country': product.origin_country or '',
+<<<<<<< HEAD
                     'product_barcode': product.barcode or '',
                     'product_default_code': product.default_code or '',
+=======
+>>>>>>> de51fe920c72e5abd97fb7ba4b02fbb65cecfcf8
 
                     # Fresh Use By:
                     # Delivery Date + Product Expiration Time
