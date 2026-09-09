@@ -16,33 +16,32 @@
         <field name="dpi">90</field>
     </record>
 
-    <record id="action_report_production_label" model="ir.actions.report">
-        <field name="name">Production Label</field>
+    <!-- ============ COURIER ============ -->
+    <record id="action_report_production_label_courier" model="ir.actions.report">
+        <field name="name">Production Label - Courier</field>
         <field name="model">production.report.wizard</field>
         <field name="report_type">qweb-pdf</field>
-        <field name="report_name">tl_rf_reports.report_production_label_document</field>
-        <field name="report_file">tl_rf_reports.report_production_label_document</field>
+        <field name="report_name">tl_rf_reports.report_production_label_document_courier</field>
+        <field name="report_file">tl_rf_reports.report_production_label_document_courier</field>
         <field name="paperformat_id" ref="paperformat_production_label"/>
-        <field name="print_report_name">'Production Label - %s' % (object.delivery_date_from)</field>
+        <field name="print_report_name">'Production Label Courier - %s' % (object.delivery_date_from)</field>
         <field name="binding_model_id" eval="False"/>
     </record>
 
-    <template id="report_production_label_document">
+    <template id="report_production_label_document_courier">
         <t t-call="web.basic_layout">
             <t t-set="total_labels" t-value="len(label_lines)"/>
             <t t-foreach="label_lines" t-as="label">
                 <div style="width:100mm; height:130mm; box-sizing:border-box; padding:2mm; page-break-after:always;">
                     <div style="width:100%; height:100%; box-sizing:border-box; padding:3mm; font-family:Arial, sans-serif; border:0.5px solid #000; border-radius:4mm; position:relative; overflow:hidden;">
 
-                        <!-- Logo, absolute top-right, independent of text flow -->
-                        <div style="position:absolute; top:3mm; right:3mm; width:24mm; text-align:right;">
+                        <div style="position:absolute; top:3mm; right:3mm; width:35mm; text-align:right;">
                             <img t-if="company.logo"
                                  t-att-src="image_data_uri(company.logo)"
-                                 style="max-height:14mm; max-width:24mm;"/>
+                                 style="max-height:24mm; max-width:35mm; width:auto; height:auto;"/>
                         </div>
 
-                        <!-- Centered block: Customer, Date, Batch, Category -->
-                        <div style="text-align:center; padding-right:26mm;">
+                        <div style="text-align:center; padding-right:36mm;">
                             <div style="font-size:14px; font-weight:bold; line-height:1.3;">
                                 <span t-esc="label.get('customer_name')"/>
                                 (<span t-esc="label.get('customer_code')"/>)
@@ -58,36 +57,44 @@
                             </div>
                         </div>
 
-                        <!-- Warehouse, right-aligned tag, independent -->
                         <div style="position:absolute; top:23mm; right:3mm; font-size:11px;">
                             <span t-esc="label.get('warehouse_name')"/>
                         </div>
+                        <br/>
 
-                        <!-- Product Description, centered -->
                         <div style="font-size:20px; font-weight:bold; text-align:center; margin-top:2mm; line-height:1.3;">
                             <span t-esc="label.get('product_name')"/>
                         </div>
+                        <br/>
 
-                        <div style="font-size:11px; margin-top:2mm;">
-                            Traceability: <span t-esc="label.get('origin_country')"/>
+                        <div style="font-size:11px; text-align:center; margin-top:2mm;">
+                            Traceability:
+                            <span t-esc="label.get('origin_country')"/>
                         </div>
+                        <br/>
 
-                        <!-- Fresh Use By, centered -->
                         <div style="font-size:13px; font-weight:bold; text-align:center; margin-top:2mm;">
-                            Fresh Use By: <span t-esc="label.get('use_by_display')"/>
+                            Fresh Use By:
+                            <span t-esc="label.get('use_by_display')"/>
                         </div>
+                        <br/>
 
                         <div style="font-size:12px; margin-top:2mm; line-height:1.3; text-align:justify;">
-                            <div style="font-weight:bold; text-align:center; font-size:13px;">Preparation and Storage Information</div>
-                            <div>Keep refrigerated below 5°C. If freezing, individually wrap the fish prior to placing in the freezer, this will prevent the fish from freezing together. Use within 3 months when stored in a domestic freezer.</div>
+                            <div style="font-weight:bold; text-align:center; font-size:13px;">Preparation and Storage
+                                Information
+                            </div>
+                            <div>Keep refrigerated below 5°C. If freezing, individually wrap the fish prior to placing
+                                in the freezer, this will prevent the fish from freezing together. Use within 3 months
+                                when stored in a domestic freezer.
+                            </div>
                         </div>
 
                         <div style="font-size:12px; margin-top:2mm; line-height:1.3; text-align:justify;">
                             <div style="font-weight:bold; text-align:center; font-size:13px;">Advisory Information</div>
-                            <div>Please take care when eating as some bones may remain. Contains <b>FISH</b>.</div>
+                            <div>Please take care when eating as some bones may remain. Contains <b>FISH</b>.
+                            </div>
                         </div>
 
-                        <!-- Footer: circle stamp + page number, pinned to bottom -->
                         <div style="position:absolute; bottom:3mm; left:3mm; width:16mm; height:12mm; border:1.5px solid #000; border-radius:50%; display:table;">
                             <div style="display:table-cell; vertical-align:middle; text-align:center; font-size:9px; font-weight:bold; line-height:1.3;">
                                 GB<br/>GG476
@@ -95,7 +102,112 @@
                         </div>
 
                         <div style="position:absolute; bottom:3mm; right:3mm; font-size:11px; font-weight:bold;">
-                            <t t-esc="label_index + 1"/> Of <t t-esc="total_labels"/>
+                            <t t-esc="label_index + 1"/>
+                            Of
+                            <t t-esc="total_labels"/>
+                        </div>
+
+                    </div>
+                </div>
+            </t>
+        </t>
+    </template>
+
+    <!-- ============ REGAL VAN (mirrored, same layout) ============ -->
+    <record id="action_report_production_label_regal_van" model="ir.actions.report">
+        <field name="name">Production Label - Regal Van</field>
+        <field name="model">production.report.wizard</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">tl_rf_reports.report_production_label_document_regal_van</field>
+        <field name="report_file">tl_rf_reports.report_production_label_document_regal_van</field>
+        <field name="paperformat_id" ref="paperformat_production_label"/>
+        <field name="print_report_name">'Production Label Regal Van - %s' % (object.delivery_date_from)</field>
+        <field name="binding_model_id" eval="False"/>
+    </record>
+
+    <template id="report_production_label_document_regal_van">
+        <t t-call="web.basic_layout">
+            <t t-set="total_labels" t-value="len(label_lines)"/>
+            <t t-foreach="label_lines" t-as="label">
+                <div style="width:100mm; height:130mm; box-sizing:border-box; padding:2mm; page-break-after:always;">
+                    <div style="width:100%; height:100%; box-sizing:border-box; padding:3mm; font-family:Arial, sans-serif; border:0.5px solid #000; border-radius:4mm; position:relative; overflow:hidden;">
+
+                        <div style="position:absolute; top:3mm; right:3mm; width:35mm; text-align:right;">
+                            <img t-if="company.logo"
+                                 t-att-src="image_data_uri(company.logo)"
+                                 style="max-height:24mm; max-width:35mm; width:auto; height:auto;"/>
+                        </div>
+
+                        <div style="text-align:center; padding-right:36mm;">
+                            <div style="font-size:19px; font-weight:bold; line-height:1.3;">
+                                (<span t-esc="label.get('batch_code')"/>)
+                            </div>
+                            <div style="font-size:14px; font-weight:bold; line-height:1.3;">
+                                <span t-esc="label.get('customer_name')"/>
+                                <!--                                (<span t-esc="label.get('customer_code')"/>)-->
+                            </div>
+                            <div style="font-size:14px; font-weight:bold; text-transform:uppercase; line-height:1.3;">
+                                <span t-esc="label.get('category_name')"/>
+                            </div>
+
+                        </div>
+
+                        <div style="position:absolute; top:23mm; right:3mm; font-size:11px;">
+                            <span t-esc="label.get('delivery_day_display')"/>
+                            (<span t-esc="label.get('warehouse_name')"/>)
+                        </div>
+                        <br/>
+
+                        <div style="font-size:20px; font-weight:bold; text-align:center; margin-top:2mm; line-height:1.3;">
+                            <span t-esc="label.get('product_name')"/>
+                        </div>
+                        <br/>
+
+                        <div style="font-size:11px; text-align:center; margin-top:2mm;">
+                            Delivery on:
+                            <span t-esc="label.get('delivery_date_display')"/>
+                        </div>
+
+
+                        <div style="font-size:13px; font-weight:bold; text-align:center; margin-top:2mm;">
+                            Fresh Use By:
+                            <span t-esc="label.get('use_by_display')"/>
+                        </div>
+                        <br/>
+
+                        <div style="font-size:12px; margin-top:2mm; line-height:1.3; text-align:justify;">
+                            <div style="font-weight:bold; text-align:center; font-size:13px;">Preparation and Storage
+                                Information
+                            </div>
+                            <div>Upon opening, remove the film lid and allow any natural odours to disperse.
+                                Keep refrigerated below 5°C. If freezing, individually wrap the fish prior to placing in
+                                the freezer,
+                                this will prevent the fish from freezing together. Use within 3 months when stored in a
+                                domestic freezer.
+                            </div>
+                        </div>
+
+                        <div style="font-size:12px; margin-top:2mm; line-height:1.3; text-align:justify;">
+                            <div style="font-weight:bold; text-align:center; font-size:13px;">Advisory Information</div>
+                            <div>Please take care when eating as some bones may remain. Contains <b>FISH</b>.
+                            </div>
+                        </div>
+
+                        <div style="font-size:15px; margin-top:2mm; line-height:1.3;">
+                            Traceability:
+                            <span t-esc="label.get('origin_country')"/>
+                        </div>
+
+                        <div style="position:absolute; bottom:3mm; left:3mm; width:16mm; height:12mm; border:1.5px solid #000; border-radius:50%; display:table;">
+                            <div style="display:table-cell; vertical-align:middle; text-align:center; font-size:9px; font-weight:bold; line-height:1.3;">
+                                GB<br/>GG476
+                            </div>
+                        </div>
+
+                        <div style="position:absolute; bottom:3mm; right:3mm; font-size:11px; font-weight:bold;">
+                            <t t-esc="label_index + 1"/>
+                            Of
+                            <t t-esc="total_labels"/>
                         </div>
 
                     </div>
