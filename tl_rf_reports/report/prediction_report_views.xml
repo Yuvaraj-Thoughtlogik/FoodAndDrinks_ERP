@@ -44,85 +44,86 @@
     </record>
 
     <!-- ============================================================== -->
-    <!-- PREDICTION REPORT TEMPLATE (Portrait Table-based Layout)        -->
+    <!-- PREDICTION REPORT TEMPLATE (Div-based Layout, no tables)         -->
     <!-- ============================================================== -->
     <template id="report_prediction">
         <t t-call="web.html_container">
             <t t-foreach="report_results" t-as="res">
                 <!-- BODY ARTICLE -->
                 <div class="article">
-                    <div class="page" style="font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif; color: #000000; padding: 0 5px; background: #ffffff;">
+                    <div class="page" style="font-family: 'Segoe UI', Calibri, Arial, sans-serif; color: #000000; padding: 0 5px; background: #ffffff;">
 
                         <!-- Report Header: Centered Title and Date Range -->
-                        <div style="text-align: center; margin-top: 0; margin-bottom: 16px;">
-                            <div style="font-size: 20px; font-weight: bold; font-style: italic; text-decoration: underline; color: #002060; font-family: Georgia, 'Times New Roman', serif;">
+                        <div style="text-align: center; margin-top: 0; margin-bottom: 18px;">
+                            <div style="font-size: 24px; font-weight: bold; font-style: italic; text-decoration: underline; color: #002060; font-family: Georgia, 'Times New Roman', serif;">
                                 Prediction Report
                             </div>
-                            <div style="font-size: 14px; font-weight: bold; font-style: italic; text-decoration: underline; color: #002060; margin-top: 3px; font-family: Georgia, 'Times New Roman', serif;">
+                            <div style="font-size: 16px; font-weight: bold; font-style: italic; text-decoration: underline; color: #002060; margin-top: 4px; font-family: Georgia, 'Times New Roman', serif;">
                                 <t t-esc="res.get('date_range_str', '')"/>
                             </div>
                         </div>
 
-                        <!-- Data Table with Repeating Header -->
+                        <!-- Data Rows (div-based, no table) -->
                         <t t-if="res.get('products')">
-                            <table style="width: 100%; border-collapse: collapse; table-layout: fixed; font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif;">
-                                <thead>
-                                    <tr style="border-bottom: 2px solid #002060;">
-                                        <th style="width: 48%; text-align: left; padding: 4px 4px 6px 4px; font-weight: bold; font-style: italic; color: #002060; font-size: 13.5px;">
-                                            Stock Name
-                                        </th>
-                                        <th style="width: 22%; text-align: left; padding: 4px 4px 6px 4px; font-weight: bold; font-style: italic; color: #002060; font-size: 13.5px;">
-                                            Delivery Date
-                                        </th>
-                                        <th style="width: 16%; padding: 4px 4px 6px 4px;"></th>
-                                        <th style="width: 14%; text-align: right; padding: 4px 4px 6px 4px; font-weight: bold; font-style: italic; color: #002060; font-size: 13.5px; line-height: 1.15;">
-                                            Quantity<br/>Ordered
-                                        </th>
-                                    </tr>
-                                </thead>
+                            <div style="width: 100%; font-family: 'Segoe UI', Calibri, Arial, sans-serif;">
+
+                                <!-- Header Row -->
+                                <div style="display: flex; border-bottom: 2px solid #002060; padding-bottom: 6px;">
+                                    <div style="width: 46%; text-align: left; padding: 4px; font-weight: bold; font-style: italic; color: #002060; font-size: 15px;">
+                                        Stock Name
+                                    </div>
+                                    <div style="width: 22%; text-align: left; padding: 4px; font-weight: bold; font-style: italic; color: #002060; font-size: 15px;">
+                                        Delivery Date
+                                    </div>
+                                    <div style="width: 16%; padding: 4px;"></div>
+                                    <div style="width: 16%; text-align: right; padding: 4px; font-weight: bold; font-style: italic; color: #002060; font-size: 15px; line-height: 1.2;">
+                                        Quantity<br/>Ordered
+                                    </div>
+                                </div>
+
                                 <t t-foreach="res['products']" t-as="prod">
-                                    <tbody style="page-break-inside: avoid;">
+                                    <div style="page-break-inside: avoid; border-top: 1.5px solid #002060;">
                                         <t t-foreach="prod['rows']" t-as="r">
-                                            <tr t-att-style="'border-top: 1.5px solid #002060;' if r_index == 0 else ''">
+                                            <div style="display: flex;">
                                                 <!-- Col 1: Product Name (shown only on first sub-row) -->
-                                                <td style="width: 48%; padding: 2px 4px; vertical-align: top; text-align: left;">
-                                                    <span t-if="r_index == 0" style="font-weight: bold; color: #000000; font-size: 12.5px;">
+                                                <div style="width: 46%; padding: 3px 4px; text-align: left;">
+                                                    <span t-if="r_index == 0" style="font-weight: bold; color: #000000; font-size: 14px;">
                                                         <t t-esc="prod['product_name']"/>
                                                     </span>
-                                                </td>
+                                                </div>
                                                 <!-- Col 2: Delivery Date (shown on first row for each delivery date) -->
-                                                <td style="width: 22%; padding: 2px 4px; vertical-align: top; text-align: left; font-size: 12px; color: #000000;">
+                                                <div style="width: 22%; padding: 3px 4px; text-align: left; font-size: 13.5px; color: #000000;">
                                                     <span t-if="r['is_first_date_row']">
                                                         <t t-esc="r['delivery_date_str']"/>
                                                     </span>
-                                                </td>
+                                                </div>
                                                 <!-- Col 3: Depot Name -->
-                                                <td style="width: 16%; padding: 2px 4px; vertical-align: top; text-align: left; font-size: 12px; color: #000000;">
+                                                <div style="width: 16%; padding: 3px 4px; text-align: left; font-size: 13.5px; color: #000000;">
                                                     <t t-esc="r['depot_name']"/>
-                                                </td>
+                                                </div>
                                                 <!-- Col 4: Quantity -->
-                                                <td style="width: 14%; padding: 2px 4px; vertical-align: top; text-align: right; font-size: 12px; color: #000000;">
+                                                <div style="width: 16%; padding: 3px 4px; text-align: right; font-size: 13.5px; color: #000000;">
                                                     <t t-esc="r['formatted_qty']"/>
-                                                </td>
-                                            </tr>
+                                                </div>
+                                            </div>
                                         </t>
                                         <!-- Product Total Row -->
-                                        <tr style="border-top: 1px solid #002060; border-bottom: 2.5px solid #002060;">
-                                            <td style="width: 48%; padding: 2px 4px;"></td>
-                                            <td style="width: 22%; padding: 2px 4px;"></td>
-                                            <td style="width: 16%; padding: 2px 4px;"></td>
-                                            <td style="width: 14%; padding: 2px 4px; text-align: right; font-weight: bold; font-size: 12.5px; color: #000000;">
+                                        <div style="display: flex; border-top: 1px solid #002060; border-bottom: 2.5px solid #002060;">
+                                            <div style="width: 46%; padding: 3px 4px;"></div>
+                                            <div style="width: 22%; padding: 3px 4px;"></div>
+                                            <div style="width: 16%; padding: 3px 4px;"></div>
+                                            <div style="width: 16%; padding: 3px 4px; text-align: right; font-weight: bold; font-size: 14px; color: #000000;">
                                                 <t t-esc="prod['formatted_total_qty']"/>
-                                            </td>
-                                        </tr>
-                                    </tbody>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </t>
-                            </table>
+                            </div>
                         </t>
 
                         <!-- Empty State -->
                         <t t-else="">
-                            <div style="font-size: 14px; color: #555555; text-align: center; padding: 40px 0;">
+                            <div style="font-size: 15px; color: #555555; text-align: center; padding: 40px 0;">
                                 No confirmed order lines found for the selected criteria.
                             </div>
                         </t>
@@ -132,7 +133,7 @@
 
                 <!-- FOOTER -->
                 <div class="footer">
-                    <div class="o_footer_content" style="font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif; font-size: 11px; color: #000000; font-style: italic; width: 100%; clear: both; overflow: hidden; padding-top: 4px;">
+                    <div class="o_footer_content" style="font-family: 'Segoe UI', Calibri, Arial, sans-serif; font-size: 12px; color: #000000; font-style: italic; width: 100%; clear: both; overflow: hidden; padding-top: 4px;">
                         <div style="float: left; width: 50%; text-align: left;">
                             <t t-esc="res.get('footer_date_str', '')"/>
                         </div>
