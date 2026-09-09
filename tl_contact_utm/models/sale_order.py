@@ -18,7 +18,11 @@ class SaleOrder(models.Model):
             ('regal_van', 'Regal Van Delivery'),
             ('courier', 'Courier Delivery'),
         ],
-        string='Delivery Channels',
+        string='Delivery Channel',
+        compute='_compute_delivery_channel',
+        store=True,
+        readonly=False,
+        help="Automatically mapped based on the selected Round Batch."
     )
 
     # @api.onchange('partner_id')
@@ -72,3 +76,17 @@ class SaleOrder(models.Model):
                     "order_channel_id": order.order_channel_id.id,
                 })
         return res
+        
+        
+    @api.depends('batch_id', 'batch_id.delivery_channel')
+    def _compute_delivery_channel(self):
+        for order in self:
+            if order.batch_id and order.batch_id.delivery_channel:
+                order.delivery_channel = order.batch_id.delivery_channel
+            elif not order.delivery_channel:
+                order.delivery_channel = False
+
+    @api.onchange('batch_id')
+    def _onchange_batch_id_set_delivery_channel(self):
+        if self.batch_id and self.batch_id.delivery_channel:
+            self.delivery_channel = self.batch_id.delivery_channel

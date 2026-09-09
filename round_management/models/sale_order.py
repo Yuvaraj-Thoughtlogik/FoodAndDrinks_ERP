@@ -470,8 +470,8 @@ class SaleOrder(models.Model):
         for order in self:
             if order.pricelist_id and order.pricelist_id.pricelist_category == 'b2b':
                 order.is_b2b = True
-            elif order.partner_id and order.partner_id.customer_type == 'b2b_trade':
-                order.is_b2b = True
+            #elif order.partner_id and order.partner_id.customer_type == 'b2b_trade':
+                #order.is_b2b = True
             else:
                 order.is_b2b = False
 

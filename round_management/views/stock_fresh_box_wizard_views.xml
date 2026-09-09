@@ -19,12 +19,12 @@
                     </group>
 
                     <div class="text-muted mb-3">
-                        * All product categories will be analyzed in the table below. Manufacturing Orders will be generated <b>strictly for Fresh category items</b>.
+                        * All product categories will be analyzed in the table below. Manufacturing Orders will be generated <b>strictly for Assembly items</b>.
                     </div>
 
-                    <button name="action_analyze_orders"
-                            string="Analyze Orders &amp; Calculate Boxes"
-                            type="object"
+                    <button name="action_analyze_orders" 
+                            string="Analyze Orders &amp; Calculate Boxes" 
+                            type="object" 
                             class="btn-secondary mb-3"/>
 
                     <notebook>
@@ -32,19 +32,26 @@
                             <field name="line_ids" readonly="1">
                                 <list no_open="1">
                                     <field name="sale_order_id"/>
+                                    <field name="customer_code"/>
+                                    <field name="round_batch_id"/>
                                     <field name="product_id"/>
+                                    <field name="product_desc"/>
+                                    <field name="special_requirements_notes" optional="show"/>
                                     <field name="category_id"/>
-                                    <field name="box_number"/>
+                                    
+                                   <!-- <field name="box_number"/>-->
                                     <field name="box_weight" string="Box Qty / Weight (kg)"/>
+                                    <field name="uom_id"/>
+                                    <field name="is_assembly"/>
                                 </list>
                             </field>
                         </page>
                     </notebook>
                 </sheet>
                 <footer>
-                    <button name="action_generate_mo"
-                            string="Packbox Generate MO (Fresh Only)"
-                            type="object"
+                    <button name="action_generate_mo" 
+                            string="Packbox Generate MO" 
+                            type="object" 
                             class="btn-primary"/>
                     <button string="Cancel" class="btn-secondary" special="cancel"/>
                 </footer>
@@ -66,6 +73,38 @@
                 <field name="total_analyzed_lines"/>
                 <field name="total_fresh_mos_created"/>
                 <field name="include_late_orders" widget="boolean_toggle"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- History Line Detailed List View (Prevent Form Opening) -->
+    <record id="view_stock_fresh_box_history_line_list" model="ir.ui.view">
+        <field name="name">stock.fresh.box.history.line.list</field>
+        <field name="model">stock.fresh.box.history.line</field>
+        <field name="arch" type="xml">
+            <list string="Pack Box History Breakdown" class="o_full_header_list" create="false" edit="false">
+                <field name="round_batch_id" string="BX_ROUND BATCH"/>
+                <field name="delivery_date" string="BX_DELIVERY DATE"/>
+                <field name="box_id" string="BX_BOX_ID"/>
+                
+                <field name="product_name" string="BX_PRODUCT"/>
+                <field name="box_weight" string="BX_Weight / Qty" sum="Total Weight"/>
+                <field name="product_desc" string="BX_DESC"/>
+                <field name="special_requirements_notes" string="SPECIAL NOTES" optional="show"/>
+                <field name="uom_id" string="UOM_TYPE"/>
+                <field name="category_id" string="PRODUCT CATEG"/>
+                <field name="is_assembly" string="BX_ORDPRODUCTISASSEMBLY"/>
+                <field name="product_code" string="BX_ORDPRODUCTCODE"/>
+                <field name="order_number" string="BX_ORDER_NO"/>
+                <field name="customer_code" string="BX_CUSTOMERCODE"/>
+                <field name="round_id" string="BX_ROUND"/>
+                
+                <field name="depot" string="BX_DEPOT"/>
+                
+                <!--<field name="box_number"/>-->
+                
+                <field name="is_late_order" string="BX_LATE_ORDERS" optional="hide"/>
+                <field name="late_status" string="BX_LATE_STATUS" optional="hide"/>
             </list>
         </field>
     </record>
@@ -97,7 +136,7 @@
                                 <list no_open="1">
                                     <field name="sale_order_id"/>
                                     <field name="product_id"/>
-                                    <field name="category_id"/>
+                                    <field name="category_id" string="Product Category"/>
                                     <field name="box_number"/>
                                     <field name="box_weight"/>
                                     <field name="delivery_date"/>
@@ -111,7 +150,7 @@
         </field>
     </record>
 
-    <!-- History Search View (FOR PACK BOX HISTORY MAIN VIEW) -->
+    <!-- History Search View -->
     <record id="view_stock_fresh_box_history_search" model="ir.ui.view">
         <field name="name">stock.fresh.box.history.search</field>
         <field name="model">stock.fresh.box.history</field>
@@ -127,13 +166,13 @@
                 <filter string="Courier Delivery" name="filter_courier" domain="[('delivery_channel', '=', 'courier')]"/>
                 <filter string="Regal Van Delivery" name="filter_regal_van" domain="[('delivery_channel', '=', 'regal_van')]"/>
 
-
-                <filter string="User" name="groupby_user" context="{'group_by': 'user_id'}"/>
-                <filter string="Delivery Channel" name="groupby_delivery_channel" context="{'group_by': 'delivery_channel'}"/>
-                <filter string="Run Date" name="groupby_wizard_date" context="{'group_by': 'wizard_date:day'}"/>
-                <filter string="Start Date" name="groupby_start_date" context="{'group_by': 'start_date:day'}"/>
-                <filter string="End Date" name="groupby_end_date" context="{'group_by': 'end_date:day'}"/>
-
+                
+                    <filter string="User" name="groupby_user" context="{'group_by': 'user_id'}"/>
+                    <filter string="Delivery Channel" name="groupby_delivery_channel" context="{'group_by': 'delivery_channel'}"/>
+                    <filter string="Run Date" name="groupby_wizard_date" context="{'group_by': 'wizard_date:day'}"/>
+                    <filter string="Start Date" name="groupby_start_date" context="{'group_by': 'start_date:day'}"/>
+                    <filter string="End Date" name="groupby_end_date" context="{'group_by': 'end_date:day'}"/>
+                
             </search>
         </field>
     </record>
@@ -153,11 +192,11 @@
                 <filter string="Courier Delivery" name="filter_courier" domain="[('delivery_channel', '=', 'courier')]"/>
                 <filter string="Regal Van Delivery" name="filter_regal_van" domain="[('delivery_channel', '=', 'regal_van')]"/>
 
-
-                <filter string="Delivery Date" name="groupby_delivery_date" context="{'group_by': 'delivery_date:day'}"/>
-                <filter string="Product Category" name="groupby_product_category" context="{'group_by': 'category_id'}"/>
-                <filter string="Delivery Channel" name="groupby_delivery_channel" context="{'group_by': 'delivery_channel'}"/>
-
+                
+                    <filter string="Delivery Date" name="groupby_delivery_date" context="{'group_by': 'delivery_date:day'}"/>
+                    <filter string="Product Category" name="groupby_product_category" context="{'group_by': 'category_id'}"/>
+                    <filter string="Delivery Channel" name="groupby_delivery_channel" context="{'group_by': 'delivery_channel'}"/>
+               
             </search>
         </field>
     </record>
@@ -193,50 +232,41 @@
 
                 <filter string="Late Orders" name="filter_late_orders" domain="[('is_late_order', '=', True)]"/>
 
-
-                <filter string="Delivery Date" name="groupby_delivery_date" context="{'group_by': 'delivery_date:day'}"/>
-                <filter string="Product Category" name="groupby_product_category" context="{'group_by': 'product_category_id'}"/>
-                <filter string="Delivery Channel" name="groupby_delivery_channel" context="{'group_by': 'delivery_channel'}"/>
-                <filter string="Round Batch" name="groupby_round_batch" context="{'group_by': 'round_batch_id'}"/>
-
+               
+                    <filter string="Delivery Date" name="groupby_delivery_date" context="{'group_by': 'delivery_date:day'}"/>
+                    <filter string="Product Category" name="groupby_product_category" context="{'group_by': 'product_category_id'}"/>
+                    <filter string="Delivery Channel" name="groupby_delivery_channel" context="{'group_by': 'delivery_channel'}"/>
+                    <filter string="Round Batch" name="groupby_round_batch" context="{'group_by': 'round_batch_id'}"/>
+               
             </xpath>
         </field>
     </record>
 
-    <record id="view_stock_fresh_box_history_line_list" model="ir.ui.view">
-        <field name="name">stock.fresh.box.history.line.list</field>
-        <field name="model">stock.fresh.box.history.line</field>
-        <field name="arch" type="xml">
-            <list string="Pack Box History Breakdown">
-                <field name="sale_order_id"/>
-                <field name="product_id"/>
-                <field name="category_id"/>
-                <field name="box_number"/>
-                <field name="box_weight" string="Box Weight / Qty" sum="Total Weight"/>
-                <field name="delivery_date"/>
-                <field name="delivery_channel"/>
-            </list>
-        </field>
-    </record>
-
+    <!-- Actions & Menus -->
     <record id="action_stock_fresh_box_history_line_grouped" model="ir.actions.act_window">
         <field name="name">Pack Box Split Fresh History Lines</field>
         <field name="res_model">stock.fresh.box.history.line</field>
-        <field name="view_mode">list,form</field>
+        <field name="view_mode">list</field>
         <field name="search_view_id" ref="view_stock_fresh_box_history_line_search"/>
         <field name="context">{
             'search_default_groupby_delivery_date': 1,
             'search_default_groupby_product_category': 1,
             'search_default_groupby_delivery_channel': 1
-            }</field>
+        }</field>
     </record>
 
-    <!-- Actions & Menus -->
     <record id="action_stock_fresh_box_wizard" model="ir.actions.act_window">
         <field name="name">Pack Box &amp; Generate MO</field>
         <field name="res_model">stock.fresh.box.wizard</field>
         <field name="view_mode">form</field>
         <field name="target">new</field>
+    </record>
+
+    <record id="action_stock_fresh_box_history_line" model="ir.actions.act_window">
+        <field name="name">Pack Box Split Fresh History Lines</field>
+        <field name="res_model">stock.fresh.box.history.line</field>
+        <field name="view_mode">list</field>
+        <field name="target">current</field>
     </record>
 
     <record id="action_stock_fresh_box_history" model="ir.actions.act_window">
@@ -247,5 +277,5 @@
         <field name="search_view_id" ref="view_stock_fresh_box_history_search"/>
     </record>
 
-
+    
 </odoo>

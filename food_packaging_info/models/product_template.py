@@ -70,15 +70,10 @@ class ProductTemplate(models.Model):
     #avail_from_date = fields.Date(string="Avail From")
     #avail_to_date = fields.Date(string="Avail To")
 
-    assembly_type = fields.Selection(
-        selection=[
-            ('assembly', 'Assembly'),
-            ('component', 'Component'),
-        ],
-        string="Assembly / Component Type",
-        help="Select whether this product is an Assembly or a Component.",
-        default=False,
-    )
+    assembly_type = fields.Selection([
+    ('A', 'Assembly A'),
+    ('C', 'Assembly C'),
+    ], string="Assembly Type")
 
     species_id = fields.Many2one(
         'fish.species',
