@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Paper Format: A4 Portrait for Prediction Report -->
+    <record id="paperformat_prediction_report" model="report.paperformat">
+        <field name="name">Prediction Report A4 Portrait</field>
+        <field name="default" eval="False"/>
+        <field name="format">A4</field>
+        <field name="page_height">0</field>
+        <field name="page_width">0</field>
+        <field name="orientation">Portrait</field>
+        <field name="margin_top">12</field>
+        <field name="margin_bottom">15</field>
+        <field name="margin_left">12</field>
+        <field name="margin_right">12</field>
+        <field name="header_line" eval="False"/>
+        <field name="header_spacing">0</field>
+        <field name="dpi">90</field>
+    </record>
+
+    <!-- Report Action: Prediction Report (Regal Van / General) -->
+    <record id="action_report_prediction" model="ir.actions.report">
+        <field name="name">Prediction Report</field>
+        <field name="model">prediction.report.wizard</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">tl_rf_reports.report_prediction</field>
+        <field name="report_file">tl_rf_reports.report_prediction</field>
+        <field name="print_report_name">'Prediction_Report_' + (object.delivery_date_from.strftime('%Y%m%d') if object.delivery_date_from else '')</field>
+        <field name="paperformat_id" ref="paperformat_prediction_report"/>
+        <field name="binding_model_id" eval="False"/>
+        <field name="binding_type">report</field>
+    </record>
+
+    <!-- Report Action: Courier Prediction Report -->
+    <record id="action_report_prediction_courier" model="ir.actions.report">
+        <field name="name">Courier Prediction Report</field>
+        <field name="model">prediction.report.wizard</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">tl_rf_reports.report_prediction_courier</field>
+        <field name="report_file">tl_rf_reports.report_prediction_courier</field>
+        <field name="print_report_name">'Courier_Prediction_Report_' + (object.delivery_date_from.strftime('%Y%m%d') if object.delivery_date_from else '')</field>
+        <field name="paperformat_id" ref="paperformat_prediction_report"/>
+        <field name="binding_model_id" eval="False"/>
+        <field name="binding_type">report</field>
+    </record>
+
+    <!-- ============================================================== -->
+    <!-- PREDICTION REPORT TEMPLATE (Portrait Table-based Layout)        -->
+    <!-- ============================================================== -->
+    <template id="report_prediction">
+        <t t-call="web.html_container">
+            <t t-foreach="report_results" t-as="res">
+                <!-- BODY ARTICLE -->
+                <div class="article">
+                    <div class="page" style="font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif; color: #000000; padding: 0 5px; background: #ffffff;">
+
+                        <!-- Report Header: Centered Title and Date Range -->
+                        <div style="text-align: center; margin-top: 0; margin-bottom: 16px;">
+                            <div style="font-size: 20px; font-weight: bold; font-style: italic; text-decoration: underline; color: #002060; font-family: Georgia, 'Times New Roman', serif;">
+                                Prediction Report
+                            </div>
+                            <div style="font-size: 14px; font-weight: bold; font-style: italic; text-decoration: underline; color: #002060; margin-top: 3px; font-family: Georgia, 'Times New Roman', serif;">
+                                <t t-esc="res.get('date_range_str', '')"/>
+                            </div>
+                        </div>
+
+                        <!-- Data Table with Repeating Header -->
+                        <t t-if="res.get('products')">
+                            <table style="width: 100%; border-collapse: collapse; table-layout: fixed; font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif;">
+                                <thead>
+                                    <tr style="border-bottom: 2px solid #002060;">
+                                        <th style="width: 48%; text-align: left; padding: 4px 4px 6px 4px; font-weight: bold; font-style: italic; color: #002060; font-size: 13.5px;">
+                                            Stock Name
+                                        </th>
+                                        <th style="width: 22%; text-align: left; padding: 4px 4px 6px 4px; font-weight: bold; font-style: italic; color: #002060; font-size: 13.5px;">
+                                            Delivery Date
+                                        </th>
+                                        <th style="width: 16%; padding: 4px 4px 6px 4px;"></th>
+                                        <th style="width: 14%; text-align: right; padding: 4px 4px 6px 4px; font-weight: bold; font-style: italic; color: #002060; font-size: 13.5px; line-height: 1.15;">
+                                            Quantity<br/>Ordered
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <t t-foreach="res['products']" t-as="prod">
+                                    <tbody style="page-break-inside: avoid;">
+                                        <t t-foreach="prod['rows']" t-as="r">
+                                            <tr t-att-style="'border-top: 1.5px solid #002060;' if r_index == 0 else ''">
+                                                <!-- Col 1: Product Name (shown only on first sub-row) -->
+                                                <td style="width: 48%; padding: 2px 4px; vertical-align: top; text-align: left;">
+                                                    <span t-if="r_index == 0" style="font-weight: bold; color: #000000; font-size: 12.5px;">
+                                                        <t t-esc="prod['product_name']"/>
+                                                    </span>
+                                                </td>
+                                                <!-- Col 2: Delivery Date (shown on first row for each delivery date) -->
+                                                <td style="width: 22%; padding: 2px 4px; vertical-align: top; text-align: left; font-size: 12px; color: #000000;">
+                                                    <span t-if="r['is_first_date_row']">
+                                                        <t t-esc="r['delivery_date_str']"/>
+                                                    </span>
+                                                </td>
+                                                <!-- Col 3: Depot Name -->
+                                                <td style="width: 16%; padding: 2px 4px; vertical-align: top; text-align: left; font-size: 12px; color: #000000;">
+                                                    <t t-esc="r['depot_name']"/>
+                                                </td>
+                                                <!-- Col 4: Quantity -->
+                                                <td style="width: 14%; padding: 2px 4px; vertical-align: top; text-align: right; font-size: 12px; color: #000000;">
+                                                    <t t-esc="r['formatted_qty']"/>
+                                                </td>
+                                            </tr>
+                                        </t>
+                                        <!-- Product Total Row -->
+                                        <tr style="border-top: 1px solid #002060; border-bottom: 2.5px solid #002060;">
+                                            <td style="width: 48%; padding: 2px 4px;"></td>
+                                            <td style="width: 22%; padding: 2px 4px;"></td>
+                                            <td style="width: 16%; padding: 2px 4px;"></td>
+                                            <td style="width: 14%; padding: 2px 4px; text-align: right; font-weight: bold; font-size: 12.5px; color: #000000;">
+                                                <t t-esc="prod['formatted_total_qty']"/>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </t>
+                            </table>
+                        </t>
+
+                        <!-- Empty State -->
+                        <t t-else="">
+                            <div style="font-size: 14px; color: #555555; text-align: center; padding: 40px 0;">
+                                No confirmed order lines found for the selected criteria.
+                            </div>
+                        </t>
+
+                    </div>
+                </div>
+
+                <!-- FOOTER -->
+                <div class="footer">
+                    <div class="o_footer_content" style="font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif; font-size: 11px; color: #000000; font-style: italic; width: 100%; clear: both; overflow: hidden; padding-top: 4px;">
+                        <div style="float: left; width: 50%; text-align: left;">
+                            <t t-esc="res.get('footer_date_str', '')"/>
+                        </div>
+                        <div style="float: right; width: 50%; text-align: right;">
+                            Page <span class="page"/> of <span class="topage"/>
+                        </div>
+                    </div>
+                </div>
+            </t>
+        </t>
+    </template>
+
+    <!-- Courier Prediction Report Template (shares the same structure) -->
+    <template id="report_prediction_courier">
+        <t t-call="tl_rf_reports.report_prediction"/>
+    </template>
+</odoo>

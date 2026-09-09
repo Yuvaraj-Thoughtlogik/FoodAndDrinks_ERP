@@ -20,4 +20,5 @@ class ProductionLabelReport(models.AbstractModel):
             'docs': docs,
             'label_lines': label_lines,
             'total_labels': len(label_lines),
+            'company': self.env.company,
         }

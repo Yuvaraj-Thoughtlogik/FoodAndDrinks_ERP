@@ -4,3 +4,4 @@ access_packing_list_wizard,packing.list.wizard,model_packing_list_wizard,base.gr
 access_delivery_note_round_wizard,delivery.note.round.wizard,model_delivery_note_round_wizard,base.group_user,1,1,1,1
 access_requirement_report_wizard,requirement.report.wizard,model_requirement_report_wizard,base.group_user,1,1,1,1
 access_production_report_wizard,production.report.wizard,model_production_report_wizard,base.group_user,1,1,1,1
+access_prediction_report_wizard,prediction.report.wizard,model_prediction_report_wizard,base.group_user,1,1,1,1
