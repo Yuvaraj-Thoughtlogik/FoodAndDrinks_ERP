@@ -44,7 +44,11 @@
     </record>
 
     <!-- ============================================================== -->
-    <!-- PREDICTION REPORT TEMPLATE (Div-based Layout, no tables)         -->
+    <!-- PREDICTION REPORT TEMPLATE                                      -->
+    <!-- Div-only markup. Columns are laid out with CSS display:table /  -->
+    <!-- table-row / table-cell (NOT the <table> HTML tag, and NOT       -->
+    <!-- flexbox - wkhtmltopdf does not reliably support flex, which is  -->
+    <!-- why the previous version broke).                                -->
     <!-- ============================================================== -->
     <template id="report_prediction">
         <t t-call="web.html_container">
@@ -63,58 +67,56 @@
                             </div>
                         </div>
 
-                        <!-- Data Rows (div-based, no table) -->
+                        <!-- Data Rows: div, styled with display:table for column alignment -->
                         <t t-if="res.get('products')">
-                            <div style="width: 100%; font-family: 'Segoe UI', Calibri, Arial, sans-serif;">
+                            <div style="display: table; width: 100%; table-layout: fixed; font-family: 'Segoe UI', Calibri, Arial, sans-serif; border-collapse: collapse;">
 
                                 <!-- Header Row -->
-                                <div style="display: flex; border-bottom: 2px solid #002060; padding-bottom: 6px;">
-                                    <div style="width: 46%; text-align: left; padding: 4px; font-weight: bold; font-style: italic; color: #002060; font-size: 15px;">
+                                <div style="display: table-row;">
+                                    <div style="display: table-cell; width: 46%; text-align: left; padding: 4px; font-weight: bold; font-style: italic; color: #002060; font-size: 15px; border-bottom: 2px solid #002060;">
                                         Stock Name
                                     </div>
-                                    <div style="width: 22%; text-align: left; padding: 4px; font-weight: bold; font-style: italic; color: #002060; font-size: 15px;">
+                                    <div style="display: table-cell; width: 22%; text-align: left; padding: 4px; font-weight: bold; font-style: italic; color: #002060; font-size: 15px; border-bottom: 2px solid #002060;">
                                         Delivery Date
                                     </div>
-                                    <div style="width: 16%; padding: 4px;"></div>
-                                    <div style="width: 16%; text-align: right; padding: 4px; font-weight: bold; font-style: italic; color: #002060; font-size: 15px; line-height: 1.2;">
+                                    <div style="display: table-cell; width: 16%; padding: 4px; border-bottom: 2px solid #002060;"></div>
+                                    <div style="display: table-cell; width: 16%; text-align: right; padding: 4px; font-weight: bold; font-style: italic; color: #002060; font-size: 15px; line-height: 1.2; border-bottom: 2px solid #002060;">
                                         Quantity<br/>Ordered
                                     </div>
                                 </div>
 
                                 <t t-foreach="res['products']" t-as="prod">
-                                    <div style="page-break-inside: avoid; border-top: 1.5px solid #002060;">
-                                        <t t-foreach="prod['rows']" t-as="r">
-                                            <div style="display: flex;">
-                                                <!-- Col 1: Product Name (shown only on first sub-row) -->
-                                                <div style="width: 46%; padding: 3px 4px; text-align: left;">
-                                                    <span t-if="r_index == 0" style="font-weight: bold; color: #000000; font-size: 14px;">
-                                                        <t t-esc="prod['product_name']"/>
-                                                    </span>
-                                                </div>
-                                                <!-- Col 2: Delivery Date (shown on first row for each delivery date) -->
-                                                <div style="width: 22%; padding: 3px 4px; text-align: left; font-size: 13.5px; color: #000000;">
-                                                    <span t-if="r['is_first_date_row']">
-                                                        <t t-esc="r['delivery_date_str']"/>
-                                                    </span>
-                                                </div>
-                                                <!-- Col 3: Depot Name -->
-                                                <div style="width: 16%; padding: 3px 4px; text-align: left; font-size: 13.5px; color: #000000;">
-                                                    <t t-esc="r['depot_name']"/>
-                                                </div>
-                                                <!-- Col 4: Quantity -->
-                                                <div style="width: 16%; padding: 3px 4px; text-align: right; font-size: 13.5px; color: #000000;">
-                                                    <t t-esc="r['formatted_qty']"/>
-                                                </div>
+                                    <t t-foreach="prod['rows']" t-as="r">
+                                        <div t-att-style="'display: table-row; page-break-inside: avoid;' + (' border-top: 1.5px solid #002060;' if r_index == 0 else '')">
+                                            <!-- Col 1: Product Name (shown only on first sub-row) -->
+                                            <div style="display: table-cell; width: 46%; padding: 3px 4px; text-align: left; vertical-align: top;">
+                                                <span t-if="r_index == 0" style="font-weight: bold; color: #000000; font-size: 14px;">
+                                                    <t t-esc="prod['product_name']"/>
+                                                </span>
                                             </div>
-                                        </t>
-                                        <!-- Product Total Row -->
-                                        <div style="display: flex; border-top: 1px solid #002060; border-bottom: 2.5px solid #002060;">
-                                            <div style="width: 46%; padding: 3px 4px;"></div>
-                                            <div style="width: 22%; padding: 3px 4px;"></div>
-                                            <div style="width: 16%; padding: 3px 4px;"></div>
-                                            <div style="width: 16%; padding: 3px 4px; text-align: right; font-weight: bold; font-size: 14px; color: #000000;">
-                                                <t t-esc="prod['formatted_total_qty']"/>
+                                            <!-- Col 2: Delivery Date (shown on first row for each delivery date) -->
+                                            <div style="display: table-cell; width: 22%; padding: 3px 4px; text-align: left; vertical-align: top; font-size: 13.5px; color: #000000;">
+                                                <span t-if="r['is_first_date_row']">
+                                                    <t t-esc="r['delivery_date_str']"/>
+                                                </span>
                                             </div>
+                                            <!-- Col 3: Depot Name -->
+                                            <div style="display: table-cell; width: 16%; padding: 3px 4px; text-align: left; vertical-align: top; font-size: 13.5px; color: #000000;">
+                                                <t t-esc="r['depot_name']"/>
+                                            </div>
+                                            <!-- Col 4: Quantity -->
+                                            <div style="display: table-cell; width: 16%; padding: 3px 4px; text-align: right; vertical-align: top; font-size: 13.5px; color: #000000;">
+                                                <t t-esc="r['formatted_qty']"/>
+                                            </div>
+                                        </div>
+                                    </t>
+                                    <!-- Product Total Row -->
+                                    <div style="display: table-row; border-top: 1px solid #002060; border-bottom: 2.5px solid #002060;">
+                                        <div style="display: table-cell; width: 46%; padding: 3px 4px;"></div>
+                                        <div style="display: table-cell; width: 22%; padding: 3px 4px;"></div>
+                                        <div style="display: table-cell; width: 16%; padding: 3px 4px;"></div>
+                                        <div style="display: table-cell; width: 16%; padding: 3px 4px; text-align: right; font-weight: bold; font-size: 14px; color: #000000;">
+                                            <t t-esc="prod['formatted_total_qty']"/>
                                         </div>
                                     </div>
                                 </t>
