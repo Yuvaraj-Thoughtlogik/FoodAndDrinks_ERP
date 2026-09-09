@@ -239,4 +239,15 @@
         </xpath>
     </field>
 </record>
+
+<record id="product_pricelist_view_inherit_category" model="ir.ui.view">
+        <field name="name">product.pricelist.form.inherit.category</field>
+        <field name="model">product.pricelist</field>
+        <field name="inherit_id" ref="product.product_pricelist_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='currency_id']" position="after">
+                <field name="pricelist_category" widget="radio" options="{'horizontal': true}"/>
+            </xpath>
+        </field>
+    </record>
 </odoo>

@@ -6,11 +6,13 @@
         <field name="model">round.management.round</field>
         <field name="arch" type="xml">
             <list string="Rounds">
-                <field name="code"/>
-                <field name="name"/>
-                <field name="state" widget="badge" decoration-success="state == 'active'" decoration-danger="state == 'inactive'"/>
-                <field name="region_id"/>
-                <field name="depot_id"/>
+                <field name="code" />
+                <field name="name" />
+                <field name="state" widget="badge" decoration-success="state == 'active'"
+                    decoration-danger="state == 'inactive'" />
+                <field name="delivery_channel" />
+                <field name="region_id" />
+                <field name="depot_id" />
             </list>
         </field>
     </record>
@@ -26,29 +28,33 @@
                     <header>
 
                         <button name="action_open_new_batch_wizard"
-                                string="Create Round Batch"
-                                type="object"
-                                class="btn-primary"/>
+                            string="Create Round Batch"
+                            type="object"
+                            class="btn-primary" />
                     </header>
                     <div class="oe_title">
-                        <label for="code" force_save="1"/>
-                        <h1><field name="code" placeholder="e.g. 1050" force_save="1"/></h1>
+                        <label for="code" force_save="1" />
+                        <h1>
+                            <field name="code" placeholder="e.g. 1050" force_save="1" />
+                        </h1>
                     </div>
                     <group>
                         <group string="Round Details">
-                            <field name="name"/>
-                            <field name="state" widget="radio" options="{'horizontal': true}"/>
-                            <field name="region_id"/>
-                            <field name="depot_id"/>
+                            <field name="name" />
+                            <field name="state" widget="radio" options="{'horizontal': true}" />
+                            <field name="region_id" />
+                            <field name="depot_id" />
+                            <field name="delivery_channel" />
                         </group>
                         <group string="Configurations">
-                            <!--<field name="pay_grade"/>-->
-                            <field name="target_cust_rev"/>
-                            <field name="max_alt_drops"/>
-<!--                            <field name="current_regular_drops" readonly="1"/>-->
-<!--                            <field name="current_alt_drops" readonly="1"/>-->
-<!--                            <field name="balance_alt_drops" readonly="1"/>-->
-                          </group>
+                            <!--<field
+                            name="pay_grade"/>-->
+                            <field name="target_cust_rev" />
+                            <field name="max_alt_drops" />
+                            <!--                            <field name="current_regular_drops" readonly="1"/>-->
+                            <!--                            <field name="current_alt_drops" readonly="1"/>-->
+                            <!--                            <field name="balance_alt_drops" readonly="1"/>-->
+                        </group>
                     </group>
 
                     <notebook>
@@ -56,105 +62,125 @@
                             <group string="Operating Times">
                                 <group>
                                     <!-- Monday -->
-                                    <label for="mon_active" string="Monday"/>
+                                    <label for="mon_active" string="Monday" />
                                     <div class="o_row">
-                                        <field name="mon_active"/>
+                                        <field name="mon_active" />
                                         <span invisible="not mon_active">From</span>
-                                        <field name="mon_from" invisible="not mon_active" required="mon_active"/>
+                                        <field name="mon_from" invisible="not mon_active"
+                                            required="mon_active" />
                                         <span invisible="not mon_active">To</span>
-                                        <field name="mon_to" invisible="not mon_active" required="mon_active"/>
+                                        <field name="mon_to" invisible="not mon_active"
+                                            required="mon_active" />
                                     </div>
                                     <!-- Tuesday -->
-                                    <label for="tue_active" string="Tuesday"/>
+                                    <label for="tue_active" string="Tuesday" />
                                     <div class="o_row">
-                                        <field name="tue_active"/>
+                                        <field name="tue_active" />
                                         <span invisible="not tue_active">From</span>
-                                        <field name="tue_from" invisible="not tue_active" required="tue_active"/>
+                                        <field name="tue_from" invisible="not tue_active"
+                                            required="tue_active" />
                                         <span invisible="not tue_active">To</span>
-                                        <field name="tue_to" invisible="not tue_active" required="tue_active"/>
+                                        <field name="tue_to" invisible="not tue_active"
+                                            required="tue_active" />
                                     </div>
                                     <!-- Wednesday -->
-                                    <label for="wed_active" string="Wednesday"/>
+                                    <label for="wed_active" string="Wednesday" />
                                     <div class="o_row">
-                                        <field name="wed_active"/>
+                                        <field name="wed_active" />
                                         <span invisible="not wed_active">From</span>
-                                        <field name="wed_from" invisible="not wed_active" required="wed_active"/>
+                                        <field name="wed_from" invisible="not wed_active"
+                                            required="wed_active" />
                                         <span invisible="not wed_active">To</span>
-                                        <field name="wed_to" invisible="not wed_active" required="wed_active"/>
+                                        <field name="wed_to" invisible="not wed_active"
+                                            required="wed_active" />
                                     </div>
                                     <!-- Thursday -->
-                                    <label for="thu_active" string="Thursday"/>
+                                    <label for="thu_active" string="Thursday" />
                                     <div class="o_row">
-                                        <field name="thu_active"/>
+                                        <field name="thu_active" />
                                         <span invisible="not thu_active">From</span>
-                                        <field name="thu_from" invisible="not thu_active" required="thu_active"/>
+                                        <field name="thu_from" invisible="not thu_active"
+                                            required="thu_active" />
                                         <span invisible="not thu_active">To</span>
-                                        <field name="thu_to" invisible="not thu_active" required="thu_active"/>
+                                        <field name="thu_to" invisible="not thu_active"
+                                            required="thu_active" />
                                     </div>
                                     <!-- Friday -->
-                                    <label for="fri_active" string="Friday"/>
+                                    <label for="fri_active" string="Friday" />
                                     <div class="o_row">
-                                        <field name="fri_active"/>
+                                        <field name="fri_active" />
                                         <span invisible="not fri_active">From</span>
-                                        <field name="fri_from" invisible="not fri_active" required="fri_active"/>
+                                        <field name="fri_from" invisible="not fri_active"
+                                            required="fri_active" />
                                         <span invisible="not fri_active">To</span>
-                                        <field name="fri_to" invisible="not fri_active" required="fri_active"/>
+                                        <field name="fri_to" invisible="not fri_active"
+                                            required="fri_active" />
                                     </div>
                                     <!-- Saturday -->
-                                    <label for="sat_active" string="Saturday"/>
+                                    <label for="sat_active" string="Saturday" />
                                     <div class="o_row">
-                                        <field name="sat_active"/>
+                                        <field name="sat_active" />
                                         <span invisible="not sat_active">From</span>
-                                        <field name="sat_from" invisible="not sat_active" required="sat_active"/>
+                                        <field name="sat_from" invisible="not sat_active"
+                                            required="sat_active" />
                                         <span invisible="not sat_active">To</span>
-                                        <field name="sat_to" invisible="not sat_active" required="sat_active"/>
+                                        <field name="sat_to" invisible="not sat_active"
+                                            required="sat_active" />
                                     </div>
                                     <!-- Sunday -->
-                                    <label for="sun_active" string="Sunday"/>
+                                    <label for="sun_active" string="Sunday" />
                                     <div class="o_row">
-                                        <field name="sun_active"/>
+                                        <field name="sun_active" />
                                         <span invisible="not sun_active">From</span>
-                                        <field name="sun_from" invisible="not sun_active" required="sun_active"/>
+                                        <field name="sun_from" invisible="not sun_active"
+                                            required="sun_active" />
                                         <span invisible="not sun_active">To</span>
-                                        <field name="sun_to" invisible="not sun_active" required="sun_active"/>
+                                        <field name="sun_to" invisible="not sun_active"
+                                            required="sun_active" />
                                     </div>
                                 </group>
                                 <group string="Schedule Options">
-                                    <field name="no_between_times"/>
+                                    <field name="no_between_times" />
                                 </group>
                                 <group string="Notes:-">
-                                    <field name="notes" nolabel="1" placeholder="Add operational notes or customer move logs here..." colspan="2"/>
+                                    <field name="notes" nolabel="1"
+                                        placeholder="Add operational notes or customer move logs here..."
+                                        colspan="2" />
                                 </group>
                             </group>
                         </page>
-
 
 
                         <!-- Tab 2: Alternative Rounds (Matches your legacy UI) -->
                         <page string="Alternative Rounds" name="alternative_rounds">
                             <field name="alt_round_ids">
                                 <list string="Alternative Rounds" editable="bottom">
-                                    <field name="alt_round_code"/>
-                                    <field name="alt_round_id" string="Alter. Round Name" options="{'no_create': True}"  domain="[('id', '!=', round_id)]"/>
-                                    <field name="before_time" string="Before"/>
-                                    <field name="after_time" string="After"/>
-                                    <field name="active" string="Active"/>
+                                    <field name="alt_round_code" />
+                                    <field name="alt_round_id" string="Alter. Round Name"
+                                        options="{'no_create': True}"
+                                        domain="[('id', '!=', round_id)]" />
+                                    <field name="before_time" string="Before" />
+                                    <field name="after_time" string="After" />
+                                    <field name="active" string="Active" />
                                 </list>
                             </field>
                         </page>
                         <page string="Round Batches" name="batches">
-                      <field name="batch_ids" readonly="1">
-                          <list class="o_full_header_list">
-                              <field name="company_currency_id" column_invisible="True"/>
-                              <field name="code"/>
-                              <field name="week_number"/>
-                              <field name="delivery_date"/>
-                              <field name="total_drops" string="Total Drops" sum="Total Drops"/>
-                              <field name="total_revenue" string="Total Revenue" widget="monetary" options="{'currency_field': 'company_currency_id'}" sum="Total Revenue"/>
-                              <field name="state" widget="badge"/>
-                          </list>
-                      </field>
-                  </page>
+                            <field name="batch_ids" readonly="1">
+                                <list class="o_full_header_list">
+                                    <field name="company_currency_id" column_invisible="True" />
+                                    <field name="code" />
+                                    <field name="week_number" />
+                                    <field name="delivery_date" />
+                                    <field name="total_drops" string="Total Drops" sum="Total Drops" />
+                                    <field name="total_revenue" string="Total Revenue"
+                                        widget="monetary"
+                                        options="{'currency_field': 'company_currency_id'}"
+                                        sum="Total Revenue" />
+                                    <field name="state" widget="badge" />
+                                </list>
+                            </field>
+                        </page>
                     </notebook>
                 </sheet>
             </form>
@@ -167,18 +193,21 @@
         <field name="arch" type="xml">
             <search string="Search Rounds">
                 <!-- Searchable fields -->
-                <field name="name" string="Search" filter_domain="[
+                <field name="name" string="Search"
+                    filter_domain="[
                     '|',
                     ('name','ilike',self),
                     ('code','ilike',self),
-                ]"/>
-                <field name="name"/>
-                <field name="code" string="Round Code"/>
+                ]" />
+                <field name="name" />
+                <field name="code" string="Round Code" />
 
-                <separator/>
+                <separator />
                 <!-- Status Filters -->
-                <filter string="Active Rounds" name="active_rounds" domain="[('state', '=', 'active')]"/>
-                <filter string="Dead / Inactive" name="inactive_rounds" domain="[('state', '=', 'inactive')]"/>
+                <filter string="Active Rounds" name="active_rounds"
+                    domain="[('state', '=', 'active')]" />
+                <filter string="Dead / Inactive" name="inactive_rounds"
+                    domain="[('state', '=', 'inactive')]" />
 
                 <!-- Group By Section -->
 
@@ -191,13 +220,16 @@
         <field name="model">round.management.round</field>
         <field name="arch" type="xml">
             <list class="o_full_header_list" create="true" edit="true">
-                <field name="code"/>
-                <field name="name"/>
-                <field name="state"/>
-                <field name="total_drops" string="Total Drops" sum="Total Drops"/>
-                <field name="active_customers_count" string="Active Customers" sum="Total Active"/>
-                <field name="ftlt_customers_m_count" string="M" sum="Total M"/>
-                <field name="customer_f_count" string="F" sum="Total F"/>
+                <field name="code" />
+                <field name="name" />
+                <field name="state" />
+                <field name="depot_id" />
+                <field name="delivery_channel" />
+
+                <!-- <field name="total_drops" string="Total Drops" sum="Total Drops" /> -->
+                <field name="active_customers_count" string="Active Customers" sum="Total Active" />
+                <field name="ftlt_customers_m_count" string="M" sum="Total M" />
+                <field name="customer_f_count" string="F" sum="Total F" />
 
             </list>
         </field>

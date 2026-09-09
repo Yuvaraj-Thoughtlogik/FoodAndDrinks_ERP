@@ -33,6 +33,13 @@
               action="action_packing_list_wizard"
               sequence="20"/>
 
+    <!-- Active Batch Report Menu Item under Round Management -> Reporting -->
+    <menuitem id="menu_report_active_batch"
+              name="Active Batch Report"
+              parent="menu_round_reporting_root"
+              action="action_active_batch_report_wizard"
+              sequence="25"/>
+
     <!-- Delivery Note Round Report Menu Item under Round Management -> Reporting -->
     <menuitem id="menu_report_delivery_note_round"
               name="Delivery Note Round Report"

@@ -86,6 +86,14 @@ class RoundManagementRound(models.Model):
         store=True,
     )
 
+    delivery_channel = fields.Selection(
+        selection=[
+            ('regal_van', 'Regal Van Delivery'),
+            ('courier', 'Courier Delivery'),
+        ],
+        string='Delivery Channels',
+    )
+
     @api.depends('batch_ids', 'batch_ids.total_drops')
     def _compute_total_drops_from_batches(self):
         for rec in self:
