@@ -14,7 +14,7 @@ class SaleOrderLine(models.Model):
         store=True,
         readonly=False,
         digits=(16, 0),
-        help="Auto-calculated box quantity based on 1kg box capacity per unit multiplied by line quantity."
+        #help="Auto-calculated box quantity based on 1kg box capacity per unit multiplied by line quantity."
     )
     weight = fields.Float(
         string="Weight (Kg)",
