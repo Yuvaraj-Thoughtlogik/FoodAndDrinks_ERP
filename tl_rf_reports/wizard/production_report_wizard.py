@@ -205,13 +205,18 @@ class ProductionReportWizard(models.TransientModel):
         return self.env.ref('tl_rf_reports.action_report_production_report').report_action(self)
 
     def action_print_label(self):
-        """Triggers the Production Label report. Data is built in
-        report.tl_rf_reports.report_production_label_document._get_report_values()."""
+        """Triggers the channel-specific Production Label report."""
         self.ensure_one()
         label_lines = self._get_label_data()
         if not label_lines:
             raise UserError(_("No matching records found to generate labels for the selected criteria."))
-        return self.env.ref('tl_rf_reports.action_report_production_label').report_action(self)
+
+        if self.delivery_channel == 'courier':
+            report_action = self.env.ref('tl_rf_reports.action_report_production_label_courier')
+        else:
+            report_action = self.env.ref('tl_rf_reports.action_report_production_label_regal_van')
+
+        return report_action.report_action(self)
 
     def _get_label_data(self):
         """Returns a list of dicts, one per label to print, based on the current wizard filters."""
@@ -226,25 +231,51 @@ class ProductionReportWizard(models.TransientModel):
 
             for line in order.order_line:
                 product = line.product_id
+
                 if not product or not product.categ_id:
                     continue
+
                 if category_ids and product.categ_id.id not in category_ids:
                     continue
+
+                # Calculate Fresh Use By date
+                # Delivery Date + Product Expiration Time (days)
+                use_by_date = False
+
+                if order.delivery_date and product.expiration_time:
+                    use_by_date = order.delivery_date + timedelta(
+                        days=product.expiration_time
+                    )
 
                 label_lines.append({
                     'customer_name': order.partner_id.name or '',
                     'customer_code': order.partner_id.customer_code or '',
-                    'delivery_date_display': order.delivery_date.strftime('%a, %d %B %Y') if order.delivery_date else '',
+
+                    'delivery_date_display': (
+                        order.delivery_date.strftime('%a, %d %B %Y')
+                        if order.delivery_date else ''
+                    ),
+
+                    'delivery_day_display': (
+                        order.delivery_date.strftime('%A')
+                        if order.delivery_date else ''
+                    ),
+
                     'batch_code': batch.code if batch else '',
                     'category_name': product.categ_id.name or '',
                     'warehouse_name': warehouse.name if warehouse else '',
                     'product_name': product.name or '',
                     'origin_country': product.origin_country or '',
-                    # TODO: Shelf Life in Days field still pending confirmation.
-                    # Once confirmed, replace this with:
-                    # use_by_date = order.delivery_date + timedelta(days=product.<shelf_life_field>)
-                    # 'use_by_display': use_by_date.strftime('%a %d %B %Y') if use_by_date else '',
-                    'use_by_display': '',
+                    'product_barcode': product.barcode or '',
+                    'product_default_code': product.default_code or '',
+
+                    # Fresh Use By:
+                    # Delivery Date + Product Expiration Time
+                    'use_by_display': (
+                        use_by_date.strftime('%d %B %Y')
+                        if use_by_date else ''
+                    ),
                 })
 
         return label_lines
+ 

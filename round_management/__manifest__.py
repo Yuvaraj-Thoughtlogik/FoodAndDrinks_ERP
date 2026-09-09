@@ -40,7 +40,7 @@
 
         'views/menus.xml',
         'views/round_region_view.xml',
-        'views/mrp_bom.xml',
+        #'views/mrp_bom.xml',
     ],
 
     'images': [

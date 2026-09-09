@@ -50,7 +50,7 @@
                 </sheet>
                 <footer>
                     <button name="action_generate_mo" 
-                            string="Packbox Generate MO" 
+                            string="Generate MO" 
                             type="object" 
                             class="btn-primary"/>
                     <button string="Cancel" class="btn-secondary" special="cancel"/>

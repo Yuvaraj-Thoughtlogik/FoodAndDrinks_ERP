@@ -7,5 +7,5 @@ from . import fleet_vehicle
 from . import round_region
 from . import stock_picking
 from . import stock_fresh_box_wizard
-from . import mrp_bom
+#from . import mrp_bom
 
