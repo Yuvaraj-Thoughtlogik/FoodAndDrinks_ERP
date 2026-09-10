@@ -9,3 +9,4 @@ from . import prediction_report
 # from . import delivery_note_round_report
 from . import production_label_report
 from . import active_batch_report
+from . import driver_packing_list_report
