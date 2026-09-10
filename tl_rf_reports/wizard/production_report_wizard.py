@@ -279,3 +279,4 @@ class ProductionReportWizard(models.TransientModel):
                 })
 
         return label_lines
+ 
