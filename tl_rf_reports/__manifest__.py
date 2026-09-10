@@ -44,6 +44,7 @@
         'report/report_delivery_note_round_van_views.xml',
         # 'report/delivery_note_round_report_views.xml',
         'report/production_label_report_views.xml',
+        'report/driver_packing_list_report.xml',
         'views/sale_order_views.xml',
         'views/menus.xml',
     ],

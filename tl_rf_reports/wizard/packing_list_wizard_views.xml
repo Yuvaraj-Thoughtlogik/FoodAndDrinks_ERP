@@ -10,22 +10,29 @@
                     <!-- Row 1: Delivery Date From & To -->
                     <group>
                         <group>
-                            <field name="delivery_date_from" widget="date" required="1" />
+                            <field name="delivery_date_from" widget="date" required="1"/>
                         </group>
                         <group>
-                            <field name="delivery_date_to" widget="date" required="1" />
+                            <field name="delivery_date_to" widget="date" required="1"/>
                         </group>
                     </group>
 
-                    <!-- Row 2: Late Order, Delivery Channel & Depot Checkboxes -->
+
+                    <!-- Row 3: Late Order, Delivery Channel & Depot Checkboxes -->
                     <group>
-                        <group colspan="4">
+                        <group colspan="4" invisible="driver_packing_list">
                             <field name="include_late_orders" string="Late Order"/>
                         </group>
                         <group>
                             <field name="delivery_channel" widget="radio"
-                                   options="{'horizontal': true}" required="1"/>
+                                   options="{'horizontal': true}" required="1"
+                                   readonly="driver_packing_list"/>
                         </group>
+                        <!-- Row 2: Driver Packing List toggle -->
+                        <group colspan="4">
+                            <field name="driver_packing_list"/>
+                        </group>
+
                         <group string="Depot" colspan="4" invisible="delivery_channel == 'courier'">
                             <field name="depot_ids"
                                    widget="many2many_checkboxes"

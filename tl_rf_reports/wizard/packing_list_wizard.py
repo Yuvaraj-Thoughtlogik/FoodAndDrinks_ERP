@@ -8,6 +8,14 @@ class PackingListWizard(models.TransientModel):
     _name = 'packing.list.wizard'
     _description = 'Packing List Report Wizard'
 
+    driver_packing_list = fields.Boolean(
+        string='Driver Packing List',
+        default=False,
+        help="When checked, generates the Driver Packing List report. This report is always "
+             "restricted to Regal Van Delivery, filtered only by Delivery Date and Depot. "
+             "The Late Order option is hidden and not used to filter this report, and the "
+             "Delivery Channel is locked to Regal Van Delivery."
+    )
     delivery_channel = fields.Selection(
         selection=[
             ('regal_van', 'Regal Van Delivery'),
@@ -64,6 +72,14 @@ class PackingListWizard(models.TransientModel):
         help="When unchecked, normal Packing List is generated. When checked, separate Late Order Packing List is generated."
     )
 
+    @api.onchange('driver_packing_list')
+    def _onchange_driver_packing_list(self):
+        """Driver Packing List only ever applies to Regal Van Delivery and does not
+        distinguish Late Orders, so lock/hide those fields as soon as it's enabled."""
+        if self.driver_packing_list:
+            self.delivery_channel = 'regal_van'
+            self.include_late_orders = False
+
     @api.onchange('delivery_date_from')
     def _onchange_delivery_date_from(self):
         if self.delivery_date_from:
@@ -99,6 +115,14 @@ class PackingListWizard(models.TransientModel):
     def action_print_report(self):
         """Validates eligible batches or courier orders and triggers the Packing List Report."""
         self.ensure_one()
+
+        # Defensive: Driver Packing List is always Regal Van Delivery, regardless of what
+        # was stored on the record (UI already enforces this via onchange + readonly).
+        if self.driver_packing_list and self.delivery_channel != 'regal_van':
+            self.delivery_channel = 'regal_van'
+
+        if self.driver_packing_list:
+            return self._action_print_driver_packing_list()
 
         if self.delivery_channel == 'courier':
             order_domain = [
@@ -157,3 +181,35 @@ class PackingListWizard(models.TransientModel):
             raise UserError(_("Eligible batches were found, but they do not contain any matching Regal Van Delivery sale orders."))
 
         return self.env.ref('tl_rf_reports.action_report_packing_list').report_action(self)
+
+    def _action_print_driver_packing_list(self):
+        """Driver Packing List: Regal Van Delivery only, filtered by Delivery Date and
+        Depot. Late Order status is intentionally NOT used as a filter here."""
+        domain = [
+            ('delivery_date', '>=', self.delivery_date_from),
+            ('delivery_date', '<=', self.delivery_date_to),
+        ]
+        if self.depot_ids:
+            domain.append(('depot_id', 'in', self.depot_ids.ids))
+
+        batches = self.env['round.management.batch'].search(domain)
+        if not batches:
+            depot_names = ", ".join(self.depot_ids.mapped('name')) if self.depot_ids else ""
+            depot_label = f" for depot(s) '{depot_names}'" if depot_names else ""
+            raise UserError(_(
+                "No batches found with delivery dates between %s and %s%s."
+            ) % (
+                self.delivery_date_from.strftime('%d/%m/%Y'),
+                self.delivery_date_to.strftime('%d/%m/%Y'),
+                depot_label
+            ))
+
+        eligible_orders = batches.mapped('order_ids').filtered(
+            lambda so: so.state in ('sale', 'done') and getattr(so, 'delivery_channel', False) in ('regal_van', False)
+        )
+        if not eligible_orders:
+            raise UserError(_(
+                "Eligible batches were found, but they do not contain any matching Regal Van Delivery sale orders."
+            ))
+
+        return self.env.ref('tl_rf_reports.action_report_driver_packing_list').report_action(self)
