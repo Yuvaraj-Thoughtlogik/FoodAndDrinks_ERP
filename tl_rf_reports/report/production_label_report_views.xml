@@ -62,22 +62,23 @@
                         </div>
                         <br/>
 
+
                         <div style="font-size:20px; font-weight:bold; text-align:center; margin-top:2mm; line-height:1.3;">
                             <span t-esc="label.get('product_name')"/>
                         </div>
-                        <br/>
+
 
                         <div style="font-size:11px; text-align:center; margin-top:2mm;">
                             Traceability:
                             <span t-esc="label.get('origin_country')"/>
                         </div>
-                        <br/>
+
 
                         <div style="font-size:13px; font-weight:bold; text-align:center; margin-top:2mm;">
                             Fresh Use By:
                             <span t-esc="label.get('use_by_display')"/>
                         </div>
-                        <br/>
+
 
                         <div style="font-size:12px; margin-top:2mm; line-height:1.3; text-align:justify;">
                             <div style="font-weight:bold; text-align:center; font-size:13px;">Preparation and Storage
@@ -94,6 +95,31 @@
                             <div>Please take care when eating as some bones may remain. Contains <b>FISH</b>.
                             </div>
                         </div>
+                        <!-- PRODUCT BARCODE -->
+                        <div t-if="label.get('product_barcode')"
+                             style="text-align:center; margin-top:3mm;">
+
+                            <!-- Default Code -->
+<!--                            <div t-if="label.get('product_default_code')"-->
+<!--                                 style="font-size:13px; font-weight:bold; margin-bottom:1mm;">-->
+<!--                                <span t-esc="label.get('product_default_code')"/>-->
+<!--                            </div>-->
+
+                            <!-- Actual Barcode -->
+                            <div>
+                                <span t-out="label.get('product_barcode')"
+                                      t-options="{
+                  'widget': 'barcode',
+                  'symbology': 'Code128',
+                  'width': 300,
+                  'height': 60,
+                  'humanreadable': 1,
+                  'img_style': 'width:55mm;height:12mm;'
+              }"/>
+                            </div>
+
+                        </div>
+
 
                         <div style="position:absolute; bottom:3mm; left:3mm; width:16mm; height:12mm; border:1.5px solid #000; border-radius:50%; display:table;">
                             <div style="display:table-cell; vertical-align:middle; text-align:center; font-size:9px; font-weight:bold; line-height:1.3;">
@@ -138,13 +164,16 @@
                                  style="max-height:24mm; max-width:35mm; width:auto; height:auto;"/>
                         </div>
 
-                        <div style="text-align:center; padding-right:36mm;">
+                        <div style="text-align:left; padding-right:36mm;">
                             <div style="font-size:19px; font-weight:bold; line-height:1.3;">
                                 (<span t-esc="label.get('batch_code')"/>)
                             </div>
                             <div style="font-size:14px; font-weight:bold; line-height:1.3;">
                                 <span t-esc="label.get('customer_name')"/>
                                 <!--                                (<span t-esc="label.get('customer_code')"/>)-->
+                            </div>
+                            <div style="font-size:14px; font-weight:bold; text-transform:uppercase; line-height:1.3;">
+                                <span t-esc="label.get('round_name')"/>
                             </div>
                             <div style="font-size:14px; font-weight:bold; text-transform:uppercase; line-height:1.3;">
                                 <span t-esc="label.get('category_name')"/>
@@ -158,10 +187,11 @@
                         </div>
                         <br/>
 
+
                         <div style="font-size:20px; font-weight:bold; text-align:center; margin-top:2mm; line-height:1.3;">
                             <span t-esc="label.get('product_name')"/>
                         </div>
-                        <br/>
+
 
                         <div style="font-size:11px; text-align:center; margin-top:2mm;">
                             Delivery on:
@@ -173,7 +203,7 @@
                             Fresh Use By:
                             <span t-esc="label.get('use_by_display')"/>
                         </div>
-                        <br/>
+
 
                         <div style="font-size:12px; margin-top:2mm; line-height:1.3; text-align:justify;">
                             <div style="font-weight:bold; text-align:center; font-size:13px;">Preparation and Storage
@@ -196,6 +226,31 @@
                         <div style="font-size:15px; margin-top:2mm; line-height:1.3;">
                             Traceability:
                             <span t-esc="label.get('origin_country')"/>
+                        </div>
+
+                        <!-- PRODUCT BARCODE -->
+                        <div t-if="label.get('product_barcode')"
+                             style="text-align:center; margin-top:3mm;">
+
+                            <!-- Default Code -->
+<!--                            <div t-if="label.get('product_default_code')"-->
+<!--                                 style="font-size:13px; font-weight:bold; margin-bottom:1mm;">-->
+<!--                                <span t-esc="label.get('product_default_code')"/>-->
+<!--                            </div>-->
+
+                            <!-- Actual Barcode -->
+                            <div>
+                                <span t-out="label.get('product_barcode')"
+                                      t-options="{
+                  'widget': 'barcode',
+                  'symbology': 'Code128',
+                  'width': 300,
+                  'height': 60,
+                  'humanreadable': 1,
+                  'img_style': 'width:55mm;height:12mm;'
+              }"/>
+                            </div>
+
                         </div>
 
                         <div style="position:absolute; bottom:3mm; left:3mm; width:16mm; height:12mm; border:1.5px solid #000; border-radius:50%; display:table;">

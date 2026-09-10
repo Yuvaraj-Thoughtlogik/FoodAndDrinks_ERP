@@ -250,6 +250,7 @@ class ProductionReportWizard(models.TransientModel):
                 label_lines.append({
                     'customer_name': order.partner_id.name or '',
                     'customer_code': order.partner_id.customer_code or '',
+                    'round_name': order.round_id.name if order.round_id else '',
 
                     'delivery_date_display': (
                         order.delivery_date.strftime('%a, %d %B %Y')
@@ -266,6 +267,8 @@ class ProductionReportWizard(models.TransientModel):
                     'warehouse_name': warehouse.name if warehouse else '',
                     'product_name': product.name or '',
                     'origin_country': product.origin_country or '',
+                    'product_barcode': product.barcode or '',
+                    'product_default_code': product.default_code or '',
 
                     # Fresh Use By:
                     # Delivery Date + Product Expiration Time
