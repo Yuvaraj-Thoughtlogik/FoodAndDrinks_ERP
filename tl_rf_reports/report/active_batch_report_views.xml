@@ -168,7 +168,6 @@
                                 Printed on <t t-esc="data.get('printed_at')"/>
                             </div>
                             <div style="display: table-cell; width: 50%; text-align: right; vertical-align: middle;">
-                                Page <span class="page"/> of <span class="topage"/>
                             </div>
                         </div>
                     </div>

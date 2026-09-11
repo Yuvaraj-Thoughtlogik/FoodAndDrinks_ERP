@@ -26,46 +26,74 @@ class ReportActiveBatch(models.AbstractModel):
             after_start_date = today + timedelta(days=1)
             after_start_str = after_start_date.strftime('%d/%m/%Y')
 
-            # Determine rounds to include (selected rounds or all active rounds)
+            params = {
+                'from_date': from_date,
+                'to_date': to_date,
+            }
             if wizard.round_ids:
-                rounds = wizard.round_ids.sorted(lambda r: (r.code or '', r.name or ''))
+                round_filter = "r.id IN %(round_ids)s"
+                params['round_ids'] = tuple(wizard.round_ids.ids)
             else:
-                rounds = self.env['round.management.round'].search([('state', '=', 'active')], order='code asc, name asc')
+                round_filter = "r.state = 'active'"
 
-            round_items = []
-            for round_rec in rounds:
-                batch_domain = [
-                    ('round_id', '=', round_rec.id),
-                    ('state', '=', 'act'),
-                    ('delivery_date', '>=', from_date),
-                    ('delivery_date', '<=', to_date),
-                ]
-                batches = self.env['round.management.batch'].search(batch_domain, order='delivery_date asc, code asc')
+            query = f"""
+                SELECT 
+                    r.id AS round_id,
+                    r.name AS round_name,
+                    r.code AS round_code,
+                    b.id AS batch_id,
+                    b.code AS batch_code,
+                    b.reference AS batch_reference,
+                    b.delivery_date AS batch_delivery_date
+                FROM round_management_round r
+                LEFT JOIN round_management_batch b ON b.round_id = r.id 
+                    AND b.state = 'act' 
+                    AND b.delivery_date >= %(from_date)s 
+                    AND b.delivery_date <= %(to_date)s
+                WHERE {round_filter}
+                ORDER BY r.code ASC, r.name ASC, b.delivery_date ASC, b.code ASC
+            """
+            self.env.cr.execute(query, params)
+            rows = self.env.cr.dictfetchall()
 
-                before_batches = []
-                today_batches = []
-                after_batches = []
+            rounds_map = {}
+            for r in rows:
+                rid = r['round_id']
+                if rid not in rounds_map:
+                    r_code = r['round_code'] or ''
+                    r_name = r['round_name'] or ''
+                    r_display = f"{r_code} - {r_name}" if r_code else r_name
+                    rounds_map[rid] = {
+                        'round_id': rid,
+                        'round_name': r_name,
+                        'round_code': r_code,
+                        'round_display': r_display,
+                        'before_batches': [],
+                        'today_batches': [],
+                        'after_batches': [],
+                        'has_batches': False,
+                    }
 
-                for batch in batches:
-                    delivery_date = batch.delivery_date
-                    if not delivery_date:
-                        continue
-
-                    batch_name = batch.display_name or batch.reference or batch.code or ''
+                if r['batch_id'] and r['batch_delivery_date']:
+                    r_item = rounds_map[rid]
+                    r_item['has_batches'] = True
+                    delivery_date = r['batch_delivery_date']
+                    batch_code = r['batch_code'] or ''
+                    batch_ref = r['batch_reference'] or ''
+                    batch_name = batch_ref or batch_code
 
                     if delivery_date < today:
                         days = (today - delivery_date).days
-                        # Negative sign for before batch age
                         batch_age = f"{days} {'day' if days == 1 else 'days'}"
-                        before_batches.append({
-                            'code': batch.code or '',
+                        r_item['before_batches'].append({
+                            'code': batch_code,
                             'name': batch_name,
                             'delivery_date': delivery_date.strftime('%d/%m/%Y'),
                             'batch_age': batch_age,
                         })
                     elif delivery_date == today:
-                        today_batches.append({
-                            'code': batch.code or '',
+                        r_item['today_batches'].append({
+                            'code': batch_code,
                             'name': batch_name,
                             'delivery_date': delivery_date.strftime('%d/%m/%Y'),
                             'batch_age': "0 days",
@@ -73,26 +101,14 @@ class ReportActiveBatch(models.AbstractModel):
                     else:
                         future_days = (delivery_date - today).days
                         batch_age = f"{future_days} {'day' if future_days == 1 else 'days'} (future date)"
-                        after_batches.append({
-                            'code': batch.code or '',
+                        r_item['after_batches'].append({
+                            'code': batch_code,
                             'name': batch_name,
                             'delivery_date': delivery_date.strftime('%d/%m/%Y'),
                             'batch_age': batch_age,
                         })
 
-                round_name_display = f"{round_rec.code} - {round_rec.name}" if round_rec.code else round_rec.name
-
-                round_items.append({
-                    'round_id': round_rec.id,
-                    'round_name': round_rec.name or '',
-                    'round_code': round_rec.code or '',
-                    'round_display': round_name_display,
-                    'before_batches': before_batches,
-                    'today_batches': today_batches,
-                    'after_batches': after_batches,
-                    'has_batches': bool(before_batches or today_batches or after_batches),
-                })
-
+            round_items = list(rounds_map.values())
             current_dt = fields.Datetime.context_timestamp(self, fields.Datetime.now())
             printed_at_str = current_dt.strftime('%d/%m/%Y %H:%M:%S')
 

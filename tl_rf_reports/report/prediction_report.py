@@ -101,41 +101,135 @@ class ReportPrediction(models.AbstractModel):
         docs = self.env['prediction.report.wizard'].browse(docids)
 
         report_results = []
+        lang = self.env.lang or 'en_US'
+        company_ids = tuple(self.env.companies.ids) if self.env.companies else (self.env.company.id,)
+
         for wizard in docs:
             # Format display dates
             delivery_date_from_str = wizard.delivery_date_from.strftime('%d/%m/%Y') if wizard.delivery_date_from else ''
             delivery_date_to_str = wizard.delivery_date_to.strftime('%d/%m/%Y') if wizard.delivery_date_to else ''
             date_range_str = f"{delivery_date_from_str} to {delivery_date_to_str}"
-
-            # Footer date display: e.g. "20 August 2026"
             footer_date_str = wizard.delivery_date_from.strftime('%d %B %Y') if wizard.delivery_date_from else ''
 
-            # Fetch matching order lines
-            domain = wizard._get_line_domain()
-            lines = self.env['sale.order.line'].search(domain, order='product_id, id asc')
+            params = {
+                'date_from': wizard.delivery_date_from,
+                'date_to': wizard.delivery_date_to,
+                'company_ids': company_ids,
+                'lang': lang,
+            }
 
-            # Group by Stock Item (Product, or BOM component if the product
-            # has a BOM) -> Delivery Date -> Depot
+            channel_filter = ""
+            if wizard.delivery_channel == 'courier':
+                channel_filter = "AND so.delivery_channel = 'courier'"
+            else:
+                channel_filter = "AND (so.delivery_channel = 'regal_van' OR so.delivery_channel IS NULL)"
+
+            depot_filter = ""
+            if wizard.delivery_channel != 'courier' and wizard.depot_ids:
+                depot_filter = "AND (sol.depot_id IN %(depot_ids)s OR (sol.depot_id IS NULL AND so.warehouse_id IN %(depot_ids)s))"
+                params['depot_ids'] = tuple(wizard.depot_ids.ids)
+
+            categ_filter = ""
+            if wizard.categ_ids:
+                categ_filter = "AND pt.categ_id IN %(categ_ids)s"
+                params['categ_ids'] = tuple(wizard.categ_ids.ids)
+
+            query = f"""
+                SELECT 
+                    sol.id AS line_id,
+                    sol.product_uom_qty AS line_qty,
+                    COALESCE(so.delivery_date, sol.delivery_date) AS delivery_date,
+                    so.delivery_channel AS delivery_channel,
+                    sw.id AS depot_id,
+                    COALESCE(sw.name, 'Grimsby') AS depot_name,
+                    p.id AS product_id,
+                    p.product_tmpl_id AS tmpl_id,
+                    COALESCE(pt.name->>%(lang)s, pt.name->>'en_GB', pt.name->>'en_US', pt.name::text) AS product_name
+                FROM sale_order_line sol
+                JOIN sale_order so ON so.id = sol.order_id
+                JOIN product_product p ON p.id = sol.product_id
+                JOIN product_template pt ON pt.id = p.product_tmpl_id
+                LEFT JOIN stock_warehouse sw ON sw.id = COALESCE(sol.depot_id, so.warehouse_id)
+                WHERE so.state IN ('sale', 'done')
+                  AND so.delivery_date >= %(date_from)s
+                  AND so.delivery_date <= %(date_to)s
+                  AND sol.display_type IS NULL
+                  AND sol.product_id IS NOT NULL
+                  AND sol.product_uom_qty > 0
+                  {channel_filter}
+                  {depot_filter}
+                  {categ_filter}
+                  AND (so.company_id IS NULL OR so.company_id IN %(company_ids)s)
+                ORDER BY p.id ASC, sol.id ASC
+            """
+            self.env.cr.execute(query, params)
+            rows = self.env.cr.dictfetchall()
+
+            if not rows:
+                report_results.append({
+                    'wizard': wizard,
+                    'delivery_channel': wizard.delivery_channel,
+                    'delivery_date_from_str': delivery_date_from_str,
+                    'delivery_date_to_str': delivery_date_to_str,
+                    'date_range_str': date_range_str,
+                    'footer_date_str': footer_date_str,
+                    'products': [],
+                    'grand_total_qty': 0.0,
+                    'formatted_grand_total_qty': '0',
+                })
+                continue
+
+            product_ids = tuple({r['product_id'] for r in rows})
+            tmpl_ids = tuple({r['tmpl_id'] for r in rows})
+
+            bom_query = """
+                SELECT 
+                    mb.id AS bom_id,
+                    mb.product_id AS bom_product_id,
+                    mb.product_tmpl_id AS bom_tmpl_id,
+                    COALESCE(mb.product_qty, 1.0) AS bom_qty,
+                    mb.sequence AS bom_sequence,
+                    mbl.product_id AS comp_product_id,
+                    mbl.product_qty AS comp_line_qty,
+                    COALESCE(pt_comp.name->>%(lang)s, pt_comp.name->>'en_GB', pt_comp.name->>'en_US', pt_comp.name::text) AS comp_product_name
+                FROM mrp_bom mb
+                JOIN mrp_bom_line mbl ON mbl.bom_id = mb.id
+                JOIN product_product p_comp ON p_comp.id = mbl.product_id
+                JOIN product_template pt_comp ON pt_comp.id = p_comp.product_tmpl_id
+                WHERE mb.active = true
+                  AND (mb.company_id IS NULL OR mb.company_id IN %(company_ids)s)
+                  AND (mb.product_id IN %(product_ids)s OR (mb.product_id IS NULL AND mb.product_tmpl_id IN %(tmpl_ids)s))
+                ORDER BY mb.sequence ASC, mb.id ASC
+            """
+            self.env.cr.execute(bom_query, {
+                'product_ids': product_ids,
+                'tmpl_ids': tmpl_ids,
+                'company_ids': company_ids,
+                'lang': lang,
+            })
+            bom_rows = self.env.cr.dictfetchall()
+
+            variant_boms = {}
+            tmpl_boms = {}
+            for br in bom_rows:
+                if br['bom_product_id']:
+                    if br['bom_product_id'] not in variant_boms:
+                        variant_boms[br['bom_product_id']] = {'qty': br['bom_qty'], 'lines': []}
+                    variant_boms[br['bom_product_id']]['lines'].append(br)
+                elif br['bom_tmpl_id']:
+                    if br['bom_tmpl_id'] not in tmpl_boms:
+                        tmpl_boms[br['bom_tmpl_id']] = {'qty': br['bom_qty'], 'lines': []}
+                    tmpl_boms[br['bom_tmpl_id']]['lines'].append(br)
+
             products_map = {}
             grand_total_qty = 0.0
-            bom_cache = {}
 
-            for line in lines:
-                product = line.product_id
-                if not product:
-                    continue
+            for r in rows:
+                qty = float(r['line_qty'] or 0.0)
+                pid = r['product_id']
+                tid = r['tmpl_id']
 
-                qty = line.product_uom_qty or 0.0
-
-                # Resolve this line to the item(s) that should actually be
-                # reported: the product itself (no BOM) or its BOM
-                # components (BOM available), with qty scaled accordingly.
-                reporting_items = self._explode_bom(product, qty, bom_cache)
-                if not reporting_items:
-                    continue
-
-                # Delivery date for this line
-                d_date = line.order_id.delivery_date or line.delivery_date or wizard.delivery_date_from
+                d_date = r['delivery_date'] or wizard.delivery_date_from
                 if d_date:
                     date_key = d_date.strftime('%Y-%m-%d')
                     date_display = d_date.strftime('%d %B %Y')
@@ -143,28 +237,35 @@ class ReportPrediction(models.AbstractModel):
                     date_key = '9999-99-99'
                     date_display = ''
 
-                # Depot / Delivery Channel
-                if wizard.delivery_channel == 'courier' or getattr(line.order_id, 'delivery_channel', False) == 'courier':
+                if wizard.delivery_channel == 'courier' or r['delivery_channel'] == 'courier':
                     depot_name = _('Courier')
                     depot_key = 'courier'
                 else:
-                    depot = line.depot_id or (line.order_id.batch_id.depot_id if hasattr(line.order_id, 'batch_id') and line.order_id.batch_id else False) or line.order_id.warehouse_id
-                    depot_name = (depot.name or _('Grimsby')).strip() if depot else _('Grimsby')
-                    depot_key = depot.id if depot else 0
+                    depot_name = (r['depot_name'] or _('Grimsby')).strip()
+                    depot_key = r['depot_id'] or 0
 
-                for item_product, item_qty in reporting_items:
-                    prod_key = item_product.id
-                    prod_name = (item_product.name or item_product.display_name or '').strip()
+                bom_info = variant_boms.get(pid) or tmpl_boms.get(tid)
+                if bom_info and bom_info['lines']:
+                    bom_produced_qty = bom_info['qty'] or 1.0
+                    items = [
+                        (comp['comp_product_id'], comp['comp_product_name'], (comp['comp_line_qty'] / bom_produced_qty) * qty)
+                        for comp in bom_info['lines']
+                    ]
+                else:
+                    items = [(pid, r['product_name'], qty)]
 
-                    if prod_key not in products_map:
-                        products_map[prod_key] = {
-                            'product_id': prod_key,
-                            'product_name': prod_name,
+                for item_pid, item_name, item_qty in items:
+                    if not item_qty:
+                        continue
+                    if item_pid not in products_map:
+                        products_map[item_pid] = {
+                            'product_id': item_pid,
+                            'product_name': (item_name or '').strip(),
                             'dates_map': {},
                             'total_qty': 0.0,
                         }
 
-                    prod_item = products_map[prod_key]
+                    prod_item = products_map[item_pid]
                     if date_key not in prod_item['dates_map']:
                         prod_item['dates_map'][date_key] = {
                             'date_key': date_key,
@@ -184,15 +285,14 @@ class ReportPrediction(models.AbstractModel):
                     prod_item['total_qty'] += item_qty
                     grand_total_qty += item_qty
 
-            # Format products and their sub-rows
             products_list = []
             for prod_key, prod_data in sorted(products_map.items(), key=lambda item: item[1]['product_name'].lower()):
-                rows = []
+                rows_list = []
                 for date_key in sorted(prod_data['dates_map'].keys()):
                     date_data = prod_data['dates_map'][date_key]
                     is_first_depot = True
                     for depot_key, depot_data in sorted(date_data['depots_map'].items(), key=lambda d: d[1]['depot_name'].lower()):
-                        rows.append({
+                        rows_list.append({
                             'is_first_date_row': is_first_depot,
                             'delivery_date_str': date_data['date_display'] if is_first_depot else '',
                             'depot_name': depot_data['depot_name'],
@@ -201,11 +301,11 @@ class ReportPrediction(models.AbstractModel):
                         })
                         is_first_depot = False
 
-                if rows:
+                if rows_list:
                     products_list.append({
                         'product_id': prod_key,
                         'product_name': prod_data['product_name'],
-                        'rows': rows,
+                        'rows': rows_list,
                         'total_qty': prod_data['total_qty'],
                         'formatted_total_qty': _format_qty(prod_data['total_qty']),
                     })

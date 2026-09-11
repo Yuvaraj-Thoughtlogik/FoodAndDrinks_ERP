@@ -131,32 +131,51 @@ def random_html(field):
     return '<p>%s</p>' % random_text(field)
 
 
-def random_integer(field):
-    return random.randint(1, 999)
+def random_integer(field, low=1, high=999):
+    if low > high:
+        low, high = high, low
+    return random.randint(low, high)
 
 
-def random_float(field):
+def random_float(field, low=1.0, high=999.0, whole_only=False):
+    if low > high:
+        low, high = high, low
+    if whole_only:
+        return float(random.randint(round(low), round(high)))
     digits = getattr(field, 'digits', None)
     precision = digits[1] if isinstance(digits, (tuple, list)) and len(digits) > 1 else 2
-    return round(random.uniform(1.0, 999.0), precision)
+    return round(random.uniform(low, high), precision)
 
 
 def random_boolean(field):
     return random.choice([True, False])
 
 
-def random_date(field=None):
-    return date.today() + timedelta(days=random.randint(-180, 180))
+def random_date(low=None, high=None):
+    if not low or not high:
+        low, high = date.today() - timedelta(days=180), date.today() + timedelta(days=180)
+    elif low > high:
+        low, high = high, low
+    span = (high - low).days
+    return low + timedelta(days=random.randint(0, span) if span > 0 else 0)
 
 
-def random_datetime(field=None):
-    base = datetime.now() + timedelta(days=random.randint(-180, 180))
-    return base.replace(
-        hour=random.randint(0, 23),
-        minute=random.choice([0, 15, 30, 45]),
-        second=0,
-        microsecond=0,
-    )
+def random_datetime(low=None, high=None):
+    if not low or not high:
+        low, high = datetime.now() - timedelta(days=180), datetime.now() + timedelta(days=180)
+    elif low > high:
+        low, high = high, low
+    span_seconds = (high - low).total_seconds()
+    offset = random.uniform(0, span_seconds) if span_seconds > 0 else 0
+    return (low + timedelta(seconds=offset)).replace(second=0, microsecond=0)
+
+
+def random_count(low, high):
+    """A random integer count, clamped to zero or more."""
+    low, high = max(low, 0), max(high, 0)
+    if low > high:
+        low, high = high, low
+    return random.randint(low, high)
 
 
 def random_selection(model, field_name):

@@ -4,6 +4,7 @@ from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 
 from . import demo_field_utils as futils
+from . import demo_random as rnd
 from .demo_value_mixin import SKIP
 
 
@@ -72,6 +73,9 @@ class DemoRecordCreatorLine(models.Model):
             line.child_line_ids = [(5, 0, 0)]
             if line.field_id.ttype == 'one2many' and line.value_count <= 0:
                 line.value_count = 1
+            if line.field_id.ttype != 'one2many':
+                line.value_count_random = False
+                line.value_count_from, line.value_count_to = 1, 1
 
     # ------------------------------------------------------------------
     # Actions for Child Lines
@@ -146,11 +150,15 @@ class DemoRecordCreatorLine(models.Model):
         if child_model is None:
             raise UserError(
                 _("The child model of '%s' could not be resolved.", label))
-        if self.value_count < 0:
-            raise UserError(
-                _("Number of Values on '%s' cannot be negative.", label))
-        if not self.value_count:
-            return
+        if self.value_count_random:
+            if self.value_count_to <= 0:
+                return
+        else:
+            if self.value_count < 0:
+                raise UserError(
+                    _("Number of Values on '%s' cannot be negative.", label))
+            if not self.value_count:
+                return
 
         children = self.child_line_ids
         for child in children:
@@ -180,7 +188,8 @@ class DemoRecordCreatorLine(models.Model):
         """
         self.ensure_one()
         children = self.child_line_ids
-        count = self.value_count
+        count = (rnd.random_count(self.value_count_from, self.value_count_to)
+                 if self.value_count_random else self.value_count)
         if count <= 0 or not children:
             return SKIP
         commands = []

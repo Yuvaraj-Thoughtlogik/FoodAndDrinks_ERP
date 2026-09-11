@@ -36,8 +36,8 @@
                     <div style="width:100%; height:100%; box-sizing:border-box; padding:3mm; font-family:Arial, sans-serif; border:0.5px solid #000; border-radius:4mm; position:relative; overflow:hidden;">
 
                         <div style="position:absolute; top:3mm; right:3mm; width:35mm; text-align:right;">
-                            <img t-if="company.logo"
-                                 t-att-src="image_data_uri(company.logo)"
+                            <img t-if="company_logo_uri or company.logo"
+                                 t-att-src="company_logo_uri or (image_data_uri(company.logo) if company.logo else '')"
                                  style="max-height:24mm; max-width:35mm; width:auto; height:auto;"/>
                         </div>
 
@@ -148,8 +148,8 @@
                     <div style="width:100%; height:100%; box-sizing:border-box; padding:3mm; font-family:Arial, sans-serif; border:0.5px solid #000; border-radius:4mm; position:relative; overflow:hidden;">
 
                         <div style="position:absolute; top:3mm; right:3mm; width:35mm; text-align:right;">
-                            <img t-if="company.logo"
-                                 t-att-src="image_data_uri(company.logo)"
+                            <img t-if="company_logo_uri or company.logo"
+                                 t-att-src="company_logo_uri or (image_data_uri(company.logo) if company.logo else '')"
                                  style="max-height:24mm; max-width:35mm; width:auto; height:auto;"/>
                         </div>
 
