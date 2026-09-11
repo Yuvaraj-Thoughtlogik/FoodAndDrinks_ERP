@@ -20,9 +20,6 @@ class ReportRequirement(models.AbstractModel):
         docs = self.env['requirement.report.wizard'].browse(docids)
 
         report_results = []
-        lang = self.env.lang or 'en_US'
-        company_ids = tuple(self.env.companies.ids) if self.env.companies else (self.env.company.id,)
-
         for wizard in docs:
             # Format display dates
             delivery_date_from_str = wizard.delivery_date_from.strftime('%d/%m/%Y') if wizard.delivery_date_from else ''
@@ -43,66 +40,22 @@ class ReportRequirement(models.AbstractModel):
             else:
                 footer_date_str = current_dt.strftime('%d %B %Y')
 
-            params = {
-                'date_from': wizard.delivery_date_from,
-                'date_to': wizard.delivery_date_to,
-                'company_ids': company_ids,
-                'lang': lang,
-            }
-
-            channel_filter = ""
-            if wizard.delivery_channel == 'courier':
-                channel_filter = "AND so.delivery_channel = 'courier'"
-            else:
-                channel_filter = "AND (so.delivery_channel = 'regal_van' OR so.delivery_channel IS NULL)"
-
-            depot_filter = ""
-            if wizard.delivery_channel != 'courier' and wizard.depot_ids:
-                depot_filter = "AND (sol.depot_id IN %(depot_ids)s OR (sol.depot_id IS NULL AND so.warehouse_id IN %(depot_ids)s))"
-                params['depot_ids'] = tuple(wizard.depot_ids.ids)
-
-            categ_filter = ""
-            if wizard.categ_ids:
-                categ_filter = "AND pt.categ_id IN %(categ_ids)s"
-                params['categ_ids'] = tuple(wizard.categ_ids.ids)
-
-            query = f"""
-                SELECT 
-                    pc.id AS categ_id,
-                    COALESCE(pc.name->>%(lang)s, pc.name->>'en_GB', pc.name->>'en_US', pc.name::text) AS categ_name,
-                    p.id AS product_id,
-                    p.default_code AS product_code,
-                    COALESCE(pt.name->>%(lang)s, pt.name->>'en_GB', pt.name->>'en_US', pt.name::text) AS product_name,
-                    COALESCE(so.delivery_date, %(date_from)s) AS delivery_date,
-                    SUM(sol.product_uom_qty) AS qty
-                FROM sale_order_line sol
-                JOIN sale_order so ON so.id = sol.order_id
-                JOIN product_product p ON p.id = sol.product_id
-                JOIN product_template pt ON pt.id = p.product_tmpl_id
-                LEFT JOIN product_category pc ON pc.id = pt.categ_id
-                WHERE so.state IN ('sale', 'done')
-                  AND so.delivery_date >= %(date_from)s
-                  AND so.delivery_date <= %(date_to)s
-                  AND sol.display_type IS NULL
-                  AND sol.product_id IS NOT NULL
-                  AND sol.product_uom_qty > 0
-                  {channel_filter}
-                  {depot_filter}
-                  {categ_filter}
-                  AND (so.company_id IS NULL OR so.company_id IN %(company_ids)s)
-                GROUP BY pc.id, pc.name, p.id, p.default_code, pt.name, COALESCE(so.delivery_date, %(date_from)s)
-                ORDER BY pc.id ASC, pt.name ASC, p.id ASC, COALESCE(so.delivery_date, %(date_from)s) ASC
-            """
-            self.env.cr.execute(query, params)
-            rows = self.env.cr.dictfetchall()
+            # Fetch matching order lines
+            domain = wizard._get_line_domain()
+            lines = self.env['sale.order.line'].search(domain, order='order_id, id asc')
 
             # Group by Category -> Product -> Delivery Date
             categories_map = {}
             grand_total_qty = 0.0
 
-            for r in rows:
-                categ_key = r['categ_id'] or 0
-                categ_name = (r['categ_name'] or _('Uncategorized')).strip()
+            for line in lines:
+                product = line.product_id
+                if not product:
+                    continue
+
+                categ = product.categ_id
+                categ_key = categ.id if categ else 0
+                categ_name = (categ.name or _('Uncategorized')).strip() if categ else _('Uncategorized')
 
                 if categ_key not in categories_map:
                     if wizard.delivery_channel == 'courier':
@@ -118,19 +71,21 @@ class ReportRequirement(models.AbstractModel):
                         'total_qty': 0.0,
                     }
 
-                prod_key = r['product_id']
+                prod_key = product.id
                 if prod_key not in categories_map[categ_key]['products']:
                     categories_map[categ_key]['products'][prod_key] = {
                         'product_id': prod_key,
-                        'product_name': r['product_name'] or '',
-                        'product_code': r['product_code'] or '',
+                        'product_name': product.name or product.display_name,
+                        'product_code': product.default_code or '',
                         'dates_map': {},
                         'total_qty': 0.0,
                     }
 
-                d_date = r['delivery_date']
+                # Delivery date for this line
+                d_date = line.order_id.delivery_date or wizard.delivery_date_from
                 d_date_str = d_date.strftime('%d/%m/%Y') if d_date else delivery_date_from_str
-                qty = float(r['qty'] or 0.0)
+
+                qty = line.product_uom_qty
 
                 prod_item = categories_map[categ_key]['products'][prod_key]
                 if d_date_str not in prod_item['dates_map']:

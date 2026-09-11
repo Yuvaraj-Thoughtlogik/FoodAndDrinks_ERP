@@ -221,94 +221,62 @@ class ProductionReportWizard(models.TransientModel):
     def _get_label_data(self):
         """Returns a list of dicts, one per label to print, based on the current wizard filters."""
         self.ensure_one()
-        lang = self.env.lang or 'en_US'
-        company_ids = tuple(self.env.companies.ids) if self.env.companies else (self.env.company.id,)
-
-        params = {
-            'date_from': self.delivery_date_from,
-            'date_to': self.delivery_date_to,
-            'is_late': bool(self.include_late_orders),
-            'company_ids': company_ids,
-            'lang': lang,
-        }
-
-        channel_filter = ""
-        depot_filter = ""
-        if self.delivery_channel == 'courier':
-            channel_filter = "AND so.delivery_channel = 'courier'"
-        else:
-            channel_filter = "AND (so.delivery_channel = 'regal_van' OR so.delivery_channel IS NULL)"
-            if self.depot_ids:
-                depot_filter = "AND b.depot_id IN %(depot_ids)s"
-                params['depot_ids'] = tuple(self.depot_ids.ids)
-
-        category_filter = ""
-        if self.category_ids:
-            category_filter = "AND pc.id IN %(category_ids)s"
-            params['category_ids'] = tuple(self.category_ids.ids)
-
-        query = f"""
-            SELECT 
-                rp.name AS customer_name,
-                rp.customer_code AS customer_code,
-                rmr.name AS round_name,
-                so.delivery_date AS delivery_date,
-                b.code AS batch_code,
-                COALESCE(pc.name->>%(lang)s, pc.name->>'en_GB', pc.name->>'en_US', pc.name::text) AS category_name,
-                sw.name AS warehouse_name,
-                COALESCE(pt.name->>%(lang)s, pt.name->>'en_GB', pt.name->>'en_US', pt.name::text) AS product_name,
-                pt.origin_country AS origin_country,
-                COALESCE(p.barcode, pt.barcode, '') AS product_barcode,
-                COALESCE(p.default_code, pt.default_code, '') AS product_default_code,
-                pt.expiration_time AS expiration_time
-            FROM sale_order so
-            JOIN res_partner rp ON rp.id = so.partner_id
-            LEFT JOIN round_management_batch b ON b.id = so.batch_id
-            LEFT JOIN stock_warehouse sw ON sw.id = b.depot_id
-            LEFT JOIN round_management_round rmr ON rmr.id = so.round_id
-            JOIN sale_order_line sol ON sol.order_id = so.id 
-                AND sol.display_type IS NULL 
-                AND sol.product_id IS NOT NULL 
-                AND sol.product_uom_qty > 0
-            JOIN product_product p ON p.id = sol.product_id
-            JOIN product_template pt ON pt.id = p.product_tmpl_id
-            JOIN product_category pc ON pc.id = pt.categ_id
-            WHERE so.state IN ('sale', 'done')
-              AND so.delivery_date >= %(date_from)s
-              AND so.delivery_date <= %(date_to)s
-              AND COALESCE(so.is_late_order, false) = %(is_late)s
-              {channel_filter}
-              {depot_filter}
-              {category_filter}
-              AND (so.company_id IS NULL OR so.company_id IN %(company_ids)s)
-            ORDER BY so.delivery_date ASC, so.name ASC, sol.id ASC
-        """
-        self.env.cr.execute(query, params)
-        rows = self.env.cr.dictfetchall()
-
         label_lines = []
-        for r in rows:
-            delivery_date = r['delivery_date']
-            exp_time = r['expiration_time']
-            use_by_date = False
-            if delivery_date and exp_time:
-                use_by_date = delivery_date + timedelta(days=exp_time)
+        orders = self._get_matching_orders()
+        category_ids = self.category_ids.ids
 
-            label_lines.append({
-                'customer_name': r['customer_name'] or '',
-                'customer_code': r['customer_code'] or '',
-                'round_name': r['round_name'] or '',
-                'delivery_date_display': delivery_date.strftime('%a, %d %B %Y') if delivery_date else '',
-                'delivery_day_display': delivery_date.strftime('%A') if delivery_date else '',
-                'batch_code': r['batch_code'] or '',
-                'category_name': r['category_name'] or '',
-                'warehouse_name': r['warehouse_name'] or '',
-                'product_name': r['product_name'] or '',
-                'origin_country': r['origin_country'] or '',
-                'product_barcode': r['product_barcode'] or '',
-                'product_default_code': r['product_default_code'] or '',
-                'use_by_display': use_by_date.strftime('%d %B %Y') if use_by_date else '',
-            })
+        for order in orders:
+            batch = order.batch_id
+            warehouse = batch.depot_id if batch else False
+
+            for line in order.order_line:
+                product = line.product_id
+
+                if not product or not product.categ_id:
+                    continue
+
+                if category_ids and product.categ_id.id not in category_ids:
+                    continue
+
+                # Calculate Fresh Use By date
+                # Delivery Date + Product Expiration Time (days)
+                use_by_date = False
+
+                if order.delivery_date and product.expiration_time:
+                    use_by_date = order.delivery_date + timedelta(
+                        days=product.expiration_time
+                    )
+
+                label_lines.append({
+                    'customer_name': order.partner_id.name or '',
+                    'customer_code': order.partner_id.customer_code or '',
+                    'round_name': order.round_id.name if order.round_id else '',
+
+                    'delivery_date_display': (
+                        order.delivery_date.strftime('%a, %d %B %Y')
+                        if order.delivery_date else ''
+                    ),
+
+                    'delivery_day_display': (
+                        order.delivery_date.strftime('%A')
+                        if order.delivery_date else ''
+                    ),
+
+                    'batch_code': batch.code if batch else '',
+                    'category_name': product.categ_id.name or '',
+                    'warehouse_name': warehouse.name if warehouse else '',
+                    'product_name': product.name or '',
+                    'origin_country': product.origin_country or '',
+                    'product_barcode': product.barcode or '',
+                    'product_default_code': product.default_code or '',
+
+                    # Fresh Use By:
+                    # Delivery Date + Product Expiration Time
+                    'use_by_display': (
+                        use_by_date.strftime('%d %B %Y')
+                        if use_by_date else ''
+                    ),
+                })
 
         return label_lines
  

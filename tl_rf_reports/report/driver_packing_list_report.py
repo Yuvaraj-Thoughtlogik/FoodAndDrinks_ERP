@@ -259,183 +259,83 @@ class ReportDriverPackingList(models.AbstractModel):
         printed_at_str = now_local.strftime('%d/%m/%Y %H:%M:%S')
 
         all_batch_groups = []
-        lang = self.env.lang or 'en_US'
-        company_ids = tuple(self.env.companies.ids) if self.env.companies else (self.env.company.id,)
+        bom_cache = {}
 
         for wizard in docs:
-            depot_filter = ""
-            params = {
-                'date_from': wizard.delivery_date_from,
-                'date_to': wizard.delivery_date_to,
-                'company_ids': company_ids,
-                'lang': lang,
-            }
+
+            batch_domain = [
+                ('delivery_date', '>=', wizard.delivery_date_from),
+                ('delivery_date', '<=', wizard.delivery_date_to),
+            ]
             if wizard.depot_ids:
-                depot_filter = "AND b.depot_id IN %(depot_ids)s"
-                params['depot_ids'] = tuple(wizard.depot_ids.ids)
+                batch_domain.append(('depot_id', 'in', wizard.depot_ids.ids))
 
-            query = f"""
-                SELECT 
-                    b.id AS batch_id,
-                    b.code AS batch_code,
-                    b.reference AS batch_reference,
-                    b.delivery_date AS batch_delivery_date,
-                    sw.id AS depot_id,
-                    sw.name AS depot_name,
-                    rmr.id AS round_id,
-                    rmr.name AS round_name,
-                    so.id AS order_id,
-                    sol.id AS line_id,
-                    sol.product_uom_qty AS line_qty,
-                    p.id AS product_id,
-                    p.product_tmpl_id AS tmpl_id,
-                    COALESCE(pt.name->>%(lang)s, pt.name->>'en_GB', pt.name->>'en_US', pt.name::text) AS product_name,
-                    COALESCE(p.sort_seq, pt.sort_seq, 0) AS sort_num,
-                    pc.id AS categ_id,
-                    COALESCE(pc.name->>%(lang)s, pc.name->>'en_GB', pc.name->>'en_US', pc.name::text) AS categ_name
-                FROM round_management_batch b
-                LEFT JOIN stock_warehouse sw ON sw.id = b.depot_id
-                LEFT JOIN round_management_round rmr ON rmr.id = b.round_id
-                JOIN sale_order so ON so.batch_id = b.id 
-                    AND so.state IN ('sale', 'done') 
-                    AND (so.delivery_channel = 'regal_van' OR so.delivery_channel IS NULL)
-                JOIN sale_order_line sol ON sol.order_id = so.id 
-                    AND sol.display_type IS NULL 
-                    AND sol.product_id IS NOT NULL 
-                    AND sol.product_uom_qty > 0
-                JOIN product_product p ON p.id = sol.product_id
-                JOIN product_template pt ON pt.id = p.product_tmpl_id
-                LEFT JOIN product_category pc ON pc.id = pt.categ_id
-                WHERE b.delivery_date >= %(date_from)s 
-                  AND b.delivery_date <= %(date_to)s
-                  {depot_filter}
-                  AND (b.company_id IS NULL OR b.company_id IN %(company_ids)s)
-                ORDER BY b.delivery_date ASC, b.code ASC, b.id ASC
-            """
-            self.env.cr.execute(query, params)
-            rows = self.env.cr.dictfetchall()
+            batches = self.env['round.management.batch'].search(
+                batch_domain, order='delivery_date asc, code asc'
+            )
 
-            if not rows:
-                continue
+            for batch in batches:
 
-            # Gather all unique product & template IDs to pre-fetch phantom BOMs in bulk
-            product_ids = tuple({r['product_id'] for r in rows})
-            tmpl_ids = tuple({r['tmpl_id'] for r in rows})
+                # Driver Packing List: Regal Van Delivery only. Both Normal
+                # and Late orders are included - no is_late_order filter.
+                orders = batch.order_ids.filtered(
+                    lambda so: so.state in ('sale', 'done')
+                    and getattr(so, 'delivery_channel', False) in ('regal_van', False)
+                )
 
-            bom_query = """
-                SELECT 
-                    mb.id AS bom_id,
-                    mb.product_id AS bom_product_id,
-                    mb.product_tmpl_id AS bom_tmpl_id,
-                    COALESCE(mb.product_qty, 1.0) AS bom_qty,
-                    mb.sequence AS bom_sequence,
-                    mbl.id AS bom_line_id,
-                    mbl.product_id AS comp_product_id,
-                    mbl.product_qty AS comp_line_qty,
-                    p_comp.product_tmpl_id AS comp_tmpl_id,
-                    COALESCE(pt_comp.name->>%(lang)s, pt_comp.name->>'en_GB', pt_comp.name->>'en_US', pt_comp.name::text) AS comp_product_name,
-                    COALESCE(p_comp.sort_seq, pt_comp.sort_seq, 0) AS comp_sort_num,
-                    pc_comp.id AS comp_categ_id,
-                    COALESCE(pc_comp.name->>%(lang)s, pc_comp.name->>'en_GB', pc_comp.name->>'en_US', pc_comp.name::text) AS comp_categ_name
-                FROM mrp_bom mb
-                JOIN mrp_bom_line mbl ON mbl.bom_id = mb.id
-                JOIN product_product p_comp ON p_comp.id = mbl.product_id
-                JOIN product_template pt_comp ON pt_comp.id = p_comp.product_tmpl_id
-                LEFT JOIN product_category pc_comp ON pc_comp.id = pt_comp.categ_id
-                WHERE mb.type = 'phantom'
-                  AND mb.active = true
-                  AND (mb.company_id IS NULL OR mb.company_id IN %(company_ids)s)
-                  AND (mb.product_id IN %(product_ids)s OR (mb.product_id IS NULL AND mb.product_tmpl_id IN %(tmpl_ids)s))
-                ORDER BY mb.sequence ASC, mb.id ASC
-            """
-            self.env.cr.execute(bom_query, {
-                'product_ids': product_ids,
-                'tmpl_ids': tmpl_ids,
-                'company_ids': company_ids,
-                'lang': lang,
-            })
-            bom_rows = self.env.cr.dictfetchall()
+                if not orders:
+                    continue
 
-            # Map BOMs: variant-specific first, fallback to template
-            variant_boms = {}
-            tmpl_boms = {}
-            for br in bom_rows:
-                b_id = br['bom_id']
-                if br['bom_product_id']:
-                    if br['bom_product_id'] not in variant_boms:
-                        variant_boms[br['bom_product_id']] = {'qty': br['bom_qty'], 'lines': []}
-                    variant_boms[br['bom_product_id']]['lines'].append(br)
-                elif br['bom_tmpl_id']:
-                    if br['bom_tmpl_id'] not in tmpl_boms:
-                        tmpl_boms[br['bom_tmpl_id']] = {'qty': br['bom_qty'], 'lines': []}
-                    tmpl_boms[br['bom_tmpl_id']]['lines'].append(br)
+                categories_map = {}
 
-            # Group rows by batch
-            batches_map = {}
-            for r in rows:
-                batch_id = r['batch_id']
-                if batch_id not in batches_map:
-                    batches_map[batch_id] = {
-                        'batch_info': r,
-                        'categories_map': {},
-                    }
+                for order in orders:
 
-                b_map = batches_map[batch_id]
-                qty = float(r['line_qty'] or 0.0)
-                pid = r['product_id']
-                tid = r['tmpl_id']
-
-                # Check for phantom BOM explosion
-                bom_info = variant_boms.get(pid) or tmpl_boms.get(tid)
-                if bom_info and bom_info['lines']:
-                    bom_produced_qty = bom_info['qty'] or 1.0
-                    for comp in bom_info['lines']:
-                        comp_qty = (comp['comp_line_qty'] / bom_produced_qty) * qty
-                        if not comp_qty:
+                    for line in order.order_line.filtered(
+                        lambda l: not l.display_type and l.product_id
+                    ):
+                        product = line.product_id
+                        qty = line.product_uom_qty or 0.0
+                        if not qty:
                             continue
-                        categ_key = comp['comp_categ_id'] or 0
-                        categ_name = (comp['comp_categ_name'] or _('Other')).strip().upper()
-                        if categ_key not in b_map['categories_map']:
-                            b_map['categories_map'][categ_key] = {
-                                'categ_name': categ_name,
-                                'products': {},
-                            }
-                        c_prods = b_map['categories_map'][categ_key]['products']
-                        c_pid = comp['comp_product_id']
-                        if c_pid not in c_prods:
-                            sort_n = int(comp['comp_sort_num']) if comp['comp_sort_num'] and int(comp['comp_sort_num']) > 0 else None
-                            c_prods[c_pid] = {
-                                'product_id': c_pid,
-                                'product_name': comp['comp_product_name'],
-                                'box_qty': 0.0,
-                                'sort_num': sort_n,
-                                'sort_str': str(sort_n) if sort_n else '',
-                            }
-                        c_prods[c_pid]['box_qty'] += comp_qty
-                else:
-                    # Direct product
-                    categ_key = r['categ_id'] or 0
-                    categ_name = (r['categ_name'] or _('Other')).strip().upper()
-                    if categ_key not in b_map['categories_map']:
-                        b_map['categories_map'][categ_key] = {
-                            'categ_name': categ_name,
-                            'products': {},
-                        }
-                    c_prods = b_map['categories_map'][categ_key]['products']
-                    if pid not in c_prods:
-                        sort_n = int(r['sort_num']) if r['sort_num'] and int(r['sort_num']) > 0 else None
-                        c_prods[pid] = {
-                            'product_id': pid,
-                            'product_name': r['product_name'],
-                            'box_qty': 0.0,
-                            'sort_num': sort_n,
-                            'sort_str': str(sort_n) if sort_n else '',
-                        }
-                    c_prods[pid]['box_qty'] += qty
 
-            # Format batches into output structure
-            for batch_id, b_data in batches_map.items():
-                categories_map = b_data['categories_map']
+                        # BOM Product Logic (functional spec section 4):
+                        # No BOM / Manufacture-type -> product unchanged.
+                        # Kit-type -> exploded into components.
+                        reporting_items = self._explode_bom(product, qty, bom_cache)
+
+                        for item_product, item_qty in reporting_items:
+
+                            categ = item_product.categ_id
+                            categ_name = (
+                                (categ.name or _('Other')).strip().upper()
+                                if categ else 'OTHER'
+                            )
+                            categ_key = categ.id if categ else 0
+
+                            if categ_key not in categories_map:
+                                categories_map[categ_key] = {
+                                    'categ_name': categ_name,
+                                    'products': {},
+                                }
+
+                            prod_key = item_product.id
+
+                            # Quantity Consolidation (functional spec
+                            # section 5): same product/component across
+                            # multiple order lines within this batch is
+                            # summed into a single row.
+                            if prod_key not in categories_map[categ_key]['products']:
+                                sort_num = self._extract_sort_number(item_product)
+                                categories_map[categ_key]['products'][prod_key] = {
+                                    'product_id': prod_key,
+                                    'product_name': item_product.name,
+                                    'box_qty': 0.0,
+                                    'sort_num': sort_num,
+                                    'sort_str': str(sort_num) if sort_num else '',
+                                }
+
+                            categories_map[categ_key]['products'][prod_key]['box_qty'] += item_qty
+
                 category_list = []
                 batch_total_boxes = 0
 
@@ -444,7 +344,12 @@ class ReportDriverPackingList(models.AbstractModel):
                     key=lambda item: self._get_category_sort_key(item[1]['categ_name'])
                 ):
                     sorted_prods = sorted(c_val['products'].values(), key=self._get_sort_key)
+
                     for p in sorted_prods:
+                        # Always shown with 2 decimal places (e.g. "4.00",
+                        # "11.00"), matching the expected Driver Packing
+                        # List output - unlike the standard Packing List,
+                        # which prints whole numbers without decimals.
                         p['qty_display'] = f"{p['box_qty']:.2f}"
 
                     cat_total = int(round(sum(p['box_qty'] for p in sorted_prods)))
@@ -458,15 +363,16 @@ class ReportDriverPackingList(models.AbstractModel):
                         })
 
                 if category_list:
-                    b_info = b_data['batch_info']
-                    depot_name = b_info['depot_name'] or 'Grimsby'
+                    depot_name = batch.depot_id.name if batch.depot_id else 'Grimsby'
                     delivery_date_str = (
-                        b_info['batch_delivery_date'].strftime('%d/%m/%Y')
-                        if b_info['batch_delivery_date']
-                        else ''
+                        batch.delivery_date.strftime('%d/%m/%Y') if batch.delivery_date else ''
                     )
-                    batch_code = b_info['batch_code'] or ''
-                    batch_name = b_info['round_name'] or b_info['batch_reference'] or ''
+                    batch_code = batch.code or ''
+                    batch_name = (
+                        batch.round_id.name
+                        if (batch.round_id and batch.round_id.name)
+                        else (batch.reference or '')
+                    )
 
                     batch_pages = self._paginate_batch_categories(category_list)
 
