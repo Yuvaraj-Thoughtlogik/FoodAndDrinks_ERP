@@ -19,7 +19,7 @@ class SaleOrder(models.Model):
             ('courier', 'Courier Delivery'),
         ],
         string='Delivery Channel',
-        compute='_compute_delivery_channel',
+        # compute='_compute_delivery_channel',
         store=True,
         readonly=False,
         help="Automatically mapped based on the selected Round Batch."
@@ -78,15 +78,15 @@ class SaleOrder(models.Model):
         return res
         
         
-    @api.depends('batch_id', 'batch_id.delivery_channel')
-    def _compute_delivery_channel(self):
-        for order in self:
-            if order.batch_id and order.batch_id.delivery_channel:
-                order.delivery_channel = order.batch_id.delivery_channel
-            elif not order.delivery_channel:
-                order.delivery_channel = False
+    # @api.depends('batch_id', 'batch_id.delivery_channel')
+    # def _compute_delivery_channel(self):
+    #     for order in self:
+    #         if order.batch_id and order.batch_id.delivery_channel:
+    #             order.delivery_channel = order.batch_id.delivery_channel
+    #         elif not order.delivery_channel:
+    #             order.delivery_channel = False
 
-    @api.onchange('batch_id')
-    def _onchange_batch_id_set_delivery_channel(self):
-        if self.batch_id and self.batch_id.delivery_channel:
-            self.delivery_channel = self.batch_id.delivery_channel
+    # @api.onchange('batch_id')
+    # def _onchange_batch_id_set_delivery_channel(self):
+    #     if self.batch_id and self.batch_id.delivery_channel:
+    #         self.delivery_channel = self.batch_id.delivery_channel
