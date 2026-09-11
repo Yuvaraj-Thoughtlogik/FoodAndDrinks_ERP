@@ -21,6 +21,7 @@
         'web',
         'sale',
         'stock',
+        'purchase',
         'round_management',
         'tl_contact_utm',
     ],
