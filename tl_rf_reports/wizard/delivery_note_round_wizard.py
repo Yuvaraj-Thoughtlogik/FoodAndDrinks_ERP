@@ -14,7 +14,7 @@ class DeliveryNoteRoundWizard(models.TransientModel):
         ],
         string='Delivery Channel',
         required=True,
-        default='regal_van',
+        default='courier',
         help="Select delivery channel for the delivery note report."
     )
     delivery_date_from = fields.Date(
@@ -34,52 +34,39 @@ class DeliveryNoteRoundWizard(models.TransientModel):
     def _check_dates(self):
         for record in self:
             if record.delivery_date_from and record.delivery_date_to and record.delivery_date_to < record.delivery_date_from:
-                raise ValidationError(_("Deliver To cannot be earlier than Deliver From."))
+                raise ValidationError(_("Deliver To date cannot be earlier than Deliver From date."))
 
     def action_print_report(self):
-        """Validates batches or orders for the selected delivery channel and triggers the Delivery Note Round Report."""
+        """Lightning-fast validation using search_count before triggering report."""
         self.ensure_one()
 
         if self.delivery_channel == 'courier':
-            order_domain = [
+            order_count = self.env['sale.order'].search_count([
                 ('delivery_channel', '=', 'courier'),
                 ('state', 'in', ['sale', 'done']),
                 ('delivery_date', '>=', self.delivery_date_from),
                 ('delivery_date', '<=', self.delivery_date_to),
-            ]
-            matching_orders = self.env['sale.order'].search(order_domain)
-            if not matching_orders:
+            ])
+            if not order_count:
                 raise UserError(_(
-                    "No confirmed Courier Delivery orders found with delivery dates between %s and %s."
+                    "No confirmed Courier Delivery orders found between %s and %s."
                 ) % (
                     self.delivery_date_from.strftime('%d/%m/%Y'),
                     self.delivery_date_to.strftime('%d/%m/%Y'),
                 ))
             return self.env.ref('tl_rf_reports.action_report_delivery_note_round_courier').report_action(self)
 
-        # Regal Van Delivery
-        domain = [
+        # Handle Regal Van Delivery
+        batch_count = self.env['round.management.batch'].search_count([
             ('delivery_date', '>=', self.delivery_date_from),
             ('delivery_date', '<=', self.delivery_date_to),
-        ]
-
-        batches = self.env['round.management.batch'].search(domain)
-        if not batches:
+        ])
+        if not batch_count:
             raise UserError(_(
                 "No batches found with delivery dates between %s and %s."
             ) % (
                 self.delivery_date_from.strftime('%d/%m/%Y'),
                 self.delivery_date_to.strftime('%d/%m/%Y'),
-            ))
-
-        # Check if batches contain matching Regal Van Delivery orders
-        eligible_orders = batches.mapped('order_ids').filtered(
-            lambda so: so.state in ('sale', 'done') and getattr(so, 'delivery_channel', False) in ('regal_van', False)
-        )
-
-        if not eligible_orders:
-            raise UserError(_(
-                "Eligible batches were found, but they do not contain any matching Regal Van Delivery sale orders within the selected criteria."
             ))
 
         return self.env.ref('tl_rf_reports.action_report_delivery_note_round_van').report_action(self)
