@@ -63,20 +63,29 @@ class ReportDeliveryNoteRoundVan(DeliveryNoteReportMixin, models.AbstractModel):
         ] if street else []
         return (street2, door_key, order.name or '')
 
-    def _build_drop(self, order):
+    def _build_drop(self, order, pickings=None, delivery_product_ids=None, lines=None):
         """Build one drop dict for an order, or None when the order has no delivery
         or none of its lines are part of the delivery."""
-        pickings = self._get_delivery_pickings(order)
+        if pickings is None:
+            pickings = self._get_delivery_pickings(order)
         if not pickings:
             return None
 
-        delivery_product_ids = self._get_delivery_product_ids(pickings)
+        if delivery_product_ids is None:
+            delivery_product_ids = self._get_delivery_product_ids(pickings)
         if not delivery_product_ids:
             return None
 
-        delivery_lines = order.order_line.filtered(
-            lambda l: not l.display_type and l.product_id and l.product_id.id in delivery_product_ids
-        )
+        if lines is None:
+            delivery_lines = order.order_line.filtered(
+                lambda l: not l.display_type and l.product_id and l.product_id.id in delivery_product_ids
+            )
+        else:
+            delivery_lines = [
+                l for l in lines
+                if not l.display_type and l.product_id and l.product_id.id in delivery_product_ids
+            ]
+
         if not delivery_lines:
             return None
 
@@ -236,6 +245,7 @@ class ReportDeliveryNoteRoundVan(DeliveryNoteReportMixin, models.AbstractModel):
 
     @api.model
     def _get_report_values(self, docids, data=None):
+        from collections import defaultdict
         docs = self.env['delivery.note.round.wizard'].browse(docids)
         all_batch_groups = []
 
@@ -250,11 +260,50 @@ class ReportDeliveryNoteRoundVan(DeliveryNoteReportMixin, models.AbstractModel):
                 order='delivery_date asc, code asc'
             )
 
+            if not batches:
+                continue
+
+            # Batch pre-fetch pickings, moves, and lines across all orders
+            all_candidate_orders = batches.order_ids.filtered(
+                lambda so: so.state in ('sale', 'done')
+                and getattr(so, 'delivery_channel', False) in ('regal_van', False)
+            )
+
+            all_pickings = self.env['stock.picking'].search([
+                ('sale_id', 'in', all_candidate_orders.ids),
+                ('state', '!=', 'cancel'),
+            ])
+            pickings_by_order = defaultdict(lambda: self.env['stock.picking'])
+            for p in all_pickings:
+                p_type = getattr(p, 'picking_type_id', False)
+                code = getattr(p_type, 'code', False) if p_type else False
+                if code in ('outgoing', False, None):
+                    pickings_by_order[p.sale_id.id] |= p
+
+            all_moves = self.env['stock.move'].search([
+                ('picking_id', 'in', all_pickings.ids),
+                ('state', '!=', 'cancel'),
+            ])
+            picking_to_sale = {p.id: p.sale_id.id for p in all_pickings}
+            delivery_products_by_order = defaultdict(set)
+            for m in all_moves:
+                if m.product_id and m.picking_id.id in picking_to_sale:
+                    delivery_products_by_order[picking_to_sale[m.picking_id.id]].add(m.product_id.id)
+
+            all_lines = self.env['sale.order.line'].search([
+                ('order_id', 'in', all_candidate_orders.ids),
+                ('display_type', '=', False),
+                ('product_id', '!=', False),
+            ])
+            lines_by_order = defaultdict(list)
+            for l in all_lines:
+                lines_by_order[l.order_id.id].append(l)
+
             for batch in batches:
                 eligible_orders = batch.order_ids.filtered(
                     lambda so: so.state in ('sale', 'done')
                     and getattr(so, 'delivery_channel', False) in ('regal_van', False)
-                    and self._get_delivery_pickings(so)
+                    and bool(pickings_by_order.get(so.id))
                 )
 
                 if not eligible_orders:
@@ -264,7 +313,12 @@ class ReportDeliveryNoteRoundVan(DeliveryNoteReportMixin, models.AbstractModel):
 
                 drops = []
                 for order in sorted_orders:
-                    drop = self._build_drop(order)
+                    drop = self._build_drop(
+                        order,
+                        pickings=pickings_by_order.get(order.id),
+                        delivery_product_ids=delivery_products_by_order.get(order.id),
+                        lines=lines_by_order.get(order.id, []),
+                    )
                     if not drop:
                         continue
 

@@ -96,14 +96,32 @@
                                invisible="ttype not in ['text', 'html'] or (can_use_random and use_random)"/>
                         <field name="value_integer"
                                invisible="ttype != 'integer' or (can_use_random and use_random)"/>
+                        <field name="value_integer_from" string="Random From"
+                               invisible="ttype != 'integer' or not (can_use_random and use_random)"/>
+                        <field name="value_integer_to" string="Random To"
+                               invisible="ttype != 'integer' or not (can_use_random and use_random)"/>
                         <field name="value_float"
                                invisible="ttype not in ['float', 'monetary'] or (can_use_random and use_random)"/>
+                        <field name="value_float_from" string="Random From"
+                               invisible="ttype not in ['float', 'monetary'] or not (can_use_random and use_random)"/>
+                        <field name="value_float_to" string="Random To"
+                               invisible="ttype not in ['float', 'monetary'] or not (can_use_random and use_random)"/>
+                        <field name="value_float_whole_only" colspan="4"
+                               invisible="ttype not in ['float', 'monetary'] or not (can_use_random and use_random)"/>
                         <field name="value_boolean"
                                invisible="ttype != 'boolean' or (can_use_random and use_random)"/>
                         <field name="value_date"
                                invisible="ttype != 'date' or (can_use_random and use_random)"/>
+                        <field name="value_date_from" string="Random From"
+                               invisible="ttype != 'date' or not (can_use_random and use_random)"/>
+                        <field name="value_date_to" string="Random To"
+                               invisible="ttype != 'date' or not (can_use_random and use_random)"/>
                         <field name="value_datetime"
                                invisible="ttype != 'datetime' or (can_use_random and use_random)"/>
+                        <field name="value_datetime_from" string="Random From"
+                               invisible="ttype != 'datetime' or not (can_use_random and use_random)"/>
+                        <field name="value_datetime_to" string="Random To"
+                               invisible="ttype != 'datetime' or not (can_use_random and use_random)"/>
                         <field name="value_selection_id" colspan="4"
                                options="{'no_create': True, 'no_open': True}"
                                domain="[('field_id', '=', field_id)]"
@@ -118,9 +136,9 @@
                                invisible="ttype not in ['many2one', 'many2many'] or not comodel_hint"/>
                         <field name="value_domain" colspan="4" widget="domain"
                                options="{'model': 'domain_model'}"
-                               invisible="ttype not in ['many2one', 'many2many', 'reference'] or not domain_model or (ttype == 'many2many' and not (can_use_random and use_random))"/>
+                               invisible="ttype not in ['many2one', 'many2many', 'reference'] or not domain_model or not (can_use_random and use_random)"/>
                         <div class="text-muted" colspan="4"
-                             invisible="ttype not in ['many2one', 'many2many', 'reference'] or not domain_model or (ttype == 'many2many' and not (can_use_random and use_random))">
+                             invisible="ttype not in ['many2one', 'many2many', 'reference'] or not domain_model or not (can_use_random and use_random)">
                             Restricts the records this line may draw on - both
                             the ones Random picks and the one filled in above.
                             Leave it empty to draw from everything you can read.
@@ -204,14 +222,32 @@
                                invisible="ttype not in ['text', 'html'] or (can_use_random and use_random)"/>
                         <field name="value_integer"
                                invisible="ttype != 'integer' or (can_use_random and use_random)"/>
+                        <field name="value_integer_from" string="Random From"
+                               invisible="ttype != 'integer' or not (can_use_random and use_random)"/>
+                        <field name="value_integer_to" string="Random To"
+                               invisible="ttype != 'integer' or not (can_use_random and use_random)"/>
                         <field name="value_float"
                                invisible="ttype not in ['float', 'monetary'] or (can_use_random and use_random)"/>
+                        <field name="value_float_from" string="Random From"
+                               invisible="ttype not in ['float', 'monetary'] or not (can_use_random and use_random)"/>
+                        <field name="value_float_to" string="Random To"
+                               invisible="ttype not in ['float', 'monetary'] or not (can_use_random and use_random)"/>
+                        <field name="value_float_whole_only" colspan="4"
+                               invisible="ttype not in ['float', 'monetary'] or not (can_use_random and use_random)"/>
                         <field name="value_boolean"
                                invisible="ttype != 'boolean' or (can_use_random and use_random)"/>
                         <field name="value_date"
                                invisible="ttype != 'date' or (can_use_random and use_random)"/>
+                        <field name="value_date_from" string="Random From"
+                               invisible="ttype != 'date' or not (can_use_random and use_random)"/>
+                        <field name="value_date_to" string="Random To"
+                               invisible="ttype != 'date' or not (can_use_random and use_random)"/>
                         <field name="value_datetime"
                                invisible="ttype != 'datetime' or (can_use_random and use_random)"/>
+                        <field name="value_datetime_from" string="Random From"
+                               invisible="ttype != 'datetime' or not (can_use_random and use_random)"/>
+                        <field name="value_datetime_to" string="Random To"
+                               invisible="ttype != 'datetime' or not (can_use_random and use_random)"/>
                         <field name="value_selection_id" colspan="4"
                                options="{'no_create': True, 'no_open': True}"
                                domain="[('field_id', '=', field_id)]"
@@ -226,9 +262,9 @@
                                invisible="ttype not in ['many2one', 'many2many'] or not comodel_hint"/>
                         <field name="value_domain" colspan="4" widget="domain"
                                options="{'model': 'domain_model'}"
-                               invisible="ttype not in ['many2one', 'many2many', 'reference'] or not domain_model or (ttype == 'many2many' and not (can_use_random and use_random))"/>
+                               invisible="ttype not in ['many2one', 'many2many', 'reference'] or not domain_model or not (can_use_random and use_random)"/>
                         <div class="text-muted" colspan="4"
-                             invisible="ttype not in ['many2one', 'many2many', 'reference'] or not domain_model or (ttype == 'many2many' and not (can_use_random and use_random))">
+                             invisible="ttype not in ['many2one', 'many2many', 'reference'] or not domain_model or not (can_use_random and use_random)">
                             Restricts the records this line may draw on - both
                             the ones Random picks and the one filled in above.
                             Leave it empty to draw from everything you can read.
@@ -254,7 +290,13 @@
                     <!-- One2many inline child record configuration -->
                     <group col="4" string="One2many Child Records Configuration"
                            invisible="ttype != 'one2many'">
-                        <field name="value_count" string="Number of Child Records" colspan="2"/>
+                        <field name="value_count_random" colspan="4"/>
+                        <field name="value_count" string="Number of Child Records" colspan="2"
+                               invisible="value_count_random"/>
+                        <field name="value_count_from" string="From"
+                               invisible="not value_count_random"/>
+                        <field name="value_count_to" string="To"
+                               invisible="not value_count_random"/>
                         <field name="comodel_hint" colspan="2" readonly="1" invisible="not comodel_hint"/>
                         <div class="text-muted" colspan="4">
                             <em>Number of Child Records</em> will be created for each parent record.

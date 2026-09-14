@@ -51,10 +51,27 @@
                             </tr>
                         </table>
 
+<<<<<<< HEAD
                         <!-- Customer Info -->
                         <div style="width: 100%; font-size: 13px; margin-bottom: 4px;">
                             Customer ID&#160;&#160;<span style="font-weight: bold;"><t t-esc="co['customer_id']" /></span>
                         </div>
+=======
+                            <!-- ==================== LOGO + TITLE ==================== -->
+                            <div style="width: 100%; margin-bottom: 14px;">
+                                <div style="float: left; width: 22%;">
+                                    <img t-if="co.get('company_logo_uri') or company_logo_uri or company.logo"
+                                        t-att-src="co.get('company_logo_uri') or company_logo_uri or image_data_uri(company.logo)"
+                                        style="max-height: 50px; max-width: 100%;" />
+                                </div>
+                                <div
+                                    style="float: left; width: 78%; font-size: 18px; padding-top: 12px; padding-left: 24px; box-sizing: border-box;">
+                                    Customer Delivery Note: For Delivery
+                                    <t t-esc="co['delivery_date']" />
+                                </div>
+                                <div style="clear: both;" />
+                            </div>
+>>>>>>> 7439c3bd32a9edb616747e8b0bded873c45356e4
 
                         <table style="width: 100%; margin-bottom: 8px; border-collapse: collapse;">
                             <tr>
@@ -106,9 +123,26 @@
                             <div style="border-top: 1px solid #000000; width: 100%;" />
                         </t>
 
+<<<<<<< HEAD
                     </div>
 
                     <!-- Footer -->
+=======
+                            <!-- ==================== FOOTER ==================== -->
+<!--                            <div-->
+<!--                                style="position: absolute; bottom: 0; left: 0; right: 0; text-align: center; font-size: 9.5px; line-height: 1.4; color: #333333;">-->
+<!--                                The goods received should arrive with you in perfect condition having-->
+<!--                                been held at optimum temperature. If for any reason you are unhappy-->
+<!--                                with the goods or you believe they have not been delivered as expected-->
+<!--                                then please don't hesitate to contact one of our customer service team-->
+<!--                                on-->
+<!--                                <t t-esc="company.phone or ''" /> or by email to-->
+<!--                                <t t-esc="company.email or ''" /> and someone will be happy to assist-->
+<!--                                with your query.-->
+<!--                            </div>-->
+                        </div>
+                    </div>
+>>>>>>> 7439c3bd32a9edb616747e8b0bded873c45356e4
                     <div class="footer" style="font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif; font-size: 9.5px; line-height: 1.4; color: #333333; width: 100%; text-align: center; padding: 0; margin: 0; border: none;">
                         <div style="width: 100%; text-align: center;">
                             The goods received should arrive with you in perfect condition having been held at optimum temperature. If for any reason you are unhappy with the goods or you believe they have not been delivered as expected then please don't hesitate to contact one of our customer service team on <t t-esc="company.phone or ''"/> or by email to <t t-esc="company.email or ''"/> and someone will be happy to assist with your query.

@@ -179,6 +179,22 @@ class DemoValueMixin(models.AbstractModel):
     value_date = fields.Date(string="Date Value")
     value_datetime = fields.Datetime(string="Date & Time Value")
 
+    value_integer_from = fields.Integer(string="From", default=1)
+    value_integer_to = fields.Integer(string="To", default=999)
+    value_float_from = fields.Float(string="From", default=1.0)
+    value_float_to = fields.Float(string="To", default=999.0)
+    value_float_whole_only = fields.Boolean(
+        string="Whole Number Only",
+        help="Generate whole numbers only (e.g. 3, 5, 6) instead of decimals.")
+    value_date_from = fields.Date(
+        string="From", default=lambda self: fields.Date.today() - timedelta(days=180))
+    value_date_to = fields.Date(
+        string="To", default=lambda self: fields.Date.today() + timedelta(days=180))
+    value_datetime_from = fields.Datetime(
+        string="From", default=lambda self: fields.Datetime.now() - timedelta(days=180))
+    value_datetime_to = fields.Datetime(
+        string="To", default=lambda self: fields.Datetime.now() + timedelta(days=180))
+
     value_selection_id = fields.Many2one(
         'ir.model.fields.selection', string="Option",
         ondelete='cascade',
@@ -219,6 +235,13 @@ class DemoValueMixin(models.AbstractModel):
         help="Many2many: how many records to link when the value is left to "
              "random. One2many: how many child records to create for each "
              "parent record.")
+    value_count_random = fields.Boolean(
+        string="Random Count",
+        help="Create a different number of child records for every parent "
+             "record, within the range below. Leave unticked to always "
+             "create exactly Number of Child Records.")
+    value_count_from = fields.Integer(string="From", default=1)
+    value_count_to = fields.Integer(string="To", default=1)
 
     value_display = fields.Char(compute='_compute_value_display', string="Value")
 
@@ -310,7 +333,11 @@ class DemoValueMixin(models.AbstractModel):
                  'value_integer', 'value_float', 'value_boolean', 'value_date',
                  'value_datetime', 'value_selection_id', 'value_selection_free',
                  'value_reference', 'value_binary_filename', 'value_count',
-                 'value_domain')
+                 'value_domain', 'value_integer_from', 'value_integer_to',
+                 'value_float_from', 'value_float_to', 'value_float_whole_only',
+                 'value_date_from', 'value_date_to',
+                 'value_datetime_from', 'value_datetime_to', 'value_count_random',
+                 'value_count_from', 'value_count_to')
     def _compute_value_display(self):
         for line in self:
             line.value_display = line._value_display_string()
@@ -321,10 +348,26 @@ class DemoValueMixin(models.AbstractModel):
         if widget == 'unsupported':
             return _("Unsupported field type")
         if widget == 'one2many':
+            if self.value_count_random:
+                return _("%(lo)s-%(hi)s child record(s) per parent",
+                          lo=self.value_count_from, hi=self.value_count_to)
             return _("%s child record(s) per parent", max(self.value_count, 0))
         if self._will_randomise():
             if widget == 'many2many':
                 label = _("Random (%s record(s))", max(self.value_count, 1))
+            elif widget in ('integer', 'float'):
+                lo, hi = ((self.value_integer_from, self.value_integer_to)
+                          if widget == 'integer' else
+                          (self.value_float_from, self.value_float_to))
+                label = _("Random (%(lo)s to %(hi)s)", lo=lo, hi=hi)
+                if widget == 'float' and self.value_float_whole_only:
+                    label = _("%s, whole numbers", label)
+            elif widget in ('date', 'datetime'):
+                lo, hi = ((self.value_date_from, self.value_date_to)
+                          if widget == 'date' else
+                          (self.value_datetime_from, self.value_datetime_to))
+                label = (_("Random (%(lo)s to %(hi)s)", lo=lo, hi=hi)
+                         if lo and hi else _("Random"))
             else:
                 label = _("Random")
             if self._has_domain():
@@ -415,6 +458,17 @@ class DemoValueMixin(models.AbstractModel):
                 line.use_random = False
             if line.field_id.ttype in ('many2many', 'one2many') and line.value_count <= 0:
                 line.value_count = 1
+            if line.field_id.ttype != 'integer':
+                line.value_integer_from, line.value_integer_to = 1, 999
+            if line.field_id.ttype != 'float':
+                line.value_float_from, line.value_float_to = 1.0, 999.0
+                line.value_float_whole_only = False
+            if line.field_id.ttype != 'date':
+                line.value_date_from = fields.Date.today() - timedelta(days=180)
+                line.value_date_to = fields.Date.today() + timedelta(days=180)
+            if line.field_id.ttype != 'datetime':
+                line.value_datetime_from = fields.Datetime.now() - timedelta(days=180)
+                line.value_datetime_to = fields.Datetime.now() + timedelta(days=180)
             line._seed_value_reference()
 
     @api.onchange('use_random')
@@ -579,7 +633,8 @@ class DemoValueMixin(models.AbstractModel):
     # ------------------------------------------------------------------
     # constraints
     # ------------------------------------------------------------------
-    @api.constrains('value_count', 'field_id')
+    @api.constrains('value_count', 'value_count_random', 'value_count_from',
+                     'value_count_to', 'field_id')
     def _check_value_count(self):
         for line in self:
             if line.ttype in ('one2many', 'many2many') and line.value_count < 0:
@@ -591,6 +646,40 @@ class DemoValueMixin(models.AbstractModel):
                     _("Number of Values on '%s' is capped at 200 child records "
                       "per parent record.",
                       line.field_id.field_description or line.field_name))
+            if line.ttype == 'one2many' and line.value_count_random:
+                label = line._label()
+                if line.value_count_from < 0 or line.value_count_to < 0:
+                    raise ValidationError(
+                        _("'From' and 'To' on '%s' must be zero or more.", label))
+                if line.value_count_from > line.value_count_to:
+                    raise ValidationError(
+                        _("'From' must not be greater than 'To' on '%s'.", label))
+                if line.value_count_to > 200:
+                    raise ValidationError(
+                        _("'To' on '%s' is capped at 200 child records per "
+                          "parent record.", label))
+
+    @api.constrains('value_integer_from', 'value_integer_to',
+                     'value_float_from', 'value_float_to',
+                     'value_date_from', 'value_date_to',
+                     'value_datetime_from', 'value_datetime_to', 'field_id')
+    def _check_value_range(self):
+        for line in self:
+            label = line._label()
+            if line.ttype == 'integer' and line.value_integer_from > line.value_integer_to:
+                raise ValidationError(
+                    _("'From' must not be greater than 'To' for '%s'.", label))
+            if line.ttype == 'float' and line.value_float_from > line.value_float_to:
+                raise ValidationError(
+                    _("'From' must not be greater than 'To' for '%s'.", label))
+            if (line.ttype == 'date' and line.value_date_from and line.value_date_to
+                    and line.value_date_from > line.value_date_to):
+                raise ValidationError(
+                    _("'From' must not be later than 'To' for '%s'.", label))
+            if (line.ttype == 'datetime' and line.value_datetime_from and line.value_datetime_to
+                    and line.value_datetime_from > line.value_datetime_to):
+                raise ValidationError(
+                    _("'From' must not be later than 'To' for '%s'.", label))
 
     @api.constrains('value_domain', 'field_id')
     def _check_value_domain(self):
@@ -1058,15 +1147,16 @@ class DemoValueMixin(models.AbstractModel):
             return (rnd.random_html(field) if self.ttype == 'html'
                     else rnd.random_text(field))
         if widget == 'integer':
-            return rnd.random_integer(field)
+            return rnd.random_integer(field, self.value_integer_from, self.value_integer_to)
         if widget == 'float':
-            return rnd.random_float(field)
+            return rnd.random_float(field, self.value_float_from, self.value_float_to,
+                                     self.value_float_whole_only)
         if widget == 'boolean':
             return rnd.random_boolean(field)
         if widget == 'date':
-            return rnd.random_date(field)
+            return rnd.random_date(self.value_date_from, self.value_date_to)
         if widget == 'datetime':
-            return rnd.random_datetime(field)
+            return rnd.random_datetime(self.value_datetime_from, self.value_datetime_to)
         if widget == 'selection':
             value = rnd.random_selection(self._target_model(), self.field_id.name)
             return value if value is not None else SKIP

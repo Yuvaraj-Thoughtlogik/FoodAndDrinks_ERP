@@ -2,6 +2,9 @@
 from odoo import models
 
 
+from odoo.tools.image import image_data_uri
+
+
 class ProductionLabelReport(models.AbstractModel):
     _name = 'report.tl_rf_reports.report_production_label_document_courier'
     _description = 'Production Label Report Data - Courier'
@@ -14,13 +17,17 @@ class ProductionLabelReport(models.AbstractModel):
         if docs:
             label_lines = docs[0]._get_label_data()
 
+        company = self.env.company
+        company_logo_uri = image_data_uri(company.logo) if company.logo else False
+
         return {
             'doc_ids': docids,
             'doc_model': 'production.report.wizard',
             'docs': docs,
             'label_lines': label_lines,
             'total_labels': len(label_lines),
-            'company': self.env.company,
+            'company': company,
+            'company_logo_uri': company_logo_uri,
         }
 
 

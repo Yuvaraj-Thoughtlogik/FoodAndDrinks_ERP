@@ -141,6 +141,32 @@ class SaleOrder(models.Model):
     pay_cheque = fields.Boolean(string="Cheque", default=False)
     pay_card = fields.Boolean(string="Card", default=False)
 
+    delivery_channel = fields.Selection(
+        selection=[
+            ('regal_van', 'Regal Van Delivery'),
+            ('courier', 'Courier Delivery'),
+        ],
+        string='Delivery Channel',
+        compute='_compute_delivery_channel',
+        store=True,
+        readonly=False,
+        help="Automatically mapped based on the selected Round Batch."
+    )
+
+    @api.depends('batch_id', 'batch_id.delivery_channel')
+    def _compute_delivery_channel(self):
+        for order in self:
+            if order.batch_id and order.batch_id.delivery_channel:
+                order.delivery_channel = order.batch_id.delivery_channel
+            elif not order.delivery_channel:
+                order.delivery_channel = False
+
+    @api.onchange('batch_id')
+    def _onchange_batch_id_set_delivery_channel(self):
+        if self.batch_id and self.batch_id.delivery_channel:
+            self.delivery_channel = self.batch_id.delivery_channel
+
+
     @api.onchange('pay_card_reader')
     def _onchange_pay_card_reader(self):
         if self.pay_card_reader:

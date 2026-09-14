@@ -92,15 +92,15 @@ class BatchReportWizard(models.TransientModel):
                 ))
             report_act = self.env.ref('tl_rf_reports.action_report_dock_weight_breakdown').report_action(self)
             lines_act = self.action_view_lines()
-            return {
-                'type': 'ir.actions.client',
-                'tag': 'print_and_open_lines',
-                'params': {
-                    'report_action': report_act,
-                    'lines_action': lines_act,
-                }
-            }
-            # return self.env.ref('tl_rf_reports.action_report_dock_weight_breakdown').report_action(self)
+            # return {
+            #     'type': 'ir.actions.client',
+            #     'tag': 'print_and_open_lines',
+            #     'params': {
+            #         'report_action': report_act,
+            #         'lines_action': lines_act,
+            #     }
+            # }
+            return self.env.ref('tl_rf_reports.action_report_dock_weight_breakdown').report_action(self)
 
         # Regal Van Delivery (Batch-based)
         domain = [
@@ -136,15 +136,16 @@ class BatchReportWizard(models.TransientModel):
 
         report_act = self.env.ref('tl_rf_reports.action_report_dock_weight_breakdown').report_action(self)
         lines_act = self.action_view_lines()
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'print_and_open_lines',
-            'params': {
-                'report_action': report_act,
-                'lines_action': lines_act,
-            }
-        }
-        # return self.env.ref('tl_rf_reports.action_report_dock_weight_breakdown').report_action(self)
+        # return {
+        #     'type': 'ir.actions.client',
+        #     'tag': 'print_and_open_lines',
+        #     'params': {
+        #         'report_action': report_act,
+        #         'lines_action': lines_act,
+        #     }
+        # }
+
+        return self.env.ref('tl_rf_reports.action_report_dock_weight_breakdown').report_action(self)
 
     def action_view_lines(self):
         """Opens the Sale Order Line list view with grouping by category (Courier) or depot and category (Regal Van)."""
