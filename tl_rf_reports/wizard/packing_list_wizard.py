@@ -112,8 +112,28 @@ class PackingListWizard(models.TransientModel):
             if record.packing_date_from and record.packing_date_to and record.packing_date_to < record.packing_date_from:
                 raise ValidationError(_("Packing Date To cannot be earlier than Packing Date From."))
 
+    def _wizard_vals(self):
+        return {
+            'driver_packing_list': self.driver_packing_list,
+            'delivery_channel': self.delivery_channel,
+            'delivery_date_from': self.delivery_date_from,
+            'delivery_date_to': self.delivery_date_to,
+            'packing_date_from': self.packing_date_from,
+            'packing_date_to': self.packing_date_to,
+            'depot_ids': [(6, 0, self.depot_ids.ids)],
+            'include_late_orders': self.include_late_orders,
+        }
+
     def action_print_report(self):
-        """Validates eligible batches or courier orders and triggers the Packing List Report."""
+        """Validates eligible batches or courier orders and triggers the Packing List Report.
+
+        For a large number of records, rendering the PDF (thousands of
+        wkhtmltopdf pages) can take many minutes - too long to hold open the
+        HTTP request that triggered the Print button. Past a configurable
+        threshold (tl.report.generation.job._get_async_threshold), the report
+        is instead generated in the background and the user is notified with
+        a Download button once it's ready, so the click always returns
+        immediately."""
         self.ensure_one()
 
         # Defensive: Driver Packing List is always Regal Van Delivery, regardless of what
@@ -123,6 +143,8 @@ class PackingListWizard(models.TransientModel):
 
         if self.driver_packing_list:
             return self._action_print_driver_packing_list()
+
+        job_model = self.env['tl.report.generation.job']
 
         if self.delivery_channel == 'courier':
             order_domain = [
@@ -146,7 +168,13 @@ class PackingListWizard(models.TransientModel):
                     self.delivery_date_from.strftime('%d/%m/%Y'),
                     self.delivery_date_to.strftime('%d/%m/%Y'),
                 ))
-            return self.env.ref('tl_rf_reports.action_report_packing_list').report_action(self)
+            return job_model.dispatch_report(
+                wizard=self,
+                report_xmlid='tl_rf_reports.action_report_packing_list',
+                wizard_vals=self._wizard_vals(),
+                display_name=_('Courier Packing List Report'),
+                record_count=len(matching_orders),
+            )
 
         # Regal Van Delivery (Batch-based)
         domain = [
@@ -180,7 +208,13 @@ class PackingListWizard(models.TransientModel):
         if not eligible_orders:
             raise UserError(_("Eligible batches were found, but they do not contain any matching Regal Van Delivery sale orders."))
 
-        return self.env.ref('tl_rf_reports.action_report_packing_list').report_action(self)
+        return job_model.dispatch_report(
+            wizard=self,
+            report_xmlid='tl_rf_reports.action_report_packing_list',
+            wizard_vals=self._wizard_vals(),
+            display_name=_('Packing List Report'),
+            record_count=len(eligible_orders),
+        )
 
     def _action_print_driver_packing_list(self):
         """Driver Packing List: Regal Van Delivery only, filtered by Delivery Date and
@@ -212,4 +246,10 @@ class PackingListWizard(models.TransientModel):
                 "Eligible batches were found, but they do not contain any matching Regal Van Delivery sale orders."
             ))
 
-        return self.env.ref('tl_rf_reports.action_report_driver_packing_list').report_action(self)
+        return self.env['tl.report.generation.job'].dispatch_report(
+            wizard=self,
+            report_xmlid='tl_rf_reports.action_report_driver_packing_list',
+            wizard_vals=self._wizard_vals(),
+            display_name=_('Driver Packing List Report'),
+            record_count=len(eligible_orders),
+        )

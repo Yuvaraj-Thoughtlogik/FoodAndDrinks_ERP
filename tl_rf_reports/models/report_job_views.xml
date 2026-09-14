@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Users only ever need to see (and clean up) their own background report jobs -->
+    <record id="rule_report_generation_job_own" model="ir.rule">
+        <field name="name">Report Jobs: own jobs only</field>
+        <field name="model_id" ref="model_tl_report_generation_job"/>
+        <field name="domain_force">[('user_id', '=', user.id)]</field>
+    </record>
+
+    <record id="view_report_generation_job_list" model="ir.ui.view">
+        <field name="name">tl.report.generation.job.list</field>
+        <field name="model">tl.report.generation.job</field>
+        <field name="arch" type="xml">
+            <list string="Report Jobs" create="false" edit="false">
+                <field name="create_date" string="Requested"/>
+                <field name="name" string="Report"/>
+                <field name="record_count" string="Records"/>
+                <field name="state" widget="badge"
+                       decoration-success="state == 'done'"
+                       decoration-danger="state == 'failed'"
+                       decoration-info="state in ('queued', 'processing')"/>
+                <field name="error_message" optional="hide"/>
+                <button name="action_download" type="object" string="Download"
+                        icon="fa-download" invisible="state != 'done'"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_report_generation_job_search" model="ir.ui.view">
+        <field name="name">tl.report.generation.job.search</field>
+        <field name="model">tl.report.generation.job</field>
+        <field name="arch" type="xml">
+            <search string="Search Report Jobs">
+                <field name="name"/>
+                <filter string="Ready" name="done" domain="[('state', '=', 'done')]"/>
+                <filter string="In Progress" name="in_progress" domain="[('state', 'in', ('queued', 'processing'))]"/>
+                <filter string="Failed" name="failed" domain="[('state', '=', 'failed')]"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_report_generation_job" model="ir.actions.act_window">
+        <field name="name">My Report Jobs</field>
+        <field name="res_model">tl.report.generation.job</field>
+        <field name="view_mode">list</field>
+        <field name="search_view_id" ref="view_report_generation_job_search"/>
+    </record>
+
+    <menuitem id="menu_report_generation_job"
+        name="My Report Jobs"
+        parent="menu_round_reporting_root"
+        action="action_report_generation_job"
+        sequence="4"/>
+</odoo>

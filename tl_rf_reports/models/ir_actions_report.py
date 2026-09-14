@@ -72,7 +72,7 @@ class IrActionsReport(models.Model):
                 return max(1, int(param))
         except (ValueError, TypeError):
             pass
-        return 200
+        return 100
 
     @api.model
     def _stamp_page_numbers(self, pdf_content, report_ref=None, format_str=None, position=None):
