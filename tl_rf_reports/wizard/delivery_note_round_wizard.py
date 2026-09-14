@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError, ValidationError
 
@@ -56,7 +55,6 @@ class DeliveryNoteRoundWizard(models.TransientModel):
                 ))
             return self.env.ref('tl_rf_reports.action_report_delivery_note_round_courier').report_action(self)
 
-        # Handle Regal Van Delivery
         batch_count = self.env['round.management.batch'].search_count([
             ('delivery_date', '>=', self.delivery_date_from),
             ('delivery_date', '<=', self.delivery_date_to),

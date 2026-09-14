@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 import io
 import base64
 from collections import defaultdict
@@ -42,7 +41,6 @@ class NumberedCanvas(canvas.Canvas):
         margin = 9 * mm
         width = A4[0] - (2 * margin)
         
-        # 1. Main Footer Paragraph
         footer_style = ParagraphStyle(
             'FooterStyle',
             fontName='Helvetica',
@@ -61,7 +59,6 @@ class NumberedCanvas(canvas.Canvas):
         w, h = p.wrap(width, 15 * mm)
         p.drawOn(self, margin, 10 * mm)
 
-        # 2. Page Numbering ("Page X of Y")
         page_style = ParagraphStyle(
             'PageNumStyle',
             fontName='Helvetica',
@@ -149,7 +146,6 @@ class ReportDeliveryNoteRoundCourier(models.AbstractModel):
 
         order_ids = orders.ids
 
-        # Fetch lines & products
         sol_read = self.env['sale.order.line'].search_read(
             [('order_id', 'in', order_ids), ('display_type', '=', False), ('product_id', '!=', False)],
             ['order_id', 'product_id', 'product_uom_qty', 'name']
@@ -174,7 +170,6 @@ class ReportDeliveryNoteRoundCourier(models.AbstractModel):
                 'note': l['name'].split('#')[1].strip() if '#' in (l['name'] or '') else '',
             })
 
-        # 2. Document Setup
         buffer = io.BytesIO()
         doc = SimpleDocTemplate(
             buffer,
@@ -203,7 +198,6 @@ class ReportDeliveryNoteRoundCourier(models.AbstractModel):
             d_date = getattr(order, 'delivery_date', False) or wizard.delivery_date_from
             delivery_date_str = d_date.strftime('%d/%m/%Y') if d_date else ''
 
-            # Header with Logo & Title Table
             header_text = f"Customer Delivery Note: For Delivery {delivery_date_str}"
             header_table_data = [[
                 logo_image if logo_image else "",
@@ -221,7 +215,6 @@ class ReportDeliveryNoteRoundCourier(models.AbstractModel):
             story.append(header_table)
             story.append(Spacer(1, 4 * mm))
 
-            # Customer Info
             main_partner = order.partner_id
             ship_partner = order.partner_shipping_id or main_partner
             cust_code = getattr(main_partner, 'customer_code', False) or main_partner.ref or str(main_partner.id)
@@ -253,13 +246,11 @@ class ReportDeliveryNoteRoundCourier(models.AbstractModel):
             story.append(cust_table)
             story.append(Spacer(1, 3 * mm))
 
-            # Divider Line
             d = Drawing(printable_width, 1)
             d.add(Line(0, 0, printable_width, 0, strokeWidth=1, strokeColor=colors.black))
             story.append(d)
             story.append(Spacer(1, 2 * mm))
 
-            # Categories
             cat_dict = {}
             for line in lines_data:
                 c_upper = line['categ_name'].upper()
@@ -313,7 +304,6 @@ class ReportDeliveryNoteRoundCourier(models.AbstractModel):
             if idx < total_orders - 1:
                 story.append(PageBreak())
 
-        # Build PDF using NumberedCanvas for exact 'Page X of Y' rendering
         doc.build(story, canvasmaker=NumberedCanvas)
 
         pdf_value = buffer.getvalue()
