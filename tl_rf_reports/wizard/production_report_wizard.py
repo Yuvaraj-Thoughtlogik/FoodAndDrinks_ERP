@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import base64
 from datetime import timedelta
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError, ValidationError
@@ -205,18 +206,43 @@ class ProductionReportWizard(models.TransientModel):
         return self.env.ref('tl_rf_reports.action_report_production_report').report_action(self)
 
     def action_print_label(self):
-        """Triggers the channel-specific Production Label report."""
+        """Triggers the channel-specific Production Label report.
+
+        Built directly with ReportLab (generate_pdf() on the report model,
+        see production_label_report.py) instead of QWeb+wkhtmltopdf, and
+        returned as a synchronous download - one physical label per PDF
+        page at a fixed 100mm x 130mm size. The QWeb templates/actions in
+        production_label_report_views.xml are left registered for parity
+        but are no longer invoked here."""
         self.ensure_one()
         label_lines = self._get_label_data()
         if not label_lines:
             raise UserError(_("No matching records found to generate labels for the selected criteria."))
 
         if self.delivery_channel == 'courier':
-            report_action = self.env.ref('tl_rf_reports.action_report_production_label_courier')
+            report_model = self.env['report.tl_rf_reports.report_production_label_document_courier']
+            filename_suffix = 'Courier'
         else:
-            report_action = self.env.ref('tl_rf_reports.action_report_production_label_regal_van')
+            report_model = self.env['report.tl_rf_reports.report_production_label_document_regal_van']
+            filename_suffix = 'Regal_Van'
 
-        return report_action.report_action(self)
+        pdf_content = report_model.generate_pdf(self)
+        if not pdf_content:
+            raise UserError(_("No matching records found to generate labels for the selected criteria."))
+
+        attachment = self.env['ir.attachment'].create({
+            'name': f'Production_Label_{filename_suffix}_{self.delivery_date_from.strftime("%Y%m%d")}.pdf',
+            'type': 'binary',
+            'datas': base64.b64encode(pdf_content),
+            'mimetype': 'application/pdf',
+            'res_model': self._name,
+            'res_id': self.id,
+        })
+        return {
+            'type': 'ir.actions.act_url',
+            'url': f'/web/content/{attachment.id}?download=true',
+            'target': 'self',
+        }
 
     def _get_label_data(self):
         """Returns a list of dicts, one per label to print, based on the current wizard filters."""

@@ -1,6 +1,65 @@
 # -*- coding: utf-8 -*-
 
+import io
+from xml.sax.saxutils import escape as xml_escape
+
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle
+from reportlab.lib.units import mm
+from reportlab.pdfgen import canvas
+from reportlab.platypus import (
+    Flowable, KeepTogether, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
+)
+
 from odoo import api, fields, models, _
+
+
+class _DriverPackingListHeaderMarker(Flowable):
+    """Same technique as _PackingListHeaderMarker in packing_list_report.py -
+    see report_delivery_note_round_van.py for the full explanation."""
+
+    def __init__(self, header_text):
+        super().__init__()
+        self.header_text = header_text
+        self.width = 0
+        self.height = 0
+
+    def wrap(self, availWidth, availHeight):
+        return (0, 0)
+
+    def draw(self):
+        self.canv.current_header = self.header_text
+
+
+class _DriverPackingListCanvas(canvas.Canvas):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._saved_page_states = []
+        self.current_header = None
+
+    def showPage(self):
+        self._saved_page_states.append(dict(self.__dict__))
+        self._startPage()
+
+    def save(self):
+        for state in self._saved_page_states:
+            self.__dict__.update(state)
+            self._draw_header()
+            super().showPage()
+        super().save()
+
+    def _draw_header(self):
+        if not self.current_header:
+            return
+        self.saveState()
+        margin = 12 * mm
+        width = A4[0] - (2 * margin)
+        style = ParagraphStyle('DriverPackingListHeaderBand', fontName='Helvetica', fontSize=10, leading=13)
+        p = Paragraph(self.current_header, style)
+        _, h = p.wrap(width, 40 * mm)
+        p.drawOn(self, margin, A4[1] - margin - h)
+        self.restoreState()
 
 
 class ReportDriverPackingList(models.AbstractModel):
@@ -292,7 +351,7 @@ class ReportDriverPackingList(models.AbstractModel):
                     COALESCE(pt.name->>%(lang)s, pt.name->>'en_GB', pt.name->>'en_US', pt.name::text) AS product_name,
                     COALESCE(p.sort_seq, pt.sort_seq, 0) AS sort_num,
                     pc.id AS categ_id,
-                    COALESCE(pc.name->>%(lang)s, pc.name->>'en_GB', pc.name->>'en_US', pc.name::text) AS categ_name
+                    pc.name AS categ_name
                 FROM round_management_batch b
                 LEFT JOIN stock_warehouse sw ON sw.id = b.depot_id
                 LEFT JOIN round_management_round rmr ON rmr.id = b.round_id
@@ -336,7 +395,7 @@ class ReportDriverPackingList(models.AbstractModel):
                     COALESCE(pt_comp.name->>%(lang)s, pt_comp.name->>'en_GB', pt_comp.name->>'en_US', pt_comp.name::text) AS comp_product_name,
                     COALESCE(p_comp.sort_seq, pt_comp.sort_seq, 0) AS comp_sort_num,
                     pc_comp.id AS comp_categ_id,
-                    COALESCE(pc_comp.name->>%(lang)s, pc_comp.name->>'en_GB', pc_comp.name->>'en_US', pc_comp.name::text) AS comp_categ_name
+                    pc_comp.name AS comp_categ_name
                 FROM mrp_bom mb
                 JOIN mrp_bom_line mbl ON mbl.bom_id = mb.id
                 JOIN product_product p_comp ON p_comp.id = mbl.product_id
@@ -488,3 +547,165 @@ class ReportDriverPackingList(models.AbstractModel):
             'printed_at': printed_at_str,
             'batch_groups': all_batch_groups,
         }
+
+    # ------------------------------------------------------------------
+    # Fast path: builds the PDF directly with ReportLab instead of QWeb+
+    # wkhtmltopdf. The raw-SQL + BOM-explosion data layer above is reused
+    # as-is (already fast); only the *rendering* step changes. See
+    # report_delivery_note_round_courier.py for the general approach and
+    # report_delivery_note_round_van.py for the repeating-header-per-group
+    # technique (_DriverPackingListHeaderMarker / _DriverPackingListCanvas
+    # above are the same idea, renamed for this file).
+    # ------------------------------------------------------------------
+    PRINTABLE_WIDTH = A4[0] - (24 * mm)
+
+    def _pdf_styles(self):
+        return {
+            'category': ParagraphStyle('DPLCategory', fontName='Helvetica-Bold', fontSize=12, leading=15),
+            'col_header': ParagraphStyle('DPLColHeader', fontName='Helvetica-BoldOblique', fontSize=9, leading=11),
+            'cell': ParagraphStyle('DPLCell', fontName='Helvetica', fontSize=10, leading=13),
+            'cell_bold': ParagraphStyle('DPLCellBold', fontName='Helvetica-Bold', fontSize=10, leading=13),
+            'total': ParagraphStyle('DPLTotal', fontName='Helvetica-Bold', fontSize=10, leading=13, alignment=2),
+        }
+
+    def generate_pdf(self, wizard):
+        """Returns the finished PDF (bytes) for one Driver Packing List
+        wizard, or None when there is nothing to print.
+
+        Uses plain ORM search() + recordset iteration rather than raw SQL,
+        reusing this class's own _find_bom/_explode_bom helpers (defined
+        above) for the Kit-BOM explosion instead of a hand-written bulk BOM
+        query - the ORM already knows how each field is actually translated/
+        stored, so there's no risk of the "assumed jsonb, column is actually
+        varchar" class of bug a hand-written query can hit."""
+        batch_domain = [
+            ('delivery_date', '>=', wizard.delivery_date_from),
+            ('delivery_date', '<=', wizard.delivery_date_to),
+        ]
+        if wizard.depot_ids:
+            batch_domain.append(('depot_id', 'in', wizard.depot_ids.ids))
+
+        batches = self.env['round.management.batch'].search(
+            batch_domain, order='delivery_date asc, code asc, id asc'
+        )
+        if not batches:
+            return None
+
+        bom_cache = {}
+        batches_map = {}
+        for batch in batches:
+            orders = batch.order_ids.filtered(
+                lambda so: so.state in ('sale', 'done')
+                and getattr(so, 'delivery_channel', False) in ('regal_van', False)
+            )
+            if not orders:
+                continue
+
+            b_map = batches_map[batch.id] = {'batch': batch, 'categories_map': {}}
+            for order in orders:
+                lines = order.order_line.filtered(
+                    lambda l: not l.display_type and l.product_id and l.product_uom_qty > 0
+                )
+                for line in lines:
+                    for item_product, item_qty in self._explode_bom(line.product_id, line.product_uom_qty, bom_cache):
+                        if not item_qty:
+                            continue
+                        categ_name = (item_product.categ_id.name or _('Other')).strip().upper()
+                        categ_key = item_product.categ_id.id or 0
+                        b_map['categories_map'].setdefault(categ_key, {'categ_name': categ_name, 'products': {}})
+                        c_prods = b_map['categories_map'][categ_key]['products']
+                        pid = item_product.id
+                        if pid not in c_prods:
+                            sort_num = self._extract_sort_number(item_product)
+                            c_prods[pid] = {
+                                'product_id': pid, 'product_name': item_product.name, 'box_qty': 0.0,
+                                'sort_num': sort_num, 'sort_str': str(sort_num) if sort_num else '',
+                            }
+                        c_prods[pid]['box_qty'] += item_qty
+
+        if not batches_map:
+            return None
+
+        styles = self._pdf_styles()
+        width = self.PRINTABLE_WIDTH
+        story = []
+        printed_batches = 0
+
+        for batch_id, b_data in batches_map.items():
+            category_list = []
+            batch_total_boxes = 0
+            for c_key, c_val in sorted(
+                b_data['categories_map'].items(), key=lambda item: self._get_category_sort_key(item[1]['categ_name'])
+            ):
+                sorted_prods = sorted(c_val['products'].values(), key=self._get_sort_key)
+                for p in sorted_prods:
+                    p['qty_display'] = f"{p['box_qty']:.2f}"
+                cat_total = int(round(sum(p['box_qty'] for p in sorted_prods)))
+                batch_total_boxes += cat_total
+                if sorted_prods:
+                    category_list.append({'categ_name': c_val['categ_name'], 'products': sorted_prods, 'total_boxes': cat_total})
+            if not category_list:
+                continue
+
+            if printed_batches:
+                story.append(PageBreak())
+            printed_batches += 1
+
+            batch = b_data['batch']
+            depot_name = batch.depot_id.name or 'Grimsby'
+            delivery_date_str = batch.delivery_date.strftime('%d/%m/%Y') if batch.delivery_date else ''
+            batch_code = batch.code or ''
+            batch_name = (batch.round_id.name if batch.round_id else False) or batch.reference or ''
+
+            header_text = (
+                f"<b>Drivers Packing List : Customer</b>&nbsp;&nbsp;&nbsp;{xml_escape(batch_code)}  {xml_escape(batch_name)}"
+                f"<br/>Delivery On: {xml_escape(delivery_date_str)}"
+                + (f"&nbsp;&nbsp;&nbsp;{xml_escape(depot_name)}" if depot_name else '')
+            )
+            story.append(_DriverPackingListHeaderMarker(header_text))
+            story.append(Spacer(1, 14 * mm))
+
+            for cat in category_list:
+                header_row = Table(
+                    [[Paragraph("Quantity", styles['col_header']), Paragraph("Product / Box Contents", styles['col_header']),
+                      Paragraph("Sort", styles['col_header'])]],
+                    colWidths=[width * 0.12, width * 0.76, width * 0.12],
+                )
+                header_row.setStyle(TableStyle([('LINEBELOW', (0, 0), (-1, 0), 1.5, colors.black)]))
+
+                rows_ = [[
+                    Paragraph(xml_escape(p['qty_display']), styles['cell_bold']),
+                    Paragraph(xml_escape(p['product_name'] or ''), styles['cell']),
+                    Paragraph(xml_escape(p['sort_str']), styles['cell']),
+                ] for p in cat['products']]
+                table = Table(rows_, colWidths=[width * 0.12, width * 0.76, width * 0.12])
+                table.setStyle(TableStyle([
+                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                    ('ALIGN', (0, 0), (0, -1), 'CENTER'),
+                    ('ALIGN', (2, 0), (2, -1), 'RIGHT'),
+                    ('LINEBELOW', (0, 0), (-1, -1), 0.5, colors.black),
+                    ('TOPPADDING', (0, 0), (-1, -1), 2), ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+                ]))
+
+                story.append(KeepTogether([
+                    Paragraph(xml_escape(cat['categ_name']), styles['category']),
+                    Spacer(1, 2 * mm), header_row, table,
+                    Paragraph(f"{cat['total_boxes']} Boxes", styles['total']),
+                    Spacer(1, 5 * mm),
+                ]))
+
+            story.append(Spacer(1, 8 * mm))
+            story.append(Paragraph("Checked By _____________________", styles['total']))
+
+        if not printed_batches:
+            return None
+
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buffer, pagesize=A4,
+            leftMargin=12 * mm, rightMargin=12 * mm, topMargin=32 * mm, bottomMargin=12 * mm,
+        )
+        doc.build(story, canvasmaker=_DriverPackingListCanvas)
+        pdf_value = buffer.getvalue()
+        buffer.close()
+        return pdf_value

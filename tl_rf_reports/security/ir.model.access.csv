@@ -6,4 +6,3 @@ access_requirement_report_wizard,requirement.report.wizard,model_requirement_rep
 access_production_report_wizard,production.report.wizard,model_production_report_wizard,base.group_user,1,1,1,1
 access_prediction_report_wizard,prediction.report.wizard,model_prediction_report_wizard,base.group_user,1,1,1,1
 access_active_batch_report_wizard,active.batch.report.wizard,model_active_batch_report_wizard,base.group_user,1,1,1,1
-access_tl_report_generation_job,tl.report.generation.job,model_tl_report_generation_job,base.group_user,1,0,0,1

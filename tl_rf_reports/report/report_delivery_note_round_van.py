@@ -1,7 +1,18 @@
 # -*- coding: utf-8 -*-
 import base64
+import io
 import logging
 import re
+from xml.sax.saxutils import escape as xml_escape
+
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle
+from reportlab.lib.units import mm
+from reportlab.platypus import (
+    Flowable, HRFlowable, Image, KeepTogether, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
+)
+from reportlab.pdfgen import canvas
 
 from odoo import api, fields, models
 from .report_delivery_note_common import DeliveryNoteReportMixin
@@ -9,23 +20,98 @@ from .report_delivery_note_common import DeliveryNoteReportMixin
 _logger = logging.getLogger(__name__)
 
 
+class _HeaderMarker(Flowable):
+    """Zero-size flowable that stamps the current batch's header text onto the
+    canvas as soon as ReportLab draws it. Because it's inserted once at the
+    top of each batch's content, whatever it sets stays the "current" header
+    for every physical page that batch spans - the canvas just re-draws
+    whatever was last stamped when a page is finalised (see _VanNoteCanvas).
+    """
+    def __init__(self, header_text):
+        super().__init__()
+        self.header_text = header_text
+        self.width = 0
+        self.height = 0
+
+    def wrap(self, availWidth, availHeight):
+        return (0, 0)
+
+    def draw(self):
+        self.canv.current_header = self.header_text
+
+
+class _VanNoteCanvas(canvas.Canvas):
+    """Two-pass canvas: replays every page once the total page count and each
+    page's batch header (stamped by _HeaderMarker) are known, so the header
+    banner and "Printed at" footer can be drawn identically to how the old
+    QWeb template repeated them on every page."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._saved_page_states = []
+        self.current_header = None
+
+    def showPage(self):
+        self._saved_page_states.append(dict(self.__dict__))
+        self._startPage()
+
+    def save(self):
+        for state in self._saved_page_states:
+            self.__dict__.update(state)
+            self._draw_decorations()
+            super().showPage()
+        super().save()
+
+    def _draw_decorations(self):
+        self.saveState()
+        margin = 9 * mm
+        width = A4[0] - (2 * margin)
+
+        if self.current_header:
+            header_style = ParagraphStyle(
+                'VanHeaderBand', fontName='Helvetica-Bold', fontSize=12,
+                leading=14, textColor=colors.black,
+            )
+            p = Paragraph(self.current_header, header_style)
+            _, h = p.wrap(width, 20 * mm)
+            p.drawOn(self, margin, A4[1] - margin - h)
+
+        footer_style = ParagraphStyle(
+            'VanFooter', fontName='Helvetica', fontSize=9, leading=11, textColor=colors.black,
+        )
+        footer = Paragraph(f"Printed at: {self.printed_at_text or ''}", footer_style)
+        footer.wrap(width, 10 * mm)
+        footer.drawOn(self, margin, 8 * mm)
+
+        page_style = ParagraphStyle(
+            'VanPageNum', fontName='Helvetica', fontSize=9, leading=11,
+            textColor=colors.black, alignment=1,
+        )
+        page_num = Paragraph(str(self._pageNumber), page_style)
+        page_num.wrap(width, 6 * mm)
+        page_num.drawOn(self, margin, 4 * mm)
+
+        self.restoreState()
+
+
 class ReportDeliveryNoteRoundVan(DeliveryNoteReportMixin, models.AbstractModel):
     _name = 'report.tl_rf_reports.report_delivery_note_round_van'
     _description = 'Delivery Note Round Report - Regal Van'
 
-    # Barcode rendering: the image is generated server-side and embedded as a
-    # data URI rather than pointing at /report/barcode/, so wkhtmltopdf never
-    # has to make an authenticated HTTP call back into Odoo to fetch it.
+    # Barcode rendering: the image is generated server-side (Code128) and
+    # embedded directly - as a ReportLab Image for the fast PDF path, and as
+    # a base64 PNG data URI for the (now unused, kept for parity) QWeb path -
+    # so wkhtmltopdf/ReportLab never has to make an HTTP round-trip for it.
     BARCODE_SYMBOLOGY = 'Code128'
     BARCODE_RENDER_WIDTH = 600     # source image px (downscaled by the template)
     BARCODE_RENDER_HEIGHT = 100
 
-    def _barcode_data_uri(self, value):
-        """Return a base64 PNG data URI for `value`, or '' when it can't be encoded."""
+    def _barcode_png(self, value):
+        """Raw PNG bytes for `value`, or b'' when it can't be encoded."""
         if not value:
-            return ''
+            return b''
         try:
-            png = self.env['ir.actions.report'].barcode(
+            return self.env['ir.actions.report'].barcode(
                 self.BARCODE_SYMBOLOGY,
                 value,
                 width=self.BARCODE_RENDER_WIDTH,
@@ -34,6 +120,12 @@ class ReportDeliveryNoteRoundVan(DeliveryNoteReportMixin, models.AbstractModel):
             )
         except Exception:  # noqa: BLE001 - a bad barcode must not kill the print
             _logger.warning("Delivery note (van): cannot encode barcode for %r", value)
+            return b''
+
+    def _barcode_data_uri(self, value):
+        """Return a base64 PNG data URI for `value`, or '' when it can't be encoded."""
+        png = self._barcode_png(value)
+        if not png:
             return ''
         return 'data:image/png;base64,%s' % base64.b64encode(png).decode('ascii')
 
@@ -129,40 +221,118 @@ class ReportDeliveryNoteRoundVan(DeliveryNoteReportMixin, models.AbstractModel):
             'price': price_str,
             'zone': '',
             'picking_name': picking_name,
+            'barcode_png': self._barcode_png(barcode_value),
             'barcode_src': self._barcode_data_uri(barcode_value),
         }
 
     # ------------------------------------------------------------------
-    # PAGINATION CALIBRATION
+    # Shared data prep - builds the list of {batch info, drops} used by both
+    # the (now unused, kept for parity) QWeb path below and generate_pdf().
     # ------------------------------------------------------------------
-    # All values below are expressed in "rows", where 1 row = the height of
-    # one printed item line (measured at 12.6pt on the generated PDF with the
-    # current paperformat: A4 portrait, 10mm top / 20mm bottom margin, 90 dpi).
-    #
-    #   printable height   = 842pt (A4) - 28.35pt (10mm top) - 56.7pt (20mm bottom)
-    #   repeated header    = ~34pt  (round line + "For Delivery on" line + margin)
-    #   space for drops    = ~722pt  ->  722 / 12.6 = ~57 rows
-    #
-    # PAGE_ROW_BUDGET is kept just under that measured 57 so a line that wraps
-    # unexpectedly cannot push the last drop onto an unnumbered overflow page.
+    def _prepare_batch_groups(self, wizard):
+        from collections import defaultdict
+
+        batch_domain = [
+            ('delivery_date', '>=', wizard.delivery_date_from),
+            ('delivery_date', '<=', wizard.delivery_date_to),
+        ]
+        batches = self.env['round.management.batch'].search(
+            batch_domain, order='delivery_date asc, code asc'
+        )
+        if not batches:
+            return []
+
+        all_candidate_orders = batches.order_ids.filtered(
+            lambda so: so.state in ('sale', 'done')
+            and getattr(so, 'delivery_channel', False) in ('regal_van', False)
+        )
+
+        all_pickings = self.env['stock.picking'].search([
+            ('sale_id', 'in', all_candidate_orders.ids),
+            ('state', '!=', 'cancel'),
+        ])
+        pickings_by_order = defaultdict(lambda: self.env['stock.picking'])
+        for p in all_pickings:
+            p_type = getattr(p, 'picking_type_id', False)
+            code = getattr(p_type, 'code', False) if p_type else False
+            if code in ('outgoing', False, None):
+                pickings_by_order[p.sale_id.id] |= p
+
+        all_moves = self.env['stock.move'].search([
+            ('picking_id', 'in', all_pickings.ids),
+            ('state', '!=', 'cancel'),
+        ])
+        picking_to_sale = {p.id: p.sale_id.id for p in all_pickings}
+        delivery_products_by_order = defaultdict(set)
+        for m in all_moves:
+            if m.product_id and m.picking_id.id in picking_to_sale:
+                delivery_products_by_order[picking_to_sale[m.picking_id.id]].add(m.product_id.id)
+
+        all_lines = self.env['sale.order.line'].search([
+            ('order_id', 'in', all_candidate_orders.ids),
+            ('display_type', '=', False),
+            ('product_id', '!=', False),
+        ])
+        lines_by_order = defaultdict(list)
+        for l in all_lines:
+            lines_by_order[l.order_id.id].append(l)
+
+        batch_groups = []
+        for batch in batches:
+            eligible_orders = batch.order_ids.filtered(
+                lambda so: so.state in ('sale', 'done')
+                and getattr(so, 'delivery_channel', False) in ('regal_van', False)
+                and bool(pickings_by_order.get(so.id))
+            )
+            if not eligible_orders:
+                continue
+
+            sorted_orders = sorted(eligible_orders, key=self._get_order_sort_key)
+
+            drops = []
+            for order in sorted_orders:
+                drop = self._build_drop(
+                    order,
+                    pickings=pickings_by_order.get(order.id),
+                    delivery_product_ids=delivery_products_by_order.get(order.id),
+                    lines=lines_by_order.get(order.id, []),
+                )
+                if not drop:
+                    continue
+                drop['zone'] = order.round_code or (
+                    order.round_id.code if order.round_id else (
+                        batch.round_code or (batch.round_id.code if batch.round_id else '')
+                    )
+                ) or ''
+                drops.append(drop)
+
+            if not drops:
+                continue
+
+            batch_groups.append({
+                'batch_name': batch.round_id.name if (batch.round_id and batch.round_id.name) else (batch.reference or ''),
+                'batch_code': batch.code or '',
+                'depot_name': batch.depot_id.name.upper() if batch.depot_id and batch.depot_id.name else 'GRIMSBY',
+                'delivery_date': batch.delivery_date.strftime('%d/%m/%Y') if batch.delivery_date else '',
+                'total_deliveries': len(drops),
+                'drops': drops,
+            })
+
+        return batch_groups
+
+    # ------------------------------------------------------------------
+    # PAGINATION CALIBRATION (QWeb path only, kept for parity - see the note
+    # at the top of generate_pdf() for why the fast path doesn't need this:
+    # ReportLab lays out real content and breaks pages on actual measured
+    # height, so there's nothing to calibrate).
+    # ------------------------------------------------------------------
     PAGE_ROW_BUDGET = 55.0
-
-    # Fixed vertical cost of a drop, on top of its item lines: top border +
-    # padding, customer/address/phone line, the Order No / payment-method block
-    # and the bottom margin. Measured at ~56pt -> 56 / 12.6 = ~4.4 rows.
     DROP_BASE_ROWS = 4.5
-
-    # Approximate characters that fit on one line in each column, used only to
-    # predict wrapping (item column = 68% width @13.5px, note column = 32% @13px).
     ITEM_CHARS_PER_LINE = 62
     NOTE_CHARS_PER_LINE = 30
-
-    # The delivery-order barcode sits at the top of the right-hand column
-    # (38px image + ~12px caption + margin = ~52px = ~42pt = ~3.3 rows).
     BARCODE_ROWS = 3.5
 
     def _estimate_wrapped_lines(self, text, chars_per_line):
-        """How many printed lines a piece of text will occupy once wrapped."""
         if not text:
             return 0
         lines = 0
@@ -171,37 +341,16 @@ class ReportDeliveryNoteRoundVan(DeliveryNoteReportMixin, models.AbstractModel):
         return max(lines, 1)
 
     def _drop_row_weight(self, drop):
-        """Estimated height of a single drop, in rows."""
         item_rows = sum(
             self._estimate_wrapped_lines(item, self.ITEM_CHARS_PER_LINE)
             for item in drop['items']
         )
-        # The barcode and the note are stacked in a column beside the items,
-        # so they only add height when together they are taller than the
-        # item list itself.
         right_col_rows = self._estimate_wrapped_lines(drop.get('note'), self.NOTE_CHARS_PER_LINE)
         if drop.get('barcode_src'):
             right_col_rows += self.BARCODE_ROWS
         return self.DROP_BASE_ROWS + max(item_rows, right_col_rows)
 
     def _paginate_drops(self, drops, max_page_weight=None):
-        """Splits a batch's drops into distinct pages so that:
-        1. Every page break is decided here in Python, not left to the browser
-           to figure out mid-render - so each page dict below maps to exactly
-           one physical PDF page.
-        2. A single very large drop (many items) still gets its own page rather
-           than being split apart or silently overflowing onto the next one.
-
-        A new page is only started when the current one is genuinely full; a
-        new *batch* always starts a new page, but that break is applied in the
-        QWeb template (page-break-before on each group's first page), not here.
-
-        NOTE: the weights are a proxy for vertical space, not a real mm/px
-        measurement - same idea as _paginate_batch_categories in the packing
-        list report. See the PAGE_ROW_BUDGET / DROP_BASE_ROWS comments above
-        for how they were calibrated; re-measure them if the paperformat,
-        font size or the drop layout in the template changes.
-        """
         if max_page_weight is None:
             max_page_weight = self.PAGE_ROW_BUDGET
 
@@ -211,8 +360,6 @@ class ReportDeliveryNoteRoundVan(DeliveryNoteReportMixin, models.AbstractModel):
 
         for drop in drops:
             drop_weight = self._drop_row_weight(drop)
-            # If a single drop is heavier than a whole page on its own, let it
-            # have the page to itself instead of looping forever trying to fit it.
             effective_max = max(max_page_weight, drop_weight)
 
             if current_page_drops and (current_weight + drop_weight > effective_max):
@@ -232,10 +379,6 @@ class ReportDeliveryNoteRoundVan(DeliveryNoteReportMixin, models.AbstractModel):
 
     @api.model
     def _number_pages_continuously(self, groups):
-        """Stamps page_number/total_pages onto every page dict across ALL batch
-        groups, so the footer shows one running sequence for the whole report
-        instead of restarting (or repeating) per batch.
-        """
         flat_pages = [pg for g in groups for pg in g['pages']]
         total_pages = len(flat_pages)
         for idx, pg in enumerate(flat_pages, start=1):
@@ -245,113 +388,16 @@ class ReportDeliveryNoteRoundVan(DeliveryNoteReportMixin, models.AbstractModel):
 
     @api.model
     def _get_report_values(self, docids, data=None):
-        from collections import defaultdict
         docs = self.env['delivery.note.round.wizard'].browse(docids)
         all_batch_groups = []
 
         for wizard in docs:
-            batch_domain = [
-                ('delivery_date', '>=', wizard.delivery_date_from),
-                ('delivery_date', '<=', wizard.delivery_date_to),
-            ]
+            for group in self._prepare_batch_groups(wizard):
+                group = dict(group)
+                group['pages'] = self._paginate_drops(group.pop('drops'))
+                all_batch_groups.append(group)
 
-            batches = self.env['round.management.batch'].search(
-                batch_domain,
-                order='delivery_date asc, code asc'
-            )
-
-            if not batches:
-                continue
-
-            # Batch pre-fetch pickings, moves, and lines across all orders
-            all_candidate_orders = batches.order_ids.filtered(
-                lambda so: so.state in ('sale', 'done')
-                and getattr(so, 'delivery_channel', False) in ('regal_van', False)
-            )
-
-            all_pickings = self.env['stock.picking'].search([
-                ('sale_id', 'in', all_candidate_orders.ids),
-                ('state', '!=', 'cancel'),
-            ])
-            pickings_by_order = defaultdict(lambda: self.env['stock.picking'])
-            for p in all_pickings:
-                p_type = getattr(p, 'picking_type_id', False)
-                code = getattr(p_type, 'code', False) if p_type else False
-                if code in ('outgoing', False, None):
-                    pickings_by_order[p.sale_id.id] |= p
-
-            all_moves = self.env['stock.move'].search([
-                ('picking_id', 'in', all_pickings.ids),
-                ('state', '!=', 'cancel'),
-            ])
-            picking_to_sale = {p.id: p.sale_id.id for p in all_pickings}
-            delivery_products_by_order = defaultdict(set)
-            for m in all_moves:
-                if m.product_id and m.picking_id.id in picking_to_sale:
-                    delivery_products_by_order[picking_to_sale[m.picking_id.id]].add(m.product_id.id)
-
-            all_lines = self.env['sale.order.line'].search([
-                ('order_id', 'in', all_candidate_orders.ids),
-                ('display_type', '=', False),
-                ('product_id', '!=', False),
-            ])
-            lines_by_order = defaultdict(list)
-            for l in all_lines:
-                lines_by_order[l.order_id.id].append(l)
-
-            for batch in batches:
-                eligible_orders = batch.order_ids.filtered(
-                    lambda so: so.state in ('sale', 'done')
-                    and getattr(so, 'delivery_channel', False) in ('regal_van', False)
-                    and bool(pickings_by_order.get(so.id))
-                )
-
-                if not eligible_orders:
-                    continue
-
-                sorted_orders = sorted(eligible_orders, key=self._get_order_sort_key)
-
-                drops = []
-                for order in sorted_orders:
-                    drop = self._build_drop(
-                        order,
-                        pickings=pickings_by_order.get(order.id),
-                        delivery_product_ids=delivery_products_by_order.get(order.id),
-                        lines=lines_by_order.get(order.id, []),
-                    )
-                    if not drop:
-                        continue
-
-                    drop['zone'] = order.round_code or (
-                        order.round_id.code if order.round_id else (
-                            batch.round_code or (batch.round_id.code if batch.round_id else '')
-                        )
-                    ) or ''
-                    drops.append(drop)
-
-                if drops:
-                    batch_name = batch.round_id.name if (batch.round_id and batch.round_id.name) else (batch.reference or '')
-                    batch_code = batch.code or ''
-                    depot_name = batch.depot_id.name.upper() if batch.depot_id and batch.depot_id.name else 'GRIMSBY'
-                    delivery_date_str = batch.delivery_date.strftime('%d/%m/%Y') if batch.delivery_date else ''
-
-                    batch_pages = self._paginate_drops(drops)
-
-                    all_batch_groups.append({
-                        'batch_name': batch_name,
-                        'batch_code': f"({batch_code})" if batch_code else "",
-                        'depot_name': depot_name,
-                        'delivery_date': delivery_date_str,
-                        'total_deliveries': len(drops),
-                        'pages': batch_pages,
-                    })
-
-        # Number pages continuously across the whole report (spans all
-        # batches, not reset or repeated per batch).
         all_batch_groups = self._number_pages_continuously(all_batch_groups)
-
-        # fields.Datetime.now() is UTC; convert to the printing user's local
-        # timezone so "Printed at" shows their actual wall-clock time.
         printed_at_local = fields.Datetime.context_timestamp(self, fields.Datetime.now())
 
         return {
@@ -362,3 +408,135 @@ class ReportDeliveryNoteRoundVan(DeliveryNoteReportMixin, models.AbstractModel):
             'company': self.env.company,
             'printed_at': printed_at_local.strftime('%d/%m/%Y %H:%M:%S'),
         }
+
+    # ------------------------------------------------------------------
+    # Fast path: builds the PDF directly with ReportLab. wkhtmltopdf isn't
+    # normally the dominant cost here (van batches are much smaller than a
+    # whole courier run - see delivery_note_round_wizard.py), but it still
+    # avoids the subprocess entirely and, unlike the QWeb path, needs no
+    # hand-calibrated row-weight pagination: Platypus measures the real
+    # rendered height of each drop and only breaks the page when it
+    # genuinely doesn't fit.
+    # ------------------------------------------------------------------
+    PX_TO_PT = 72.0 / 90.0  # the QWeb paperformat renders at 90dpi
+
+    def generate_pdf(self, wizard):
+        """Returns the finished PDF (bytes) for one Regal Van Delivery Note
+        Round wizard, or None when there is nothing to print."""
+        batch_groups = self._prepare_batch_groups(wizard)
+        if not batch_groups:
+            return None
+
+        printed_at_local = fields.Datetime.context_timestamp(self, fields.Datetime.now())
+        printed_at_text = printed_at_local.strftime('%d/%m/%Y %H:%M:%S')
+
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buffer, pagesize=A4,
+            leftMargin=9 * mm, rightMargin=9 * mm, topMargin=22 * mm, bottomMargin=16 * mm,
+        )
+
+        cust_style = ParagraphStyle('VanCust', fontName='Helvetica', fontSize=9.5, leading=12)
+        addr_style = ParagraphStyle('VanAddr', fontName='Helvetica-Bold', fontSize=9.5, leading=12)
+        tel_style = ParagraphStyle('VanTel', fontName='Helvetica-Bold', fontSize=9.5, leading=12, alignment=2)
+        item_style = ParagraphStyle('VanItem', fontName='Helvetica', fontSize=9.5, leading=13)
+        note_style = ParagraphStyle('VanNote', fontName='Helvetica-Bold', fontSize=9, leading=11, alignment=2)
+        caption_style = ParagraphStyle('VanBarcodeCaption', fontName='Helvetica', fontSize=7, leading=8, alignment=1)
+        pay_style = ParagraphStyle('VanPay', fontName='Helvetica', fontSize=9, leading=11)
+        order_style = ParagraphStyle('VanOrderNo', fontName='Helvetica', fontSize=9, leading=11)
+        price_style = ParagraphStyle('VanPrice', fontName='Helvetica-Bold', fontSize=10.5, leading=13, alignment=2)
+
+        printable_width = A4[0] - (18 * mm)
+
+        story = []
+        for gi, group in enumerate(batch_groups):
+            if gi:
+                story.append(PageBreak())
+
+            header_text = (
+                f"DELIVERY NOTE FOR ROUND: <b>{xml_escape(group['batch_name'])}</b> "
+                f"({xml_escape(group['batch_code'])})"
+                f"<br/>For Delivery on: {xml_escape(group['delivery_date'])} &nbsp;&nbsp;&nbsp;"
+                f"{group['total_deliveries']} Deliveries "
+                f'<br/><font size="10">{xml_escape(group["depot_name"])}</font>'
+            )
+            story.append(_HeaderMarker(header_text))
+            story.append(Spacer(1, 2 * mm))
+
+            for drop in group['drops']:
+                story.append(KeepTogether(self._build_drop_flowables(
+                    drop, printable_width, cust_style, addr_style, tel_style,
+                    item_style, note_style, caption_style, pay_style, order_style, price_style,
+                )))
+
+        def _make_canvas(*args, **kwargs):
+            c = _VanNoteCanvas(*args, **kwargs)
+            c.printed_at_text = printed_at_text
+            return c
+
+        doc.build(story, canvasmaker=_make_canvas)
+        pdf_value = buffer.getvalue()
+        buffer.close()
+        return pdf_value
+
+    def _build_drop_flowables(
+        self, drop, printable_width, cust_style, addr_style, tel_style,
+        item_style, note_style, caption_style, pay_style, order_style, price_style,
+    ):
+        flowables = [
+            HRFlowable(width=printable_width, thickness=1.5, color=colors.black, spaceAfter=2 * mm),
+        ]
+
+        top_row = Table(
+            [[
+                Paragraph(xml_escape(drop['cust']), cust_style),
+                Paragraph(xml_escape(drop['addr']), addr_style),
+                Paragraph(xml_escape(drop['tel']), tel_style),
+            ]],
+            colWidths=[printable_width * 0.28, printable_width * 0.54, printable_width * 0.18],
+        )
+        top_row.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP')]))
+        flowables.append(top_row)
+        flowables.append(Spacer(1, 1 * mm))
+
+        items_html = '<br/>'.join(xml_escape(item) for item in drop['items']) or ''
+        right_col = []
+        if drop.get('barcode_png'):
+            img = Image(io.BytesIO(drop['barcode_png']))
+            img.drawWidth = 190 * self.PX_TO_PT
+            img.drawHeight = 38 * self.PX_TO_PT
+            right_col.append(img)
+            right_col.append(Paragraph(xml_escape(drop.get('picking_name') or ''), caption_style))
+            right_col.append(Spacer(1, 1 * mm))
+        if drop.get('note'):
+            right_col.append(Paragraph(xml_escape(drop['note']), note_style))
+
+        body_row = Table(
+            [[Paragraph(items_html, item_style), right_col or '']],
+            colWidths=[printable_width * 0.68, printable_width * 0.32],
+        )
+        body_row.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'), ('ALIGN', (1, 0), (1, 0), 'RIGHT')]))
+        flowables.append(body_row)
+        flowables.append(Spacer(1, 1 * mm))
+
+        pay_labels = [
+            ('Card Reader', drop['pay']['card_reader']), ('K/B', drop['pay']['kb']),
+            ('LNP', drop['pay']['lnp']), ('Cash', drop['pay']['cash']),
+            ('Cheque', drop['pay']['cheque']), ('Card', drop['pay']['card']),
+        ]
+        pay_text = '&nbsp;&nbsp;&nbsp;'.join(
+            f"{label} [{'X' if checked else '&nbsp;'}]" for label, checked in pay_labels
+        )
+        bottom_row = Table(
+            [[
+                Paragraph(f"Order No: {xml_escape(drop['order_no'])}", order_style),
+                Paragraph(pay_text, pay_style),
+                Paragraph(xml_escape(drop['price']), price_style),
+            ]],
+            colWidths=[printable_width * 0.15, printable_width * 0.63, printable_width * 0.22],
+        )
+        bottom_row.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'MIDDLE')]))
+        flowables.append(bottom_row)
+        flowables.append(Spacer(1, 4 * mm))
+
+        return flowables

@@ -19,7 +19,6 @@
     'depends': [
         'base',
         'web',
-        'bus',
         'sale',
         'stock',
         'round_management',
@@ -48,14 +47,12 @@
         'report/driver_packing_list_report.xml',
         'views/sale_order_views.xml',
         'views/menus.xml',
-        'models/report_job_views.xml',
     ],
 
     'assets': {
         'web.assets_backend': [
             'tl_rf_reports/static/src/scss/horizontal_checkboxes.scss',
             'tl_rf_reports/static/src/js/print_and_open_lines.js',
-            'tl_rf_reports/static/src/js/report_job_notifications.js',
         ],
     },
     'installable': True,

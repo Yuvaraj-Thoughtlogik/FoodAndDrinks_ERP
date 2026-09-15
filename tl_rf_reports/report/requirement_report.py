@@ -1,6 +1,15 @@
 # -*- coding: utf-8 -*-
 import datetime
+import io
 import math
+from xml.sax.saxutils import escape as xml_escape
+
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib.styles import ParagraphStyle
+from reportlab.lib.units import mm
+from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
 from odoo import api, fields, models, _
 
 
@@ -20,8 +29,6 @@ class ReportRequirement(models.AbstractModel):
         docs = self.env['requirement.report.wizard'].browse(docids)
 
         report_results = []
-        lang = self.env.lang or 'en_US'
-        company_ids = tuple(self.env.companies.ids) if self.env.companies else (self.env.company.id,)
 
         for wizard in docs:
             # Format display dates
@@ -43,66 +50,55 @@ class ReportRequirement(models.AbstractModel):
             else:
                 footer_date_str = current_dt.strftime('%d %B %Y')
 
-            params = {
-                'date_from': wizard.delivery_date_from,
-                'date_to': wizard.delivery_date_to,
-                'company_ids': company_ids,
-                'lang': lang,
-            }
+            # Build the sale.order.line search domain - equivalent to the old
+            # raw SQL's JOIN + WHERE clauses, but expressed as ORM domain
+            # terms so field access below goes through the field descriptors
+            # (which already know whether a given name/categ is translatable)
+            # instead of hand-guessing per-column jsonb/varchar storage.
+            domain = [
+                ('state', 'in', ['sale', 'done']),
+                ('delivery_date', '>=', wizard.delivery_date_from),
+                ('delivery_date', '<=', wizard.delivery_date_to),
+                ('display_type', '=', False),
+                ('product_id', '!=', False),
+                ('product_uom_qty', '>', 0),
+            ]
 
-            channel_filter = ""
             if wizard.delivery_channel == 'courier':
-                channel_filter = "AND so.delivery_channel = 'courier'"
+                domain.append(('delivery_channel', '=', 'courier'))
             else:
-                channel_filter = "AND (so.delivery_channel = 'regal_van' OR so.delivery_channel IS NULL)"
+                domain.append(('delivery_channel', 'in', ['regal_van', False]))
 
-            depot_filter = ""
             if wizard.delivery_channel != 'courier' and wizard.depot_ids:
-                depot_filter = "AND (sol.depot_id IN %(depot_ids)s OR (sol.depot_id IS NULL AND so.warehouse_id IN %(depot_ids)s))"
-                params['depot_ids'] = tuple(wizard.depot_ids.ids)
+                depot_ids = wizard.depot_ids.ids
+                # Mirrors "sol.depot_id IN depot_ids OR (sol.depot_id IS NULL
+                # AND so.warehouse_id IN depot_ids)" from the old query.
+                domain += [
+                    '|',
+                    ('depot_id', 'in', depot_ids),
+                    '&', ('depot_id', '=', False), ('order_id.warehouse_id', 'in', depot_ids),
+                ]
 
-            categ_filter = ""
             if wizard.categ_ids:
-                categ_filter = "AND pt.categ_id IN %(categ_ids)s"
-                params['categ_ids'] = tuple(wizard.categ_ids.ids)
+                domain.append(('categ_id', 'in', wizard.categ_ids.ids))
 
-            query = f"""
-                SELECT 
-                    pc.id AS categ_id,
-                    COALESCE(pc.name->>%(lang)s, pc.name->>'en_GB', pc.name->>'en_US', pc.name::text) AS categ_name,
-                    p.id AS product_id,
-                    p.default_code AS product_code,
-                    COALESCE(pt.name->>%(lang)s, pt.name->>'en_GB', pt.name->>'en_US', pt.name::text) AS product_name,
-                    COALESCE(so.delivery_date, %(date_from)s) AS delivery_date,
-                    SUM(sol.product_uom_qty) AS qty
-                FROM sale_order_line sol
-                JOIN sale_order so ON so.id = sol.order_id
-                JOIN product_product p ON p.id = sol.product_id
-                JOIN product_template pt ON pt.id = p.product_tmpl_id
-                LEFT JOIN product_category pc ON pc.id = pt.categ_id
-                WHERE so.state IN ('sale', 'done')
-                  AND so.delivery_date >= %(date_from)s
-                  AND so.delivery_date <= %(date_to)s
-                  AND sol.display_type IS NULL
-                  AND sol.product_id IS NOT NULL
-                  AND sol.product_uom_qty > 0
-                  {channel_filter}
-                  {depot_filter}
-                  {categ_filter}
-                  AND (so.company_id IS NULL OR so.company_id IN %(company_ids)s)
-                GROUP BY pc.id, pc.name, p.id, p.default_code, pt.name, COALESCE(so.delivery_date, %(date_from)s)
-                ORDER BY pc.id ASC, pt.name ASC, p.id ASC, COALESCE(so.delivery_date, %(date_from)s) ASC
-            """
-            self.env.cr.execute(query, params)
-            rows = self.env.cr.dictfetchall()
+            # Company filtering is handled automatically by the multi-company
+            # record rule on sale.order.line (company_id = False OR in the
+            # allowed companies) - no explicit domain clause needed here,
+            # unlike the raw SQL which had to replicate that by hand.
+            order_lines = self.env['sale.order.line'].search(
+                domain, order='categ_id, product_id, delivery_date',
+            )
 
             # Group by Category -> Product -> Delivery Date
             categories_map = {}
             grand_total_qty = 0.0
 
-            for r in rows:
-                categ_key = r['categ_id'] or 0
-                categ_name = (r['categ_name'] or _('Uncategorized')).strip()
+            for line in order_lines:
+                product = line.product_id
+                categ = product.categ_id
+                categ_key = categ.id or 0
+                categ_name = (categ.name or _('Uncategorized')).strip()
 
                 if categ_key not in categories_map:
                     if wizard.delivery_channel == 'courier':
@@ -118,19 +114,19 @@ class ReportRequirement(models.AbstractModel):
                         'total_qty': 0.0,
                     }
 
-                prod_key = r['product_id']
+                prod_key = product.id
                 if prod_key not in categories_map[categ_key]['products']:
                     categories_map[categ_key]['products'][prod_key] = {
                         'product_id': prod_key,
-                        'product_name': r['product_name'] or '',
-                        'product_code': r['product_code'] or '',
+                        'product_name': product.name or '',
+                        'product_code': product.default_code or '',
                         'dates_map': {},
                         'total_qty': 0.0,
                     }
 
-                d_date = r['delivery_date']
+                d_date = line.delivery_date or wizard.delivery_date_from
                 d_date_str = d_date.strftime('%d/%m/%Y') if d_date else delivery_date_from_str
-                qty = float(r['qty'] or 0.0)
+                qty = float(line.product_uom_qty or 0.0)
 
                 prod_item = categories_map[categ_key]['products'][prod_key]
                 if d_date_str not in prod_item['dates_map']:
@@ -238,6 +234,155 @@ class ReportRequirement(models.AbstractModel):
             'report_results': report_results,
         }
 
+    # ------------------------------------------------------------------
+    # Fast path: builds the PDF directly with ReportLab instead of going
+    # through QWeb + wkhtmltopdf. This deliberately reuses _get_report_values()
+    # above (which fetches its data with a single ORM search() over
+    # sale.order.line plus one pass over the resulting recordset - no N+1
+    # queries) to compute the data, so unlike the Delivery Note Round
+    # reports there was no performance reason to duplicate the data prep;
+    # only the rendering needed to change. Handles the Regal Van (landscape,
+    # 2-column) layout. See ReportRequirementCourier.generate_pdf() below
+    # for the Courier (portrait, 1-column) layout, which shares this same
+    # data prep.
+    # ------------------------------------------------------------------
+    def generate_pdf(self, wizard):
+        """Returns the finished PDF (bytes) for one Requirement Report wizard
+        (Regal Van layout), or None when there is nothing to print."""
+        values = self._get_report_values(wizard.ids)
+        report_results = values.get('report_results') or []
+        if not report_results or not report_results[0].get('categories'):
+            return None
+        res = report_results[0]
+
+        buffer = io.BytesIO()
+        page_size = landscape(A4)
+        doc = SimpleDocTemplate(
+            buffer, pagesize=page_size,
+            leftMargin=12 * mm, rightMargin=12 * mm, topMargin=12 * mm, bottomMargin=18 * mm,
+        )
+        printable_width = page_size[0] - (24 * mm)
+
+        title_style = ParagraphStyle(
+            'ReqVanTitle', fontName='Helvetica-Bold', fontSize=13, leading=16,
+        )
+        col_header_style = ParagraphStyle(
+            'ReqVanColHeader', fontName='Helvetica-Bold', fontSize=9.5, leading=11,
+        )
+        col_header_right_style = ParagraphStyle(
+            'ReqVanColHeaderRight', parent=col_header_style, alignment=2,
+        )
+        data_style = ParagraphStyle('ReqVanData', fontName='Helvetica', fontSize=8.5, leading=10)
+        data_right_style = ParagraphStyle('ReqVanDataRight', parent=data_style, alignment=2)
+        subtotal_label_style = ParagraphStyle(
+            'ReqVanSubtotalLabel', fontName='Helvetica-Bold', fontSize=8.5, leading=10, alignment=2,
+        )
+        subtotal_value_style = ParagraphStyle(
+            'ReqVanSubtotalValue', parent=subtotal_label_style,
+        )
+
+        story = []
+        for idx, cat_page in enumerate(res['categories']):
+            if idx:
+                story.append(PageBreak())
+
+            title_table = Table(
+                [[Paragraph(xml_escape(cat_page['title']), title_style)]], colWidths=[printable_width],
+            )
+            title_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f0f0f0')),
+                ('BOX', (0, 0), (-1, -1), 1, colors.HexColor('#dddddd')),
+                ('LEFTPADDING', (0, 0), (-1, -1), 8),
+                ('TOPPADDING', (0, 0), (-1, -1), 5),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+            ]))
+            story.append(title_table)
+            story.append(Spacer(1, 4 * mm))
+
+            col_width = printable_width * 0.485
+            col1_flowable = self._build_van_column(
+                cat_page.get('col1') or [], col_width, col_header_style, col_header_right_style,
+                data_style, data_right_style, subtotal_label_style, subtotal_value_style,
+            )
+            col2_flowable = self._build_van_column(
+                cat_page.get('col2') or [], col_width, col_header_style, col_header_right_style,
+                data_style, data_right_style, subtotal_label_style, subtotal_value_style,
+            )
+
+            outer = Table(
+                [[col1_flowable, col2_flowable]],
+                colWidths=[col_width, printable_width - col_width],
+            )
+            outer.setStyle(TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+            ]))
+            story.append(outer)
+
+        printed_at_text = xml_escape(res.get('printed_at_str', ''))
+
+        def _draw_footer(canvas_obj, doc_obj):
+            canvas_obj.saveState()
+            footer_style = ParagraphStyle(
+                'ReqVanFooter', fontName='Helvetica', fontSize=8.5, leading=10,
+                textColor=colors.HexColor('#444444'),
+            )
+            p = Paragraph(f"Printed at: {printed_at_text}", footer_style)
+            p.wrap(printable_width, 8 * mm)
+            p.drawOn(canvas_obj, 12 * mm, 10 * mm)
+            canvas_obj.restoreState()
+
+        doc.build(story, onFirstPage=_draw_footer, onLaterPages=_draw_footer)
+        pdf_value = buffer.getvalue()
+        buffer.close()
+        return pdf_value
+
+    def _build_van_column(
+        self, products, col_width, header_style, header_right_style,
+        data_style, data_right_style, subtotal_label_style, subtotal_value_style,
+    ):
+        """One 'Del Date / Stock Item / Total Qty' column of the Regal Van
+        layout: a header row, then per product a row per delivery date plus a
+        bold subtotal row - mirrors the col1/col2 divs of the old QWeb
+        template. Returns '' (renders blank) when the column has no products,
+        e.g. the right-hand column on a page with an odd number of products."""
+        if not products:
+            return ''
+
+        date_col = col_width * 0.26
+        name_col = col_width * 0.54
+        qty_col = col_width - date_col - name_col
+
+        rows = [[
+            Paragraph("Del Date", header_style),
+            Paragraph("Stock Item", header_style),
+            Paragraph("Total Qty", header_right_style),
+        ]]
+        for prod in products:
+            for d_entry in prod['dates']:
+                rows.append([
+                    Paragraph(xml_escape(d_entry['delivery_date_str']), data_style),
+                    Paragraph(xml_escape(prod['product_name']), data_style),
+                    Paragraph(xml_escape(d_entry['formatted_qty']), data_right_style),
+                ])
+            rows.append([
+                '',
+                Paragraph("Total", subtotal_label_style),
+                Paragraph(xml_escape(prod['formatted_total_qty']), subtotal_value_style),
+            ])
+
+        table = Table(rows, colWidths=[date_col, name_col, qty_col])
+        table.setStyle(TableStyle([
+            ('LINEBELOW', (0, 0), (-1, 0), 1.5, colors.black),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('TOPPADDING', (0, 0), (-1, -1), 1.5),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 1.5),
+            ('LEFTPADDING', (0, 0), (-1, -1), 0),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+        ]))
+        return table
+
 
 class ReportRequirementCourier(models.AbstractModel):
     _name = 'report.tl_rf_reports.report_requirement_courier'
@@ -246,4 +391,92 @@ class ReportRequirementCourier(models.AbstractModel):
     @api.model
     def _get_report_values(self, docids, data=None):
         return self.env['report.tl_rf_reports.report_requirement']._get_report_values(docids, data=data)
+
+    # ------------------------------------------------------------------
+    # Fast path: Courier (portrait, 1-column) layout. Shares the exact same
+    # data prep as the Regal Van report above (see generate_pdf() there for
+    # why _get_report_values() is reused as-is rather than rewritten).
+    # ------------------------------------------------------------------
+    def generate_pdf(self, wizard):
+        """Returns the finished PDF (bytes) for one Requirement Report wizard
+        (Courier layout), or None when there is nothing to print."""
+        report_requirement = self.env['report.tl_rf_reports.report_requirement']
+        values = report_requirement._get_report_values(wizard.ids)
+        report_results = values.get('report_results') or []
+        if not report_results or not report_results[0].get('categories'):
+            return None
+        res = report_results[0]
+
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buffer, pagesize=A4,
+            leftMargin=12 * mm, rightMargin=12 * mm, topMargin=12 * mm, bottomMargin=18 * mm,
+        )
+        printable_width = A4[0] - (24 * mm)
+
+        title_style = ParagraphStyle('ReqCourierTitle', fontName='Helvetica-Bold', fontSize=17, leading=20)
+        packing_style = ParagraphStyle('ReqCourierPacking', fontName='Helvetica', fontSize=9, leading=12)
+        col_header_style = ParagraphStyle('ReqCourierColHeader', fontName='Helvetica-Bold', fontSize=11, leading=13)
+        qty_style = ParagraphStyle('ReqCourierQty', fontName='Helvetica', fontSize=10.5, leading=13, alignment=2)
+        x_style = ParagraphStyle('ReqCourierX', fontName='Helvetica', fontSize=10.5, leading=13, alignment=1)
+        name_style = ParagraphStyle('ReqCourierName', fontName='Helvetica', fontSize=10.5, leading=13)
+
+        packing_from = xml_escape(res.get('packing_date_from_str', ''))
+        packing_to = xml_escape(res.get('packing_date_to_str', ''))
+
+        story = []
+        for idx, cat_page in enumerate(res['categories']):
+            if idx:
+                story.append(PageBreak())
+
+            header_table = Table(
+                [[
+                    Paragraph(xml_escape(cat_page['title']), title_style),
+                    Paragraph(f"For Packing between {packing_from} and<br/>{packing_to}", packing_style),
+                ]],
+                colWidths=[printable_width * 0.62, printable_width * 0.38],
+            )
+            header_table.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP')]))
+            story.append(header_table)
+            story.append(Spacer(1, 3 * mm))
+
+            rows = [[
+                Paragraph("Total Kg", col_header_style), '',
+                Paragraph("Stock Name", col_header_style),
+            ]]
+            for prod in cat_page['products']:
+                rows.append([
+                    Paragraph(xml_escape(prod['formatted_total_qty']), qty_style),
+                    Paragraph("x", x_style),
+                    Paragraph(xml_escape(prod['product_name']), name_style),
+                ])
+            table = Table(
+                rows, colWidths=[printable_width * 0.13, printable_width * 0.07, printable_width * 0.80],
+                repeatRows=1,
+            )
+            table.setStyle(TableStyle([
+                ('LINEBELOW', (0, 0), (-1, 0), 2, colors.black),
+                ('LINEBELOW', (0, 1), (-1, -1), 0.5, colors.black),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('TOPPADDING', (0, 0), (-1, -1), 4),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ]))
+            story.append(table)
+
+        footer_text = xml_escape(res.get('footer_date_str', ''))
+
+        def _draw_footer(canvas_obj, doc_obj):
+            canvas_obj.saveState()
+            footer_style = ParagraphStyle(
+                'ReqCourierFooter', fontName='Helvetica', fontSize=9, leading=11, textColor=colors.black,
+            )
+            p = Paragraph(footer_text, footer_style)
+            p.wrap(printable_width, 8 * mm)
+            p.drawOn(canvas_obj, 12 * mm, 10 * mm)
+            canvas_obj.restoreState()
+
+        doc.build(story, onFirstPage=_draw_footer, onLaterPages=_draw_footer)
+        pdf_value = buffer.getvalue()
+        buffer.close()
+        return pdf_value
 

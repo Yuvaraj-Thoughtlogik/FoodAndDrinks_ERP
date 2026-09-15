@@ -1,8 +1,75 @@
 # -*- coding: utf-8 -*-
 
 import datetime
+import io
+from xml.sax.saxutils import escape as xml_escape
+
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle
+from reportlab.lib.units import mm
+from reportlab.pdfgen import canvas
+from reportlab.platypus import (
+    Flowable, HRFlowable, KeepTogether, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
+)
 
 from odoo import api, fields, models, _
+
+
+class _PackingListHeaderMarker(Flowable):
+    """Zero-size flowable that stamps the current group's (customer order, or
+    batch) header text onto the canvas as soon as ReportLab draws it - see
+    report_delivery_note_round_van.py for the full explanation of this
+    technique. Inserted once at the top of each group's content, it makes
+    whatever it sets the "current" header for every physical page that group
+    spans, without any manual page-counting."""
+
+    def __init__(self, header_text):
+        super().__init__()
+        self.header_text = header_text
+        self.width = 0
+        self.height = 0
+
+    def wrap(self, availWidth, availHeight):
+        return (0, 0)
+
+    def draw(self):
+        self.canv.current_header = self.header_text
+
+
+class _PackingListCanvas(canvas.Canvas):
+    """Two-pass canvas: replays every page once the header stamped by
+    _PackingListHeaderMarker for that page is known, so the banner can be
+    drawn identically to how the old QWeb template repeated it on every page
+    of a customer order / batch."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._saved_page_states = []
+        self.current_header = None
+
+    def showPage(self):
+        self._saved_page_states.append(dict(self.__dict__))
+        self._startPage()
+
+    def save(self):
+        for state in self._saved_page_states:
+            self.__dict__.update(state)
+            self._draw_header()
+            super().showPage()
+        super().save()
+
+    def _draw_header(self):
+        if not self.current_header:
+            return
+        self.saveState()
+        margin = 12 * mm
+        width = A4[0] - (2 * margin)
+        style = ParagraphStyle('PackingListHeaderBand', fontName='Helvetica', fontSize=10, leading=13)
+        p = Paragraph(self.current_header, style)
+        _, h = p.wrap(width, 40 * mm)
+        p.drawOn(self, margin, A4[1] - margin - h)
+        self.restoreState()
 
 
 class ReportPackingList(models.AbstractModel):
@@ -503,7 +570,7 @@ class ReportPackingList(models.AbstractModel):
                         COALESCE(p.weight, pt.weight, 0.0) AS product_weight,
                         COALESCE(pt.name->>%(lang)s, pt.name->>'en_GB', pt.name->>'en_US', pt.name::text) AS product_name,
                         pc.id AS categ_id,
-                        COALESCE(pc.name->>%(lang)s, pc.name->>'en_GB', pc.name->>'en_US', pc.name::text) AS categ_name
+                        pc.name AS categ_name
                     FROM sale_order so
                     JOIN res_partner rp_main ON rp_main.id = so.partner_id
                     LEFT JOIN res_partner_title rpt ON rpt.id = rp_main.title
@@ -674,7 +741,7 @@ class ReportPackingList(models.AbstractModel):
                     p.id AS product_id,
                     COALESCE(pt.name->>%(lang)s, pt.name->>'en_GB', pt.name->>'en_US', pt.name::text) AS product_name,
                     pc.id AS categ_id,
-                    COALESCE(pc.name->>%(lang)s, pc.name->>'en_GB', pc.name->>'en_US', pc.name::text) AS categ_name
+                    pc.name AS categ_name
                 FROM round_management_batch b
                 LEFT JOIN stock_warehouse sw ON sw.id = b.depot_id
                 LEFT JOIN round_management_round rmr ON rmr.id = b.round_id
@@ -793,3 +860,334 @@ class ReportPackingList(models.AbstractModel):
             'delivery_channel': 'regal_van',
             'batch_groups': all_batch_groups,
         }
+
+    # ------------------------------------------------------------------
+    # Fast path: builds the PDF directly with ReportLab instead of QWeb+
+    # wkhtmltopdf. The raw-SQL data layer above is already fast (it exists
+    # specifically to avoid N+1 ORM queries) and is reused as-is; only the
+    # *rendering* step changes. See report_delivery_note_round_courier.py
+    # for the general approach and report_delivery_note_round_van.py for the
+    # repeating-header-per-group technique (_PackingListHeaderMarker /
+    # _PackingListCanvas above are the same idea, renamed for this file).
+    # ------------------------------------------------------------------
+    PRINTABLE_WIDTH = A4[0] - (24 * mm)
+
+    def generate_pdf(self, wizard):
+        """Returns the finished PDF (bytes) for one Packing List wizard, or
+        None when there is nothing to print."""
+        if wizard.delivery_channel == 'courier':
+            return self._generate_courier_pdf(wizard)
+        return self._generate_van_pdf(wizard)
+
+    def _pdf_styles(self):
+        return {
+            'title': ParagraphStyle('PLTitle', fontName='Helvetica-Bold', fontSize=20, leading=24),
+            'subtitle': ParagraphStyle('PLSubtitle', fontName='Helvetica', fontSize=11, leading=15, alignment=2),
+            'customer': ParagraphStyle('PLCustomer', fontName='Helvetica-Bold', fontSize=13, leading=16),
+            'address': ParagraphStyle('PLAddress', fontName='Helvetica-Bold', fontSize=13, leading=16, alignment=2),
+            'category': ParagraphStyle('PLCategory', fontName='Helvetica-Bold', fontSize=12, leading=15),
+            'col_header': ParagraphStyle('PLColHeader', fontName='Helvetica-BoldOblique', fontSize=9, leading=11),
+            'cell': ParagraphStyle('PLCell', fontName='Helvetica', fontSize=10, leading=13),
+            'cell_bold': ParagraphStyle('PLCellBold', fontName='Helvetica-Bold', fontSize=10, leading=13),
+            'total': ParagraphStyle('PLTotal', fontName='Helvetica-Bold', fontSize=10, leading=13, alignment=2),
+        }
+
+    def _generate_courier_pdf(self, wizard):
+        """Uses plain ORM search() + recordset iteration rather than raw SQL -
+        the ORM already knows how each field is actually translated/stored,
+        so there's no risk of the "assumed jsonb, column is actually varchar"
+        class of bug a hand-written query can hit."""
+        p_from = (
+            wizard.packing_date_from or (wizard.delivery_date_from - datetime.timedelta(days=1))
+            if wizard.delivery_date_from else False
+        )
+        p_to = (
+            wizard.packing_date_to or (wizard.delivery_date_to - datetime.timedelta(days=1))
+            if wizard.delivery_date_to else False
+        )
+        packing_date_from_str = p_from.strftime('%d/%m/%Y') if p_from else ''
+        packing_date_to_str = p_to.strftime('%d/%m/%Y') if p_to else ''
+        delivery_date_from_str = wizard.delivery_date_from.strftime('%d/%m/%Y') if wizard.delivery_date_from else ''
+        delivery_date_to_str = wizard.delivery_date_to.strftime('%d/%m/%Y') if wizard.delivery_date_to else ''
+
+        order_domain = [
+            ('delivery_channel', '=', 'courier'),
+            ('state', 'in', ['sale', 'done']),
+            ('delivery_date', '>=', wizard.delivery_date_from),
+            ('delivery_date', '<=', wizard.delivery_date_to),
+            ('is_late_order', '=', bool(wizard.include_late_orders)),
+        ]
+        orders = self.env['sale.order'].search(order_domain, order='delivery_date asc, name asc')
+        if not orders:
+            return None
+
+        orders_map = {}
+        for order in orders:
+            lines = order.order_line.filtered(
+                lambda l: not l.display_type and l.product_id and l.product_uom_qty > 0
+            )
+            if not lines:
+                continue
+
+            main_partner = order.partner_id
+            ship_partner = order.partner_shipping_id or main_partner
+            cust_name = self._format_customer_name(main_partner)
+            addr = self._format_address_lines(ship_partner)
+
+            o_data = orders_map[order.id] = {
+                'order_name': order.name,
+                'delivery_date': order.delivery_date.strftime('%d/%m/%Y') if order.delivery_date else '',
+                'customer_code': getattr(main_partner, 'customer_code', False) or main_partner.ref or order.name or '',
+                'customer_name': cust_name,
+                'address_line1': addr['line1'],
+                'address_line2': addr['line2'],
+                'categories_map': {},
+                'total_order_weight_g': 0.0,
+            }
+
+            for line in lines:
+                product = line.product_id
+                categ_name = (product.categ_id.name or _('Other')).strip().upper()
+                categ_key = (0, categ_name)
+                if categ_key not in o_data['categories_map']:
+                    o_data['categories_map'][categ_key] = {'categ_name': categ_name, 'products': []}
+
+                qty_val = line.product_uom_qty
+                unit_weight_kg = product.weight or product.product_tmpl_id.weight or 0.0
+                line_weight_g = round(unit_weight_kg * qty_val * 1000)
+                o_data['total_order_weight_g'] += line_weight_g
+
+                sort_num = self._extract_sort_number(product, line)
+                qty_display = int(round(qty_val)) if float(qty_val).is_integer() else qty_val
+                o_data['categories_map'][categ_key]['products'].append({
+                    'qty': qty_display,
+                    'product_name': product.name or line.name or '',
+                    'weight_display': int(round(line_weight_g)),
+                    'sort_num': sort_num,
+                })
+
+        if not orders_map:
+            return None
+
+        styles = self._pdf_styles()
+        width = self.PRINTABLE_WIDTH
+        story = [
+            Table(
+                [[
+                    Paragraph("Courier Packing List", styles['title']),
+                    Paragraph(
+                        f"For Packing between {xml_escape(packing_date_from_str)} and {xml_escape(packing_date_to_str)}"
+                        f"<br/>(Delivery {xml_escape(delivery_date_from_str)}-{xml_escape(delivery_date_to_str)})",
+                        styles['subtitle'],
+                    ),
+                ]],
+                colWidths=[width * 0.5, width * 0.5],
+            ),
+            HRFlowable(width=width, thickness=2, color=colors.black, spaceBefore=3 * mm, spaceAfter=4 * mm),
+        ]
+
+        printed_orders = 0
+        for oid, o_data in orders_map.items():
+            category_list = []
+            for c_key, c_val in sorted(
+                o_data['categories_map'].items(), key=lambda item: self._get_category_sort_key(item[1]['categ_name'])
+            ):
+                sorted_prods = sorted(c_val['products'], key=self._get_sort_key)
+                if sorted_prods:
+                    category_list.append({'categ_name': c_val['categ_name'], 'products': sorted_prods})
+            if not category_list:
+                continue
+
+            if printed_orders:
+                story.append(PageBreak())
+            printed_orders += 1
+
+            header_text = (
+                f"<b>{xml_escape(o_data['customer_code'])}  {xml_escape(o_data['customer_name'])}</b>"
+                f"<br/>{xml_escape(o_data['address_line1'])} {xml_escape(o_data['address_line2'])}"
+            )
+            story.append(_PackingListHeaderMarker(header_text))
+            story.append(Spacer(1, 10 * mm))
+
+            for cat in category_list:
+                rows = [[
+                    Paragraph(str(p['qty']), styles['cell_bold']),
+                    Paragraph("X", styles['cell']),
+                    Paragraph(xml_escape(p['product_name']), styles['cell']),
+                    Paragraph(str(p['weight_display']), styles['cell_bold']),
+                ] for p in cat['products']]
+                table = Table(rows, colWidths=[width * 0.08, width * 0.06, width * 0.72, width * 0.14])
+                table.setStyle(TableStyle([
+                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                    ('ALIGN', (3, 0), (3, -1), 'RIGHT'),
+                    ('TOPPADDING', (0, 0), (-1, -1), 1.5),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 1.5),
+                ]))
+                story.append(KeepTogether([
+                    Paragraph(xml_escape(cat['categ_name']), styles['category']),
+                    HRFlowable(width=width, thickness=1.2, color=colors.black, spaceBefore=1 * mm, spaceAfter=1 * mm),
+                    table,
+                    HRFlowable(width=width, thickness=1.2, color=colors.black, spaceBefore=1 * mm, spaceAfter=3 * mm),
+                ]))
+
+            story.append(Spacer(1, 2 * mm))
+            total_row = Table(
+                [[
+                    Paragraph("Total Weight - Not Inc Fres", styles['total']),
+                    Paragraph(str(int(round(o_data['total_order_weight_g']))), styles['cell_bold']),
+                ]],
+                colWidths=[width * 0.82, width * 0.18],
+            )
+            total_row.setStyle(TableStyle([
+                ('BOX', (1, 0), (1, 0), 2, colors.black),
+                ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+                ('TOPPADDING', (1, 0), (1, 0), 3), ('BOTTOMPADDING', (1, 0), (1, 0), 3),
+                ('RIGHTPADDING', (1, 0), (1, 0), 6), ('LEFTPADDING', (1, 0), (1, 0), 6),
+            ]))
+            story.append(total_row)
+
+        if not printed_orders:
+            return None
+        return self._build_pdf(story)
+
+    def _generate_van_pdf(self, wizard):
+        """Uses plain ORM search() + recordset iteration rather than raw SQL -
+        see the note at the top of _generate_courier_pdf."""
+        batch_domain = [
+            ('delivery_date', '>=', wizard.delivery_date_from),
+            ('delivery_date', '<=', wizard.delivery_date_to),
+        ]
+        if wizard.depot_ids:
+            batch_domain.append(('depot_id', 'in', wizard.depot_ids.ids))
+
+        batches = self.env['round.management.batch'].search(
+            batch_domain, order='delivery_date asc, code asc, id asc'
+        )
+        if not batches:
+            return None
+
+        batches_map = {}
+        for batch in batches:
+            orders = batch.order_ids.filtered(
+                lambda so: so.state in ('sale', 'done')
+                and getattr(so, 'delivery_channel', False) in ('regal_van', False)
+                and bool(getattr(so, 'is_late_order', False)) == bool(wizard.include_late_orders)
+            )
+            if not orders:
+                continue
+
+            b_map = batches_map[batch.id] = {'batch': batch, 'categories_map': {}}
+            for order in orders:
+                lines = order.order_line.filtered(
+                    lambda l: not l.display_type and l.product_id and l.product_uom_qty > 0
+                )
+                for line in lines:
+                    product = line.product_id
+                    categ_name = (product.categ_id.name or _('Other')).strip().upper()
+                    categ_key = product.categ_id.id or 0
+                    if categ_key not in b_map['categories_map']:
+                        b_map['categories_map'][categ_key] = {'categ_name': categ_name, 'products': {}}
+
+                    c_prods = b_map['categories_map'][categ_key]['products']
+                    pid = product.id
+                    if pid not in c_prods:
+                        sort_num = self._extract_sort_number(product, line)
+                        c_prods[pid] = {
+                            'product_id': pid, 'product_name': product.name, 'box_qty': 0.0,
+                            'sort_num': sort_num, 'sort_str': str(sort_num) if sort_num else '',
+                        }
+                    effective_qty = line.box_qty or line.product_uom_qty or 0.0
+                    c_prods[pid]['box_qty'] += effective_qty
+
+        if not batches_map:
+            return None
+
+        styles = self._pdf_styles()
+        width = self.PRINTABLE_WIDTH
+        story = []
+        printed_batches = 0
+        for bid, b_data in batches_map.items():
+            category_list = []
+            batch_total_boxes = 0
+            for c_key, c_val in sorted(
+                b_data['categories_map'].items(), key=lambda item: self._get_category_sort_key(item[1]['categ_name'])
+            ):
+                sorted_prods = sorted(c_val['products'].values(), key=self._get_sort_key)
+                for p in sorted_prods:
+                    p['qty_display'] = int(round(p['box_qty'])) if float(p['box_qty']).is_integer() else p['box_qty']
+                cat_total = int(round(sum(p['box_qty'] for p in sorted_prods)))
+                batch_total_boxes += cat_total
+                if sorted_prods:
+                    category_list.append({'categ_name': c_val['categ_name'], 'products': sorted_prods, 'total_boxes': cat_total})
+            if not category_list:
+                continue
+
+            if printed_batches:
+                story.append(PageBreak())
+            printed_batches += 1
+
+            batch = b_data['batch']
+            depot_name = batch.depot_id.name or 'Grimsby'
+            delivery_date_str = batch.delivery_date.strftime('%d/%m/%Y') if batch.delivery_date else ''
+            batch_code = batch.code or ''
+            batch_name = (batch.round_id.name if batch.round_id else False) or batch.reference or ''
+
+            header_text = (
+                f"<b>Factory Only Packing List</b>&nbsp;&nbsp;&nbsp;{xml_escape(batch_code)}  {xml_escape(batch_name)}"
+                f"<br/>Delivery On: {xml_escape(delivery_date_str)}"
+                + (f"&nbsp;&nbsp;&nbsp;{xml_escape(depot_name)}" if depot_name else '')
+            )
+            story.append(_PackingListHeaderMarker(header_text))
+            story.append(Spacer(1, 14 * mm))
+
+            for cat in category_list:
+                header_row = Table(
+                    [[Paragraph("Quantity", styles['col_header']), Paragraph("Product / Box Contents", styles['col_header']),
+                      Paragraph("Sort", styles['col_header'])]],
+                    colWidths=[width * 0.12, width * 0.76, width * 0.12],
+                )
+                header_row.setStyle(TableStyle([('LINEBELOW', (0, 0), (-1, 0), 1.5, colors.black)]))
+
+                rows = [[
+                    Paragraph(str(p['qty_display']), styles['cell_bold']),
+                    Paragraph(xml_escape(p['product_name'] or ''), styles['cell']),
+                    Paragraph(xml_escape(p['sort_str']), styles['cell']),
+                ] for p in cat['products']]
+                table = Table(rows, colWidths=[width * 0.12, width * 0.76, width * 0.12])
+                table.setStyle(TableStyle([
+                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                    ('ALIGN', (0, 0), (0, -1), 'CENTER'),
+                    ('ALIGN', (2, 0), (2, -1), 'RIGHT'),
+                    ('LINEBELOW', (0, 0), (-1, -1), 0.5, colors.black),
+                    ('TOPPADDING', (0, 0), (-1, -1), 2), ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+                ]))
+
+                elements = [
+                    Paragraph(xml_escape(cat['categ_name']), styles['category']),
+                    Spacer(1, 2 * mm), header_row, table,
+                    Paragraph(f"{cat['total_boxes']} Boxes", styles['total']),
+                    Spacer(1, 5 * mm),
+                ]
+                story.append(KeepTogether(elements))
+
+            story.append(Spacer(1, 8 * mm))
+            story.append(Paragraph("Checked By _____________________", styles['total']))
+
+        if not printed_batches:
+            return None
+        return self._build_pdf(story)
+
+    def _build_pdf(self, story):
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buffer, pagesize=A4,
+            leftMargin=12 * mm, rightMargin=12 * mm, topMargin=32 * mm, bottomMargin=12 * mm,
+        )
+
+        def _make_canvas(*args, **kwargs):
+            return _PackingListCanvas(*args, **kwargs)
+
+        doc.build(story, canvasmaker=_make_canvas)
+        pdf_value = buffer.getvalue()
+        buffer.close()
+        return pdf_value
