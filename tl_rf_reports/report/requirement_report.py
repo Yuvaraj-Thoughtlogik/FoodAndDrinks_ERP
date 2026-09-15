@@ -25,11 +25,57 @@ class ReportRequirement(models.AbstractModel):
     _description = 'Requirement Report Generator'
 
     @api.model
+    def _add_requirement_entry(self, categories_map, wizard, product, qty, d_date_str,
+                                delivery_date_from_str, delivery_date_to_str):
+        """Consolidate one (stock item, qty, delivery date) entry into categories_map.
+
+        This is used both for products that have no BOM (reported as-is) and for BOM
+        components (reported in place of the finished product they belong to). Calling
+        this multiple times for the same product/component - whether it comes from
+        different Sale Orders, or as a component of two different BOM'd products - will
+        automatically sum into a single consolidated line rather than duplicating it.
+        """
+        categ = product.categ_id
+        categ_key = categ.id if categ else 0
+        categ_name = (categ.name or _('Uncategorized')).strip() if categ else _('Uncategorized')
+
+        if categ_key not in categories_map:
+            if wizard.delivery_channel == 'courier':
+                cat_title = f"Courier {categ_name} Requirements"
+            else:
+                cat_title = f"{categ_name} Total Between {delivery_date_from_str} and {delivery_date_to_str}"
+
+            categories_map[categ_key] = {
+                'categ_id': categ_key,
+                'categ_name': categ_name,
+                'title': cat_title,
+                'products': {},
+                'total_qty': 0.0,
+            }
+
+        prod_key = product.id
+        if prod_key not in categories_map[categ_key]['products']:
+            categories_map[categ_key]['products'][prod_key] = {
+                'product_id': prod_key,
+                'product_name': product.name or product.display_name,
+                'product_code': product.default_code or '',
+                'dates_map': {},
+                'total_qty': 0.0,
+            }
+
+        prod_item = categories_map[categ_key]['products'][prod_key]
+        if d_date_str not in prod_item['dates_map']:
+            prod_item['dates_map'][d_date_str] = 0.0
+        prod_item['dates_map'][d_date_str] += qty
+        prod_item['total_qty'] += qty
+
+        categories_map[categ_key]['total_qty'] += qty
+
+    @api.model
     def _get_report_values(self, docids, data=None):
         docs = self.env['requirement.report.wizard'].browse(docids)
 
         report_results = []
-
         for wizard in docs:
             # Format display dates
             delivery_date_from_str = wizard.delivery_date_from.strftime('%d/%m/%Y') if wizard.delivery_date_from else ''
@@ -50,92 +96,58 @@ class ReportRequirement(models.AbstractModel):
             else:
                 footer_date_str = current_dt.strftime('%d %B %Y')
 
-            # Build the sale.order.line search domain - equivalent to the old
-            # raw SQL's JOIN + WHERE clauses, but expressed as ORM domain
-            # terms so field access below goes through the field descriptors
-            # (which already know whether a given name/categ is translatable)
-            # instead of hand-guessing per-column jsonb/varchar storage.
-            domain = [
-                ('state', 'in', ['sale', 'done']),
-                ('delivery_date', '>=', wizard.delivery_date_from),
-                ('delivery_date', '<=', wizard.delivery_date_to),
-                ('display_type', '=', False),
-                ('product_id', '!=', False),
-                ('product_uom_qty', '>', 0),
-            ]
+            # Fetch matching order lines - reuses the wizard's own domain
+            # builder (also used by its search_count validation) instead of
+            # duplicating the domain here, so the two stay in sync.
+            domain = wizard._get_line_domain()
+            lines = self.env['sale.order.line'].search(domain, order='order_id, id asc')
 
-            if wizard.delivery_channel == 'courier':
-                domain.append(('delivery_channel', '=', 'courier'))
-            else:
-                domain.append(('delivery_channel', 'in', ['regal_van', False]))
-
-            if wizard.delivery_channel != 'courier' and wizard.depot_ids:
-                depot_ids = wizard.depot_ids.ids
-                # Mirrors "sol.depot_id IN depot_ids OR (sol.depot_id IS NULL
-                # AND so.warehouse_id IN depot_ids)" from the old query.
-                domain += [
-                    '|',
-                    ('depot_id', 'in', depot_ids),
-                    '&', ('depot_id', '=', False), ('order_id.warehouse_id', 'in', depot_ids),
-                ]
-
-            if wizard.categ_ids:
-                domain.append(('categ_id', 'in', wizard.categ_ids.ids))
-
-            # Company filtering is handled automatically by the multi-company
-            # record rule on sale.order.line (company_id = False OR in the
-            # allowed companies) - no explicit domain clause needed here,
-            # unlike the raw SQL which had to replicate that by hand.
-            order_lines = self.env['sale.order.line'].search(
-                domain, order='categ_id, product_id, delivery_date',
-            )
+            # Preload BOMs for every product found on the matching lines in a single call.
+            # _bom_find correctly resolves variant-specific vs. template-level BOMs and
+            # simply won't have an entry (or maps to a falsy value) for products with no BOM.
+            all_products = lines.mapped('product_id')
+            boms_by_product = self.env['mrp.bom']._bom_find(products=all_products) if all_products else {}
 
             # Group by Category -> Product -> Delivery Date
             categories_map = {}
             grand_total_qty = 0.0
 
-            for line in order_lines:
+            for line in lines:
                 product = line.product_id
-                categ = product.categ_id
-                categ_key = categ.id or 0
-                categ_name = (categ.name or _('Uncategorized')).strip()
+                if not product:
+                    continue
 
-                if categ_key not in categories_map:
-                    if wizard.delivery_channel == 'courier':
-                        cat_title = f"Courier {categ_name} Requirements"
-                    else:
-                        cat_title = f"{categ_name} Total Between {delivery_date_from_str} and {delivery_date_to_str}"
-
-                    categories_map[categ_key] = {
-                        'categ_id': categ_key,
-                        'categ_name': categ_name,
-                        'title': cat_title,
-                        'products': {},
-                        'total_qty': 0.0,
-                    }
-
-                prod_key = product.id
-                if prod_key not in categories_map[categ_key]['products']:
-                    categories_map[categ_key]['products'][prod_key] = {
-                        'product_id': prod_key,
-                        'product_name': product.name or '',
-                        'product_code': product.default_code or '',
-                        'dates_map': {},
-                        'total_qty': 0.0,
-                    }
-
-                d_date = line.delivery_date or wizard.delivery_date_from
+                # Delivery date for this line
+                d_date = line.order_id.delivery_date or wizard.delivery_date_from
                 d_date_str = d_date.strftime('%d/%m/%Y') if d_date else delivery_date_from_str
-                qty = float(line.product_uom_qty or 0.0)
 
-                prod_item = categories_map[categ_key]['products'][prod_key]
-                if d_date_str not in prod_item['dates_map']:
-                    prod_item['dates_map'][d_date_str] = 0.0
-                prod_item['dates_map'][d_date_str] += qty
-                prod_item['total_qty'] += qty
+                qty = line.product_uom_qty
+                bom = boms_by_product.get(product)
 
-                categories_map[categ_key]['total_qty'] += qty
-                grand_total_qty += qty
+                if bom:
+                    # Product has a BOM: explode into its components, scaled to the
+                    # ordered quantity, and report the components instead of the
+                    # finished product itself (the finished product is never added here).
+                    bom_batch_qty = bom.product_qty or 1.0
+                    for bom_line in bom.bom_line_ids:
+                        component = bom_line.product_id
+                        if not component:
+                            continue
+                        component_qty = (bom_line.product_qty / bom_batch_qty) * qty
+                        if not component_qty:
+                            continue
+                        self._add_requirement_entry(
+                            categories_map, wizard, component, component_qty, d_date_str,
+                            delivery_date_from_str, delivery_date_to_str,
+                        )
+                        grand_total_qty += component_qty
+                else:
+                    # No BOM: report the product itself, exactly as before.
+                    self._add_requirement_entry(
+                        categories_map, wizard, product, qty, d_date_str,
+                        delivery_date_from_str, delivery_date_to_str,
+                    )
+                    grand_total_qty += qty
 
             # Format category pages and split products into 2 columns (for Regal Van)
             category_pages = []
@@ -237,9 +249,8 @@ class ReportRequirement(models.AbstractModel):
     # ------------------------------------------------------------------
     # Fast path: builds the PDF directly with ReportLab instead of going
     # through QWeb + wkhtmltopdf. This deliberately reuses _get_report_values()
-    # above (which fetches its data with a single ORM search() over
-    # sale.order.line plus one pass over the resulting recordset - no N+1
-    # queries) to compute the data, so unlike the Delivery Note Round
+    # above (which now also explodes BOM components, same as the Prediction
+    # Report Wizard) to compute the data, so unlike the Delivery Note Round
     # reports there was no performance reason to duplicate the data prep;
     # only the rendering needed to change. Handles the Regal Van (landscape,
     # 2-column) layout. See ReportRequirementCourier.generate_pdf() below
@@ -479,4 +490,3 @@ class ReportRequirementCourier(models.AbstractModel):
         pdf_value = buffer.getvalue()
         buffer.close()
         return pdf_value
-
