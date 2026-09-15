@@ -584,11 +584,11 @@ class SaleOrderSpecialNote(models.Model):
 class SaleOrderLine(models.Model):
     _inherit = 'sale.order.line'
 
-
     special_requirements_notes_id = fields.Many2one(
         'sale.order.special.note',
         string="Special Notes",
         ondelete='set null',
+    )
 
    
 
