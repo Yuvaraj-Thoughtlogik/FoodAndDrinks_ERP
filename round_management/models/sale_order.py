@@ -320,7 +320,8 @@ class SaleOrder(models.Model):
                 local_dt = fields.Datetime.context_timestamp(order, order.commitment_date)
                 target_date = local_dt.date()
             if target_date:
-                order.delivery_day_name = f"({target_date.strftime('%a')})"
+                # %A returns full day name (e.g. Wednesday)
+                order.delivery_day_name = f"({target_date.strftime('%A')})"
             else:
                 order.delivery_day_name = ""
 
@@ -570,12 +571,22 @@ class SaleOrder(models.Model):
 
         self.batch_id = next_batch if next_batch else False
             
+class SaleOrderSpecialNote(models.Model):
+    _name = 'sale.order.special.note'
+    _description = 'Special Requirements Note'
+    _order = 'name'
+
+    name = fields.Char(string="Note", required=True)
+
+
+
 class SaleOrderLine(models.Model):
     _inherit = 'sale.order.line'
 
-    
-    special_requirements_notes = fields.Text(
-        string="Special Notes"
+    special_requirements_notes_id = fields.Many2one(
+        'sale.order.special.note',
+        string="Special Notes",
+        ondelete='set null',
     )
     
 class Pricelist(models.Model):
@@ -586,3 +597,12 @@ class Pricelist(models.Model):
         ('b2b', 'B2B'),
         ('standard', 'Standard'),
     ], string="Pricelist Category", default='standard', required=True)
+    
+    
+class ProductProduct(models.Model):
+    _inherit = 'product.product'
+
+    def _compute_display_name(self):
+        for product in self:
+            # Fallback to product name without default code
+            product.display_name = product.name or ""
