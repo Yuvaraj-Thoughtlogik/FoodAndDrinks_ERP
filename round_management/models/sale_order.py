@@ -3,6 +3,7 @@ from odoo.exceptions import UserError
 from odoo.tools import _
 from datetime import datetime, time
 import pytz
+import re
 
 DEFAULT_DELIVERY_TIME = time(23, 59)  # 11:00 PM (local time)
 
@@ -165,6 +166,7 @@ class SaleOrder(models.Model):
     def _onchange_batch_id_set_delivery_channel(self):
         if self.batch_id and self.batch_id.delivery_channel:
             self.delivery_channel = self.batch_id.delivery_channel
+
 
     @api.onchange('pay_card_reader')
     def _onchange_pay_card_reader(self):
@@ -496,8 +498,8 @@ class SaleOrder(models.Model):
         for order in self:
             if order.pricelist_id and order.pricelist_id.pricelist_category == 'b2b':
                 order.is_b2b = True
-            # elif order.partner_id and order.partner_id.customer_type == 'b2b_trade':
-            # order.is_b2b = True
+            #elif order.partner_id and order.partner_id.customer_type == 'b2b_trade':
+                #order.is_b2b = True
             else:
                 order.is_b2b = False
 
@@ -509,7 +511,7 @@ class SaleOrder(models.Model):
                 order.is_staff_order = (order.pricelist_id.pricelist_category == 'staff')
             else:
                 order.is_staff_order = False
-
+            
     @api.depends('partner_id', 'partner_id.round_id')
     def _compute_partner_id_set_round(self):
         for rec in self:
@@ -517,7 +519,7 @@ class SaleOrder(models.Model):
                 rec.round_id = rec.partner_id.round_id
             else:
                 rec.round_id = False
-
+    
     @api.depends('round_id')
     def _compute_auto_select_batch_id(self):
         today = fields.Date.context_today(self)
@@ -541,7 +543,7 @@ class SaleOrder(models.Model):
                 ], order='delivery_date desc, id desc', limit=1)
 
             order.batch_id = next_batch.id if next_batch else False
-
+            
     @api.onchange('round_id')
     def _onchange_round_id_auto_select_next_batch(self):
         """
@@ -569,7 +571,6 @@ class SaleOrder(models.Model):
             ], order='delivery_date desc, id desc', limit=1)
 
         self.batch_id = next_batch if next_batch else False
-
             
 class SaleOrderSpecialNote(models.Model):
     _name = 'sale.order.special.note'
@@ -577,7 +578,6 @@ class SaleOrderSpecialNote(models.Model):
     _order = 'name'
 
     name = fields.Char(string="Note", required=True)
-
 
 
 
@@ -589,11 +589,7 @@ class SaleOrderLine(models.Model):
         string="Special Notes",
         ondelete='set null',
     )
-
-   
-
-
-
+    
 class Pricelist(models.Model):
     _inherit = 'product.pricelist'
 
@@ -601,7 +597,6 @@ class Pricelist(models.Model):
         ('staff', 'Staff'),
         ('b2b', 'B2B'),
         ('standard', 'Standard'),
-
     ], string="Pricelist Category", default='standard', required=True)
     
     
@@ -609,8 +604,25 @@ class ProductProduct(models.Model):
     _inherit = 'product.product'
 
     def _compute_display_name(self):
+        super()._compute_display_name()
         for product in self:
-            # Fallback to product name without default code
-            product.display_name = product.name or ""
+            if product.display_name:
+                # Strips [code] prefix from selected field display
+                product.display_name = re.sub(r'^\[.*?\]\s*', '', product.display_name)
 
-    
+    @api.model
+    def _name_search(self, name='', domain=None, operator='ilike', limit=100, order=None):
+        # Pass display_default_code=False in context to suppress right-hand reference column in dropdown
+        res = super(ProductProduct, self.with_context(display_default_code=False))._name_search(
+            name=name, domain=domain, operator=operator, limit=limit, order=order
+        )
+        return res
+        
+class ProductTemplate(models.Model):
+    _inherit = 'product.template'
+
+    def _compute_display_name(self):
+        super()._compute_display_name()
+        for template in self:
+            if template.display_name:
+                template.display_name = re.sub(r'^\[.*?\]\s*', '', template.display_name)
