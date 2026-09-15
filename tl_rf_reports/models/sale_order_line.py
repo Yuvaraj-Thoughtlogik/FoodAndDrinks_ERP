@@ -2,6 +2,7 @@
 import logging
 import math
 from odoo import api, fields, models
+from odoo.tools import float_is_zero
 
 _logger = logging.getLogger(__name__)
 
@@ -48,12 +49,61 @@ class SaleOrderLine(models.Model):
         readonly=True,
         store=True,
     )
-    is_late_order = fields.Boolean(
-        related='order_id.is_late_order',
-        string="Late Order",
-        readonly=True,
-        store=True,
+    confirmed_qty = fields.Float(
+        string="Confirmed Qty",
+        default=0.0,
+        copy=False,
+        digits='Product Unit of Measure',
+        help="Snapshot of the ordered quantity taken when the sale order was confirmed. "
+             "Used to detect quantity changes made after confirmation.",
     )
+    late_created = fields.Boolean(
+        string="Late Created",
+        default=False,
+        copy=False,
+        readonly=True,
+        help="True when this line was added to the order after the order was already confirmed.",
+    )
+    late_qty_delta = fields.Float(
+        string="Late Qty Delta",
+        compute='_compute_late_order',
+        store=True,
+        digits='Product Unit of Measure',
+        help="Current quantity minus the quantity confirmed at order confirmation. "
+             "Positive when increased after confirmation, negative when reduced.",
+    )
+    late_order = fields.Boolean(
+        string="Late Order",
+        compute='_compute_late_order',
+        store=True,
+        help="True when the sale order itself is late, this line was added after the "
+             "order was confirmed, or its quantity was changed after confirmation.",
+    )
+
+    @api.depends('product_uom_qty', 'confirmed_qty', 'late_created', 'order_id.state', 'order_id.is_late_order')
+    def _compute_late_order(self):
+        for line in self:
+            line.late_qty_delta = line.product_uom_qty - line.confirmed_qty
+            qty_changed_after_confirm = (
+                line.order_id.state in ('sale', 'done')
+                and not float_is_zero(line.late_qty_delta, precision_digits=4)
+            )
+            line.late_order = (
+                bool(line.order_id.is_late_order)
+                or line.late_created
+                or qty_changed_after_confirm
+            )
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        order_ids = {vals['order_id'] for vals in vals_list if vals.get('order_id')}
+        late_order_ids = set(
+            self.env['sale.order'].browse(order_ids).filtered(lambda o: o.state in ('sale', 'done')).ids
+        )
+        for vals in vals_list:
+            if vals.get('order_id') in late_order_ids and 'late_created' not in vals:
+                vals['late_created'] = True
+        return super().create(vals_list)
 
     def _get_product_unit_weight_in_kg(self):
         """Extracts unit weight in kg directly from the product."""

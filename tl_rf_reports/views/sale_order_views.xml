@@ -13,6 +13,27 @@
         </field>
     </record>
 
+    <!-- Inherit Sale Order Form: Highlight late order lines (blue) and
+         lines with a late quantity reduction (red) in the Order Lines list -->
+    <record id="view_order_form_inherit_late_line_decoration" model="ir.ui.view">
+        <field name="name">sale.order.form.inherit.late.line.decoration</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="priority">100</field>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='order_line']/list" position="attributes">
+                <attribute name="decoration-danger">late_qty_delta &lt; 0</attribute>
+                <attribute name="decoration-info">late_order and late_qty_delta &gt;= 0</attribute>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/list/field[@name='product_uom_qty']" position="after">
+                <field name="late_qty_delta" string="Qty +/-" optional="show"/>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/list" position="inside">
+                <field name="late_order" optional="hide"/>
+            </xpath>
+        </field>
+    </record>
+
     <!-- Sale Order Line List View for Dock Weight / Courier Report -->
     <record id="view_sale_order_line_dock_weight_tree" model="ir.ui.view">
         <field name="name">sale.order.line.dock.weight.list</field>
@@ -29,7 +50,7 @@
                 <field name="order_partner_id" string="Customer" optional="hide"/>
                 <field name="delivery_date" optional="show"/>
                 <field name="delivery_channel" optional="hide"/>
-                <field name="is_late_order" optional="hide"/>
+                <field name="late_order" optional="hide"/>
             </list>
         </field>
     </record>
@@ -49,8 +70,8 @@
                 <filter string="Courier Delivery" name="courier" domain="[('delivery_channel', '=', 'courier')]"/>
                 <filter string="Regal Van Delivery" name="regal_van" domain="[('delivery_channel', 'in', ['regal_van', False])]"/>
                 <separator/>
-                <filter string="Normal Orders" name="normal_orders" domain="[('is_late_order', '=', False)]"/>
-                <filter string="Late Orders" name="late_orders" domain="[('is_late_order', '=', True)]"/>
+                <filter string="Normal Orders" name="normal_orders" domain="[('late_order', '=', False)]"/>
+                <filter string="Late Orders" name="late_orders" domain="[('late_order', '=', True)]"/>
                 <group>
                     <filter string="Depot" name="group_by_depot" context="{'group_by': 'depot_id'}"/>
                     <filter string="Product Category" name="group_by_category" context="{'group_by': 'categ_id'}"/>

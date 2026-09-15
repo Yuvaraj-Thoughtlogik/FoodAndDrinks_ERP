@@ -67,18 +67,18 @@
         <field name="name">prediction.report.line.list</field>
         <field name="model">prediction.report.line</field>
         <field name="arch" type="xml">
-            <list string="Prediction Report Lines" create="0" edit="1">
+            <list string="Prediction Report Lines" create="0" edit="1" editable="bottom">
                 <header>
-                    <button name="action_create_rfq" string="Create RFQ" type="object"
+                    <button name="action_create_rfq" string="Create PO" type="object"
                         class="btn-primary" display="always" icon="fa-shopping-cart" />
                 </header>
                 <field name="product_id" readonly="1" />
                 <field name="product_code" optional="show" readonly="1" />
                 <field name="categ_id" readonly="1" />
-                <field name="quantity" sum="Total Ordered Qty" />
+                <field name="quantity" sum="Total Ordered Qty"  readonly="1" />
                 <field name="uom_id" readonly="1" />
-                <field name="vendor_id" options="{'no_create': True}" />
-                <field name="price_unit" optional="show" />
+                <field name="vendor_id" options="{'no_create': True}"  readonly="1" />
+                <field name="price_unit" optional="show"   readonly="1"/>
             </list>
         </field>
     </record>
@@ -90,7 +90,7 @@
         <field name="arch" type="xml">
             <form string="Prediction Report Line" create="0">
                 <header>
-                    <button name="action_create_rfq" string="Create RFQ" type="object"
+                    <button name="action_create_rfq" string="Create PO" type="object"
                         class="btn-primary" icon="fa-shopping-cart" />
                 </header>
                 <sheet>

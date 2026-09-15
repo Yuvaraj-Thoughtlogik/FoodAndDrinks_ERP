@@ -130,7 +130,6 @@ class ReportDockWeightBreakdown(models.AbstractModel):
         docs = self.env['batch.report.wizard'].browse(docids)
 
         report_results = []
-        lang = self.env.lang or 'en_US'
         company_ids = tuple(self.env.companies.ids) if self.env.companies else (self.env.company.id,)
 
         for wizard in docs:
@@ -159,94 +158,84 @@ class ReportDockWeightBreakdown(models.AbstractModel):
 
             # Courier Delivery Flow
             if getattr(wizard, 'delivery_channel', 'regal_van') == 'courier':
-                courier_query = """
-                    SELECT 
-                        so.id AS order_id,
-                        sol.id AS line_id,
-                        sol.product_uom_qty AS line_qty,
-                        p.id AS product_id,
-                        p.default_code AS product_code,
-                        COALESCE(pt.name->>%(lang)s, pt.name->>'en_GB', pt.name->>'en_US', pt.name::text) AS product_name,
-                        COALESCE(p.weight, pt.weight, 0.0) AS weight,
-                        COALESCE(sol.gross_net_weight, pt.gross_net_weight) AS gross_net_weight,
-                        sol.min_weight AS min_weight,
-                        COALESCE(uom.name->>%(lang)s, uom.name->>'en_GB', uom.name->>'en_US', uom.name::text) AS uom_name,
-                        pc.id AS categ_id,
-                        pc.name AS categ_name
-                    FROM sale_order so
-                    JOIN sale_order_line sol ON sol.order_id = so.id 
-                        AND sol.display_type IS NULL 
-                        AND sol.product_id IS NOT NULL 
-                        AND sol.product_uom_qty > 0
-                    JOIN product_product p ON p.id = sol.product_id
-                    JOIN product_template pt ON pt.id = p.product_tmpl_id
-                    LEFT JOIN uom_uom uom ON uom.id = COALESCE(sol.product_uom_id, pt.uom_id)
-                    LEFT JOIN product_category pc ON pc.id = pt.categ_id
-                    WHERE so.delivery_channel = 'courier'
-                      AND so.state IN ('sale', 'done')
-                      AND so.delivery_date >= %(date_from)s
-                      AND so.delivery_date <= %(date_to)s
-                      AND COALESCE(so.is_late_order, false) = %(is_late)s
-                      AND (so.company_id IS NULL OR so.company_id IN %(company_ids)s)
-                    ORDER BY so.delivery_date ASC, so.name ASC, sol.id ASC
-                """
-                params = {
-                    'date_from': wizard.delivery_date_from,
-                    'date_to': wizard.delivery_date_to,
-                    'is_late': bool(wizard.include_late_orders),
-                    'company_ids': company_ids,
-                    'lang': lang,
-                }
-                self.env.cr.execute(courier_query, params)
-                c_rows = self.env.cr.dictfetchall()
+                is_late = bool(wizard.include_late_orders)
+                orders = self.env['sale.order'].search(
+                    [
+                        ('delivery_channel', '=', 'courier'),
+                        ('state', 'in', ['sale', 'done']),
+                        ('delivery_date', '>=', wizard.delivery_date_from),
+                        ('delivery_date', '<=', wizard.delivery_date_to),
+                        '|', ('company_id', '=', False), ('company_id', 'in', company_ids),
+                    ],
+                    order='delivery_date asc, name asc',
+                )
 
                 categories_map = {}
                 grand_total_qty = 0.0
                 grand_total_weight = 0.0
                 unique_orders = set()
 
-                for r in c_rows:
-                    unique_orders.add(r['order_id'])
-                    categ_key = r['categ_id'] or 0
-                    categ_name = (r['categ_name'] or _('Fresh')).strip()
+                for order in orders:
+                    lines = order.order_line.filtered(
+                        lambda l: not l.display_type and l.product_id and l.product_uom_qty > 0
+                        and bool(l.late_order) == is_late
+                    )
+                    if not lines:
+                        continue
+                    unique_orders.add(order.id)
 
-                    if categ_key not in categories_map:
-                        categories_map[categ_key] = {
-                            'categ_id': categ_key,
-                            'categ_name': categ_name,
-                            'products': {},
-                            'total_qty': 0.0,
-                            'total_weight': 0.0,
-                        }
+                    for line in lines:
+                        product = line.product_id
+                        categ = product.categ_id
+                        categ_name = (categ.name or _('Fresh')).strip()
+                        # Group by display name, not database id: two
+                        # different category records that happen to render
+                        # the same text must not split into two pages.
+                        categ_key = categ_name.lower()
 
-                    prod_key = r['product_id']
-                    if prod_key not in categories_map[categ_key]['products']:
-                        unit_weight = self._extract_unit_weight_from_vals(
-                            r['uom_name'], r['weight'], r['gross_net_weight'], r['min_weight'], r['product_name']
-                        )
-                        categories_map[categ_key]['products'][prod_key] = {
-                            'product_id': prod_key,
-                            'product_code': r['product_code'] or '',
-                            'product_name': r['product_name'] or '',
-                            'uom_name': r['uom_name'] or '',
-                            'unit_weight': unit_weight,
-                            'total_qty': 0.0,
-                            'total_weight': 0.0,
-                        }
+                        if categ_key not in categories_map:
+                            categories_map[categ_key] = {
+                                'categ_id': categ.id or 0,
+                                'categ_name': categ_name,
+                                'products': {},
+                                'total_qty': 0.0,
+                                'total_weight': 0.0,
+                            }
 
-                    qty = float(r['line_qty'] or 0.0)
-                    prod_info = categories_map[categ_key]['products'][prod_key]
-                    line_weight = (prod_info['unit_weight'] * qty) if prod_info['unit_weight'] > 0 else qty
+                        prod_key = product.id
+                        if prod_key not in categories_map[categ_key]['products']:
+                            uom = line.product_uom_id or product.product_tmpl_id.uom_id
+                            uom_name = uom.name or '' if uom else ''
+                            unit_weight = self._extract_unit_weight_from_vals(
+                                uom_name,
+                                product.weight or product.product_tmpl_id.weight,
+                                line.gross_net_weight or product.product_tmpl_id.gross_net_weight,
+                                line.min_weight,
+                                product.name,
+                            )
+                            categories_map[categ_key]['products'][prod_key] = {
+                                'product_id': prod_key,
+                                'product_code': product.default_code or '',
+                                'product_name': product.name or '',
+                                'uom_name': uom_name,
+                                'unit_weight': unit_weight,
+                                'total_qty': 0.0,
+                                'total_weight': 0.0,
+                            }
 
-                    prod_info['total_qty'] += qty
-                    prod_info['total_weight'] += line_weight
+                        qty = float(line.product_uom_qty or 0.0)
+                        prod_info = categories_map[categ_key]['products'][prod_key]
+                        line_weight = (prod_info['unit_weight'] * qty) if prod_info['unit_weight'] > 0 else qty
 
-                    categ_map = categories_map[categ_key]
-                    categ_map['total_qty'] += qty
-                    categ_map['total_weight'] += line_weight
+                        prod_info['total_qty'] += qty
+                        prod_info['total_weight'] += line_weight
 
-                    grand_total_qty += qty
-                    grand_total_weight += line_weight
+                        categ_map = categories_map[categ_key]
+                        categ_map['total_qty'] += qty
+                        categ_map['total_weight'] += line_weight
+
+                        grand_total_qty += qty
+                        grand_total_weight += line_weight
 
                 category_pages = []
                 for c_key, c_val in sorted(categories_map.items(), key=lambda item: item[1]['categ_name']):
@@ -284,61 +273,20 @@ class ReportDockWeightBreakdown(models.AbstractModel):
                 continue
 
             # Regal Van Delivery Flow (Batch-based)
-            depot_filter = ""
-            params = {
-                'date_from': wizard.delivery_date_from,
-                'date_to': wizard.delivery_date_to,
-                'is_late': bool(wizard.include_late_orders),
-                'company_ids': company_ids,
-                'lang': lang,
-            }
+            is_late = bool(wizard.include_late_orders)
+            batch_domain = [
+                ('delivery_date', '>=', wizard.delivery_date_from),
+                ('delivery_date', '<=', wizard.delivery_date_to),
+                '|', ('company_id', '=', False), ('company_id', 'in', company_ids),
+            ]
             if wizard.depot_ids:
-                depot_filter = "AND b.depot_id IN %(depot_ids)s"
-                params['depot_ids'] = tuple(wizard.depot_ids.ids)
+                batch_domain.append(('depot_id', 'in', wizard.depot_ids.ids))
             elif hasattr(wizard, 'depot_id') and wizard.depot_id:
-                depot_filter = "AND b.depot_id = %(depot_id)s"
-                params['depot_id'] = wizard.depot_id.id
+                batch_domain.append(('depot_id', '=', wizard.depot_id.id))
 
-            van_query = f"""
-                SELECT 
-                    b.id AS batch_id,
-                    sw.id AS depot_id,
-                    COALESCE(sw.name, 'Grimsby') AS depot_name,
-                    COALESCE(sw.code, 'N/A') AS depot_code,
-                    so.id AS order_id,
-                    sol.id AS line_id,
-                    sol.product_uom_qty AS line_qty,
-                    p.id AS product_id,
-                    p.default_code AS product_code,
-                    COALESCE(pt.name->>%(lang)s, pt.name->>'en_GB', pt.name->>'en_US', pt.name::text) AS product_name,
-                    COALESCE(p.weight, pt.weight, 0.0) AS weight,
-                    COALESCE(sol.gross_net_weight, pt.gross_net_weight) AS gross_net_weight,
-                    sol.min_weight AS min_weight,
-                    COALESCE(uom.name->>%(lang)s, uom.name->>'en_GB', uom.name->>'en_US', uom.name::text) AS uom_name,
-                    pc.id AS categ_id,
-                    pc.name AS categ_name
-                FROM round_management_batch b
-                LEFT JOIN stock_warehouse sw ON sw.id = b.depot_id
-                JOIN sale_order so ON so.batch_id = b.id 
-                    AND so.state IN ('sale', 'done') 
-                    AND (so.delivery_channel = 'regal_van' OR so.delivery_channel IS NULL)
-                    AND COALESCE(so.is_late_order, false) = %(is_late)s
-                JOIN sale_order_line sol ON sol.order_id = so.id 
-                    AND sol.display_type IS NULL 
-                    AND sol.product_id IS NOT NULL 
-                    AND sol.product_uom_qty > 0
-                JOIN product_product p ON p.id = sol.product_id
-                JOIN product_template pt ON pt.id = p.product_tmpl_id
-                LEFT JOIN uom_uom uom ON uom.id = COALESCE(sol.product_uom_id, pt.uom_id)
-                LEFT JOIN product_category pc ON pc.id = pt.categ_id
-                WHERE b.delivery_date >= %(date_from)s 
-                  AND b.delivery_date <= %(date_to)s
-                  {depot_filter}
-                  AND (b.company_id IS NULL OR b.company_id IN %(company_ids)s)
-                ORDER BY sw.name ASC, b.delivery_date ASC, b.code ASC, sol.id ASC
-            """
-            self.env.cr.execute(van_query, params)
-            v_rows = self.env.cr.dictfetchall()
+            batches = self.env['round.management.batch'].search(
+                batch_domain, order='delivery_date asc, code asc, id asc'
+            )
 
             depots_map = {}
             grand_total_qty = 0.0
@@ -346,67 +294,94 @@ class ReportDockWeightBreakdown(models.AbstractModel):
             unique_batches = set()
             unique_orders = set()
 
-            for r in v_rows:
-                unique_batches.add(r['batch_id'])
-                unique_orders.add(r['order_id'])
+            for batch in batches:
+                orders = batch.order_ids.filtered(
+                    lambda so: so.state in ('sale', 'done')
+                    and getattr(so, 'delivery_channel', False) in ('regal_van', False)
+                )
+                if not orders:
+                    continue
 
-                depot_key = r['depot_id'] or 0
-                depot_name = r['depot_name'] or _('Grimsby')
-                depot_code = r['depot_code'] or 'N/A'
+                depot = batch.depot_id
+                depot_name = depot.name or _('Grimsby')
+                depot_code = depot.code or 'N/A'
+                # Group by display name, not database id: two different
+                # depot/category records that happen to render the same
+                # text must not split into two pages.
+                depot_key = depot_name.lower()
 
-                if depot_key not in depots_map:
-                    depots_map[depot_key] = {
-                        'depot_id': depot_key,
-                        'depot_name': depot_name,
-                        'depot_code': depot_code,
-                        'categories': {},
-                        'total_qty': 0.0,
-                        'total_weight': 0.0,
-                    }
-
-                categ_key = r['categ_id'] or 0
-                categ_name = (r['categ_name'] or _('FRESH')).upper()
-
-                if categ_key not in depots_map[depot_key]['categories']:
-                    depots_map[depot_key]['categories'][categ_key] = {
-                        'categ_id': categ_key,
-                        'categ_name': categ_name,
-                        'products': {},
-                        'total_qty': 0.0,
-                        'total_weight': 0.0,
-                    }
-
-                prod_key = r['product_id']
-                if prod_key not in depots_map[depot_key]['categories'][categ_key]['products']:
-                    unit_weight = self._extract_unit_weight_from_vals(
-                        r['uom_name'], r['weight'], r['gross_net_weight'], r['min_weight'], r['product_name']
+                for order in orders:
+                    lines = order.order_line.filtered(
+                        lambda l: not l.display_type and l.product_id and l.product_uom_qty > 0
+                        and bool(l.late_order) == is_late
                     )
-                    depots_map[depot_key]['categories'][categ_key]['products'][prod_key] = {
-                        'product_id': prod_key,
-                        'product_code': r['product_code'] or '',
-                        'product_name': r['product_name'] or '',
-                        'uom_name': r['uom_name'] or '',
-                        'unit_weight': unit_weight,
-                        'total_qty': 0.0,
-                        'total_weight': 0.0,
-                    }
+                    if not lines:
+                        continue
+                    unique_batches.add(batch.id)
+                    unique_orders.add(order.id)
 
-                qty = float(r['line_qty'] or 0.0)
-                prod_info = depots_map[depot_key]['categories'][categ_key]['products'][prod_key]
-                line_weight = (prod_info['unit_weight'] * qty) if prod_info['unit_weight'] > 0 else qty
+                    if depot_key not in depots_map:
+                        depots_map[depot_key] = {
+                            'depot_id': depot.id or 0,
+                            'depot_name': depot_name,
+                            'depot_code': depot_code,
+                            'categories': {},
+                            'total_qty': 0.0,
+                            'total_weight': 0.0,
+                        }
 
-                prod_info['total_qty'] += qty
-                prod_info['total_weight'] += line_weight
+                    for line in lines:
+                        product = line.product_id
+                        categ = product.categ_id
+                        categ_name = (categ.name or _('FRESH')).upper()
+                        categ_key = categ_name.lower()
 
-                categ_map = depots_map[depot_key]['categories'][categ_key]
-                categ_map['total_qty'] += qty
-                categ_map['total_weight'] += line_weight
+                        if categ_key not in depots_map[depot_key]['categories']:
+                            depots_map[depot_key]['categories'][categ_key] = {
+                                'categ_id': categ.id or 0,
+                                'categ_name': categ_name,
+                                'products': {},
+                                'total_qty': 0.0,
+                                'total_weight': 0.0,
+                            }
 
-                depots_map[depot_key]['total_qty'] += qty
-                depots_map[depot_key]['total_weight'] += line_weight
+                        prod_key = product.id
+                        if prod_key not in depots_map[depot_key]['categories'][categ_key]['products']:
+                            uom = line.product_uom_id or product.product_tmpl_id.uom_id
+                            uom_name = uom.name or '' if uom else ''
+                            unit_weight = self._extract_unit_weight_from_vals(
+                                uom_name,
+                                product.weight or product.product_tmpl_id.weight,
+                                line.gross_net_weight or product.product_tmpl_id.gross_net_weight,
+                                line.min_weight,
+                                product.name,
+                            )
+                            depots_map[depot_key]['categories'][categ_key]['products'][prod_key] = {
+                                'product_id': prod_key,
+                                'product_code': product.default_code or '',
+                                'product_name': product.name or '',
+                                'uom_name': uom_name,
+                                'unit_weight': unit_weight,
+                                'total_qty': 0.0,
+                                'total_weight': 0.0,
+                            }
 
-                grand_total_qty += qty
-                grand_total_weight += line_weight
+                        qty = float(line.product_uom_qty or 0.0)
+                        prod_info = depots_map[depot_key]['categories'][categ_key]['products'][prod_key]
+                        line_weight = (prod_info['unit_weight'] * qty) if prod_info['unit_weight'] > 0 else qty
+
+                        prod_info['total_qty'] += qty
+                        prod_info['total_weight'] += line_weight
+
+                        categ_map = depots_map[depot_key]['categories'][categ_key]
+                        categ_map['total_qty'] += qty
+                        categ_map['total_weight'] += line_weight
+
+                        depots_map[depot_key]['total_qty'] += qty
+                        depots_map[depot_key]['total_weight'] += line_weight
+
+                        grand_total_qty += qty
+                        grand_total_weight += line_weight
 
             combo_pages = []
             for d_key, d_val in sorted(depots_map.items(), key=lambda item: item[1]['depot_name']):
@@ -493,23 +468,27 @@ class ReportDockWeightBreakdown(models.AbstractModel):
                 ('state', 'in', ['sale', 'done']),
                 ('delivery_date', '>=', wizard.delivery_date_from),
                 ('delivery_date', '<=', wizard.delivery_date_to),
-                ('is_late_order', '=', bool(wizard.include_late_orders)),
             ],
             order='delivery_date asc, name asc',
         )
         if not orders:
             return None
 
+        is_late = bool(wizard.include_late_orders)
         categories_map = {}
         for order in orders:
             lines = order.order_line.filtered(
                 lambda l: not l.display_type and l.product_id and l.product_uom_qty > 0
+                and bool(l.late_order) == is_late
             )
             for line in lines:
                 product = line.product_id
                 categ = product.categ_id
-                categ_key = categ.id or 0
                 categ_name = (categ.name or _('Fresh')).strip()
+                # Group by display name, not database id: two different
+                # category records that happen to render the same text
+                # (e.g. per-company duplicates) must not split into two pages.
+                categ_key = categ_name.lower()
 
                 if categ_key not in categories_map:
                     categories_map[categ_key] = {
@@ -531,12 +510,22 @@ class ReportDockWeightBreakdown(models.AbstractModel):
                         'product_name': product.name or '',
                         'unit_weight': unit_weight,
                         'total_weight': 0.0,
+                        'reduced_weight': 0.0,
+                        'increased_weight': 0.0,
                     }
 
                 qty = float(line.product_uom_qty or 0.0)
                 prod_info = categories_map[categ_key]['products'][prod_key]
                 line_weight = (prod_info['unit_weight'] * qty) if prod_info['unit_weight'] > 0 else qty
                 prod_info['total_weight'] += line_weight
+
+                if is_late:
+                    delta_qty = float(line.late_qty_delta or 0.0)
+                    delta_weight = (prod_info['unit_weight'] * delta_qty) if prod_info['unit_weight'] > 0 else delta_qty
+                    if delta_weight < 0:
+                        prod_info['reduced_weight'] += -delta_weight
+                    elif delta_weight > 0:
+                        prod_info['increased_weight'] += delta_weight
 
         category_pages = []
         for c_key, c_val in sorted(categories_map.items(), key=lambda item: item[1]['categ_name']):
@@ -550,13 +539,17 @@ class ReportDockWeightBreakdown(models.AbstractModel):
         if not category_pages:
             return None
 
-        return self._build_courier_pdf_bytes(category_pages, delivery_date_from_str, delivery_date_to_str)
+        return self._build_courier_pdf_bytes(category_pages, delivery_date_from_str, delivery_date_to_str, is_late)
 
-    def _build_courier_pdf_bytes(self, category_pages, delivery_date_from_str, delivery_date_to_str):
+    def _build_courier_pdf_bytes(self, category_pages, delivery_date_from_str, delivery_date_to_str, is_late=False):
         """Pure layout step - takes already-grouped/sorted category pages and
         draws them. Split out from _generate_courier_pdf() so the layout code
         can be exercised standalone (e.g. by a smoke test) without touching
-        the ORM/SQL."""
+        the ORM/SQL. When is_late is True (the wizard's "Include Late
+        Orders" run), an extra left-hand column shows, per product, the
+        weight reduced (red) and weight increased (blue) by late quantity
+        changes, and the report is titled as an "ALT's" (alterations)
+        breakdown."""
         buffer = io.BytesIO()
         doc = SimpleDocTemplate(
             buffer, pagesize=A4,
@@ -564,14 +557,15 @@ class ReportDockWeightBreakdown(models.AbstractModel):
         )
         printable_width = A4[0] - (30 * mm)
 
-        title_style = ParagraphStyle('DockCourierTitle', fontName='Helvetica-Bold', fontSize=19, leading=21)
-        info_style = ParagraphStyle('DockCourierInfo', fontName='Helvetica', fontSize=10.5, leading=14)
-        header_cell_style = ParagraphStyle('DockCourierColHeader', fontName='Helvetica-Bold', fontSize=13, leading=15)
+        title_style = ParagraphStyle('DockCourierTitle', fontName='Helvetica-Bold', fontSize=14, leading=16)
+        info_style = ParagraphStyle('DockCourierInfo', fontName='Helvetica', fontSize=8.5, leading=11)
+        header_cell_style = ParagraphStyle('DockCourierColHeader', fontName='Helvetica-Bold', fontSize=10, leading=12)
         header_cell_right_style = ParagraphStyle(
             'DockCourierColHeaderR', parent=header_cell_style, alignment=2,
         )
-        weight_style = ParagraphStyle('DockCourierWeight', fontName='Helvetica', fontSize=12.5, leading=15, alignment=2)
-        name_style = ParagraphStyle('DockCourierName', fontName='Helvetica', fontSize=12.5, leading=15)
+        weight_style = ParagraphStyle('DockCourierWeight', fontName='Helvetica', fontSize=9.5, leading=12, alignment=2)
+        name_style = ParagraphStyle('DockCourierName', fontName='Helvetica', fontSize=9.5, leading=12)
+        delta_style = ParagraphStyle('DockCourierDelta', fontName='Helvetica', fontSize=7, leading=8.5, alignment=2)
 
         today_str = xml_escape(datetime.date.today().strftime('%d/%m/%Y'))
         delivery_date_from_esc = xml_escape(delivery_date_from_str)
@@ -583,7 +577,8 @@ class ReportDockWeightBreakdown(models.AbstractModel):
                 story.append(PageBreak())
 
             categ_esc = xml_escape((cat_page['categ_name'] or '').upper())
-            title = Paragraph(f"Courier {categ_esc} Filleters Weights", title_style)
+            flow_label = "Courier ALT's" if is_late else "Courier"
+            title = Paragraph(f"{flow_label} {categ_esc} Filleters Weights", title_style)
             info = Paragraph(
                 f"For Packing between {today_str} and {today_str}<br/>"
                 f"(Delivery {delivery_date_from_esc}-{delivery_date_to_esc})",
@@ -602,17 +597,44 @@ class ReportDockWeightBreakdown(models.AbstractModel):
             story.append(rule)
             story.append(Spacer(1, 3 * mm))
 
-            rows = [[Paragraph("Total Kg", header_cell_right_style), Paragraph("Stock Name", header_cell_style)]]
-            for prod in cat_page['product_list']:
-                weight_text = xml_escape(_format_weight_display(prod['total_weight']))
-                rows.append([
-                    Paragraph(f"{weight_text} Kg", weight_style),
-                    Paragraph(xml_escape(prod['product_name']), name_style),
-                ])
+            if is_late:
+                rows = [[
+                    Paragraph("Adj Kg", header_cell_right_style),
+                    Paragraph("Total Kg", header_cell_right_style),
+                    Paragraph("Stock Name", header_cell_style),
+                ]]
+                for prod in cat_page['product_list']:
+                    weight_text = xml_escape(_format_weight_display(prod['total_weight']))
+                    reduced_text = xml_escape(_format_weight_display(prod.get('reduced_weight', 0.0)))
+                    increased_text = xml_escape(_format_weight_display(prod.get('increased_weight', 0.0)))
+                    delta_para = Paragraph(
+                        f'<font color="#cc0000">{reduced_text}</font><br/>'
+                        f'<font color="#0000cc">{increased_text}</font>',
+                        delta_style,
+                    )
+                    rows.append([
+                        delta_para,
+                        Paragraph(f"{weight_text} Kg", weight_style),
+                        Paragraph(xml_escape(prod['product_name']), name_style),
+                    ])
 
-            prod_table = Table(
-                rows, colWidths=[printable_width * 0.28, printable_width * 0.72], repeatRows=1,
-            )
+                prod_table = Table(
+                    rows,
+                    colWidths=[printable_width * 0.16, printable_width * 0.20, printable_width * 0.64],
+                    repeatRows=1,
+                )
+            else:
+                rows = [[Paragraph("Total Kg", header_cell_right_style), Paragraph("Stock Name", header_cell_style)]]
+                for prod in cat_page['product_list']:
+                    weight_text = xml_escape(_format_weight_display(prod['total_weight']))
+                    rows.append([
+                        Paragraph(f"{weight_text} Kg", weight_style),
+                        Paragraph(xml_escape(prod['product_name']), name_style),
+                    ])
+
+                prod_table = Table(
+                    rows, colWidths=[printable_width * 0.28, printable_width * 0.72], repeatRows=1,
+                )
             prod_table.setStyle(TableStyle([
                 ('LINEBELOW', (0, 0), (-1, 0), 1.5, colors.black),
                 ('LINEBELOW', (0, 1), (-1, -1), 0.75, colors.black),
@@ -673,14 +695,16 @@ class ReportDockWeightBreakdown(models.AbstractModel):
             orders = batch.order_ids.filtered(
                 lambda so: so.state in ('sale', 'done')
                 and getattr(so, 'delivery_channel', False) in ('regal_van', False)
-                and bool(getattr(so, 'is_late_order', False)) == is_late
             )
             if not orders:
                 continue
 
             depot = batch.depot_id
-            depot_key = depot.id or 0
             depot_name = depot.name or _('Grimsby')
+            # Group by display name, not database id: two different depot or
+            # category records that happen to render the same text (e.g.
+            # per-company duplicates) must not split into two pages.
+            depot_key = depot_name.lower()
 
             if depot_key not in depots_map:
                 depots_map[depot_key] = {'depot_name': depot_name, 'categories': {}}
@@ -688,12 +712,13 @@ class ReportDockWeightBreakdown(models.AbstractModel):
             for order in orders:
                 lines = order.order_line.filtered(
                     lambda l: not l.display_type and l.product_id and l.product_uom_qty > 0
+                    and bool(l.late_order) == is_late
                 )
                 for line in lines:
                     product = line.product_id
                     categ = product.categ_id
-                    categ_key = categ.id or 0
                     categ_name = (categ.name or _('FRESH')).upper()
+                    categ_key = categ_name.lower()
 
                     if categ_key not in depots_map[depot_key]['categories']:
                         depots_map[depot_key]['categories'][categ_key] = {'categ_name': categ_name, 'products': {}}
@@ -712,12 +737,22 @@ class ReportDockWeightBreakdown(models.AbstractModel):
                             'product_name': product.name or '',
                             'unit_weight': unit_weight,
                             'total_weight': 0.0,
+                            'reduced_weight': 0.0,
+                            'increased_weight': 0.0,
                         }
 
                     qty = float(line.product_uom_qty or 0.0)
                     prod_info = depots_map[depot_key]['categories'][categ_key]['products'][prod_key]
                     line_weight = (prod_info['unit_weight'] * qty) if prod_info['unit_weight'] > 0 else qty
                     prod_info['total_weight'] += line_weight
+
+                    if is_late:
+                        delta_qty = float(line.late_qty_delta or 0.0)
+                        delta_weight = (prod_info['unit_weight'] * delta_qty) if prod_info['unit_weight'] > 0 else delta_qty
+                        if delta_weight < 0:
+                            prod_info['reduced_weight'] += -delta_weight
+                        elif delta_weight > 0:
+                            prod_info['increased_weight'] += delta_weight
 
         combo_pages = []
         for d_key, d_val in sorted(depots_map.items(), key=lambda item: item[1]['depot_name']):
@@ -733,13 +768,17 @@ class ReportDockWeightBreakdown(models.AbstractModel):
         if not combo_pages:
             return None
 
-        return self._build_van_pdf_bytes(combo_pages, formatted_date, printed_at_str)
+        return self._build_van_pdf_bytes(combo_pages, formatted_date, printed_at_str, is_late)
 
-    def _build_van_pdf_bytes(self, combo_pages, formatted_date, printed_at_str):
+    def _build_van_pdf_bytes(self, combo_pages, formatted_date, printed_at_str, is_late=False):
         """Pure layout step - takes already-grouped/sorted depot+category
         pages and draws them. Split out from _generate_van_pdf() so the
         layout code can be exercised standalone (e.g. by a smoke test)
-        without touching the ORM/SQL."""
+        without touching the ORM/SQL. When is_late is True (the wizard's
+        "Include Late Orders" run), an extra left-hand column shows, per
+        product, the weight reduced (red) and weight increased (blue) by
+        late quantity changes, and the report is titled as an "ALT's"
+        (alterations) breakdown."""
         buffer = io.BytesIO()
         doc = SimpleDocTemplate(
             buffer, pagesize=A4,
@@ -747,21 +786,23 @@ class ReportDockWeightBreakdown(models.AbstractModel):
         )
         printable_width = A4[0] - (30 * mm)
 
-        report_title_style = ParagraphStyle('DockVanReportTitle', fontName='Helvetica-Bold', fontSize=18, leading=20)
-        date_style = ParagraphStyle('DockVanDate', fontName='Helvetica-Bold', fontSize=13.5, leading=16)
-        banner_style = ParagraphStyle('DockVanBanner', fontName='Helvetica-Bold', fontSize=26, leading=29)
-        subtitle_style = ParagraphStyle('DockVanSubtitle', fontName='Helvetica-BoldOblique', fontSize=12, leading=14)
-        weight_style = ParagraphStyle('DockVanWeight', fontName='Helvetica-Bold', fontSize=13.5, leading=17, alignment=2)
-        name_style = ParagraphStyle('DockVanName', fontName='Helvetica', fontSize=13.5, leading=17)
+        report_title_style = ParagraphStyle('DockVanReportTitle', fontName='Helvetica-Bold', fontSize=14, leading=16)
+        date_style = ParagraphStyle('DockVanDate', fontName='Helvetica-Bold', fontSize=10.5, leading=13)
+        banner_style = ParagraphStyle('DockVanBanner', fontName='Helvetica-Bold', fontSize=19, leading=22)
+        subtitle_style = ParagraphStyle('DockVanSubtitle', fontName='Helvetica-BoldOblique', fontSize=9.5, leading=11)
+        weight_style = ParagraphStyle('DockVanWeight', fontName='Helvetica-Bold', fontSize=10.5, leading=13, alignment=2)
+        name_style = ParagraphStyle('DockVanName', fontName='Helvetica', fontSize=10.5, leading=13)
+        delta_style = ParagraphStyle('DockVanDelta', fontName='Helvetica', fontSize=7.5, leading=9, alignment=2)
 
         formatted_date_esc = xml_escape(formatted_date)
+        report_title = "Dock Weight ALT's Breakdown Report" if is_late else "Dock Weight Breakdown Report"
 
         story = []
         for idx, combo_page in enumerate(combo_pages):
             if idx:
                 story.append(PageBreak())
 
-            story.append(Paragraph("Dock Weight Breakdown Report", report_title_style))
+            story.append(Paragraph(report_title, report_title_style))
             story.append(Spacer(1, 2 * mm))
             story.append(Paragraph(formatted_date_esc, date_style))
             story.append(Spacer(1, 6 * mm))
@@ -783,13 +824,33 @@ class ReportDockWeightBreakdown(models.AbstractModel):
             story.append(Paragraph("Sold Weight (Kg)", subtitle_style))
             story.append(Spacer(1, 3 * mm))
 
-            rows = []
-            for prod in combo_page['product_list']:
-                rows.append([
-                    Paragraph(xml_escape('%.2f' % prod['total_weight']), weight_style),
-                    Paragraph(xml_escape(prod['product_name']), name_style),
-                ])
-            prod_table = Table(rows, colWidths=[printable_width * 0.22, printable_width * 0.78])
+            if is_late:
+                rows = []
+                for prod in combo_page['product_list']:
+                    reduced_text = xml_escape(_format_weight_display(prod.get('reduced_weight', 0.0)))
+                    increased_text = xml_escape(_format_weight_display(prod.get('increased_weight', 0.0)))
+                    delta_para = Paragraph(
+                        f'<font color="#cc0000">{reduced_text}</font><br/>'
+                        f'<font color="#0000cc">{increased_text}</font>',
+                        delta_style,
+                    )
+                    rows.append([
+                        delta_para,
+                        Paragraph(xml_escape('%.2f' % prod['total_weight']), weight_style),
+                        Paragraph(xml_escape(prod['product_name']), name_style),
+                    ])
+                prod_table = Table(
+                    rows,
+                    colWidths=[printable_width * 0.16, printable_width * 0.14, printable_width * 0.70],
+                )
+            else:
+                rows = []
+                for prod in combo_page['product_list']:
+                    rows.append([
+                        Paragraph(xml_escape('%.2f' % prod['total_weight']), weight_style),
+                        Paragraph(xml_escape(prod['product_name']), name_style),
+                    ])
+                prod_table = Table(rows, colWidths=[printable_width * 0.22, printable_width * 0.78])
             prod_table.setStyle(TableStyle([
                 ('VALIGN', (0, 0), (-1, -1), 'TOP'),
                 ('TOPPADDING', (0, 0), (-1, -1), 3),
