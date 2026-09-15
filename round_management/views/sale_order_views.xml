@@ -50,13 +50,14 @@
                 </div>
 
                 <!-- Requested Delivery Time Range -->
-                <label for="requested_delivery_after" string="Requested Delivery Time"/>
+               <label for="requested_delivery_after" string="Requested Delivery Time" invisible="1"/>
                 <div class="o_row">
-                    <span class="me-1">After:</span>
-                    <field name="requested_delivery_after" widget="float_time" placeholder="12:00"/>
-                    <span class="ms-3 me-1">Before:</span>
-                    <field name="requested_delivery_before" widget="float_time" placeholder="17:00"/>
+                    <!--<span class="me-1">After:</span>-->
+                    <field name="requested_delivery_after" widget="float_time" placeholder="12:00" invisible="1"/>
+                   <!-- <span class="ms-3 me-1">Before:</span>-->
+                    <field name="requested_delivery_before" widget="float_time" placeholder="17:00" invisible="1"/>
                 </div>
+
 
             </xpath>
 
@@ -203,7 +204,7 @@
         </field>
     </record>
 
-    <record id="view_order_form_inherit_round_time_readonly" model="ir.ui.view">
+   <record id="view_order_form_inherit_round_time_readonly_v2" model="ir.ui.view">
         <field name="name">sale.order.form.inherit.round.time.readonly</field>
         <field name="model">sale.order</field>
         <field name="inherit_id" ref="sale.view_order_form"/>
@@ -215,30 +216,30 @@
             </xpath>
 
 
-            <xpath expr="//field[@name='requested_delivery_after']" position="attributes">
+           <!-- <xpath expr="//field[@name='requested_delivery_after']" position="attributes">
                 <attribute name="readonly">no_between_times_round == True</attribute>
             </xpath>
 
 
             <xpath expr="//field[@name='requested_delivery_before']" position="attributes">
                 <attribute name="readonly">no_between_times_round == True</attribute>
-            </xpath>
+            </xpath>-->
 
         </field>
     </record>
     
     
-    <record id="view_order_form_inherit_special_notes" model="ir.ui.view">
-    <field name="name">sale.order.form.inherit.special.notes</field>
-    <field name="model">sale.order</field>
-    <field name="inherit_id" ref="sale.view_order_form"/>
-    <field name="arch" type="xml">
-        <xpath expr="//field[@name='order_line']/list/field[@name='name']" position="after">
-            
-            <field name="special_requirements_notes" />
-        </xpath>
-    </field>
-</record>
+    <record id="view_order_form_inherit_round_v4" model="ir.ui.view">
+        <field name="name">sale.order.form.inherit.round.v4</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='order_line']/list/field[@name='name']" position="after">
+                <field name="special_requirements_notes_id" 
+                       options="{'no_create': False, 'no_create_edit': False}"/>
+            </xpath>
+        </field>
+    </record>
 
 <record id="product_pricelist_view_inherit_category" model="ir.ui.view">
         <field name="name">product.pricelist.form.inherit.category</field>
@@ -250,4 +251,41 @@
             </xpath>
         </field>
     </record>
+    
+    
+    <record id="view_sales_order_filter_inherit_immediate_search" model="ir.ui.view">
+        <field name="name">sale.order.list.select.inherit.immediate.search</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_sales_order_filter"/>
+        <field name="arch" type="xml">
+            
+            <!-- Replace the default 'name' field so it becomes the primary Enter-key action -->
+            <xpath expr="//search/field[@name='name']" position="replace">
+                <field name="name" 
+                       string="Order / Customer Code / Zip / Phone" 
+                       filter_domain="['|', '|', '|', '|',
+                           ('name', 'ilike', self),
+                           ('partner_id.name', 'ilike', self),
+                           ('partner_id.customer_code', 'ilike', self),
+                           ('partner_id.zip', 'ilike', self),
+                           ('partner_id.phone', 'ilike', self)
+                       ]"/>
+            </xpath>
+
+        </field>
+    </record>
+    
+    <record id="view_order_form_inherit_hide_product_ref" model="ir.ui.view">
+        <field name="name">sale.order.form.inherit.hide.product.ref</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="arch" type="xml">
+
+            <xpath expr="//field[@name='order_line']/list/field[@name='product_id']" position="attributes">
+                <attribute name="context">{'display_default_code': False}</attribute>
+            </xpath>
+
+        </field>
+    </record>
+    
 </odoo>

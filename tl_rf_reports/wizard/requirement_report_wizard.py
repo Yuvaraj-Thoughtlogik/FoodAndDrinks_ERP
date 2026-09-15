@@ -37,6 +37,15 @@ class RequirementReportWizard(models.TransientModel):
         help="Ending delivery date for requirement report."
     )
 
+    @api.onchange('delivery_date_from')
+    def _onchange_delivery_date_from(self):
+        """Keep 'Delivery Date To' in sync with 'Delivery Date From' whenever
+        the start date changes, so a single-day selection (e.g. both = Sep 14)
+        is the default without extra clicks. If the user later picks a later
+        'To' date manually, that stays untouched until 'From' changes again."""
+        if self.delivery_date_from:
+            self.delivery_date_to = self.delivery_date_from
+
     @api.model
     def _default_depot_ids(self):
         return self.env['stock.warehouse'].search([])
