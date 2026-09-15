@@ -1,6 +1,15 @@
 # -*- coding: utf-8 -*-
 import datetime
+import io
 import math
+from xml.sax.saxutils import escape as xml_escape
+
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib.styles import ParagraphStyle
+from reportlab.lib.units import mm
+from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
 from odoo import api, fields, models, _
 
 
@@ -87,7 +96,9 @@ class ReportRequirement(models.AbstractModel):
             else:
                 footer_date_str = current_dt.strftime('%d %B %Y')
 
-            # Fetch matching order lines
+            # Fetch matching order lines - reuses the wizard's own domain
+            # builder (also used by its search_count validation) instead of
+            # duplicating the domain here, so the two stay in sync.
             domain = wizard._get_line_domain()
             lines = self.env['sale.order.line'].search(domain, order='order_id, id asc')
 
@@ -235,6 +246,154 @@ class ReportRequirement(models.AbstractModel):
             'report_results': report_results,
         }
 
+    # ------------------------------------------------------------------
+    # Fast path: builds the PDF directly with ReportLab instead of going
+    # through QWeb + wkhtmltopdf. This deliberately reuses _get_report_values()
+    # above (which now also explodes BOM components, same as the Prediction
+    # Report Wizard) to compute the data, so unlike the Delivery Note Round
+    # reports there was no performance reason to duplicate the data prep;
+    # only the rendering needed to change. Handles the Regal Van (landscape,
+    # 2-column) layout. See ReportRequirementCourier.generate_pdf() below
+    # for the Courier (portrait, 1-column) layout, which shares this same
+    # data prep.
+    # ------------------------------------------------------------------
+    def generate_pdf(self, wizard):
+        """Returns the finished PDF (bytes) for one Requirement Report wizard
+        (Regal Van layout), or None when there is nothing to print."""
+        values = self._get_report_values(wizard.ids)
+        report_results = values.get('report_results') or []
+        if not report_results or not report_results[0].get('categories'):
+            return None
+        res = report_results[0]
+
+        buffer = io.BytesIO()
+        page_size = landscape(A4)
+        doc = SimpleDocTemplate(
+            buffer, pagesize=page_size,
+            leftMargin=12 * mm, rightMargin=12 * mm, topMargin=12 * mm, bottomMargin=18 * mm,
+        )
+        printable_width = page_size[0] - (24 * mm)
+
+        title_style = ParagraphStyle(
+            'ReqVanTitle', fontName='Helvetica-Bold', fontSize=13, leading=16,
+        )
+        col_header_style = ParagraphStyle(
+            'ReqVanColHeader', fontName='Helvetica-Bold', fontSize=9.5, leading=11,
+        )
+        col_header_right_style = ParagraphStyle(
+            'ReqVanColHeaderRight', parent=col_header_style, alignment=2,
+        )
+        data_style = ParagraphStyle('ReqVanData', fontName='Helvetica', fontSize=8.5, leading=10)
+        data_right_style = ParagraphStyle('ReqVanDataRight', parent=data_style, alignment=2)
+        subtotal_label_style = ParagraphStyle(
+            'ReqVanSubtotalLabel', fontName='Helvetica-Bold', fontSize=8.5, leading=10, alignment=2,
+        )
+        subtotal_value_style = ParagraphStyle(
+            'ReqVanSubtotalValue', parent=subtotal_label_style,
+        )
+
+        story = []
+        for idx, cat_page in enumerate(res['categories']):
+            if idx:
+                story.append(PageBreak())
+
+            title_table = Table(
+                [[Paragraph(xml_escape(cat_page['title']), title_style)]], colWidths=[printable_width],
+            )
+            title_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f0f0f0')),
+                ('BOX', (0, 0), (-1, -1), 1, colors.HexColor('#dddddd')),
+                ('LEFTPADDING', (0, 0), (-1, -1), 8),
+                ('TOPPADDING', (0, 0), (-1, -1), 5),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+            ]))
+            story.append(title_table)
+            story.append(Spacer(1, 4 * mm))
+
+            col_width = printable_width * 0.485
+            col1_flowable = self._build_van_column(
+                cat_page.get('col1') or [], col_width, col_header_style, col_header_right_style,
+                data_style, data_right_style, subtotal_label_style, subtotal_value_style,
+            )
+            col2_flowable = self._build_van_column(
+                cat_page.get('col2') or [], col_width, col_header_style, col_header_right_style,
+                data_style, data_right_style, subtotal_label_style, subtotal_value_style,
+            )
+
+            outer = Table(
+                [[col1_flowable, col2_flowable]],
+                colWidths=[col_width, printable_width - col_width],
+            )
+            outer.setStyle(TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+            ]))
+            story.append(outer)
+
+        printed_at_text = xml_escape(res.get('printed_at_str', ''))
+
+        def _draw_footer(canvas_obj, doc_obj):
+            canvas_obj.saveState()
+            footer_style = ParagraphStyle(
+                'ReqVanFooter', fontName='Helvetica', fontSize=8.5, leading=10,
+                textColor=colors.HexColor('#444444'),
+            )
+            p = Paragraph(f"Printed at: {printed_at_text}", footer_style)
+            p.wrap(printable_width, 8 * mm)
+            p.drawOn(canvas_obj, 12 * mm, 10 * mm)
+            canvas_obj.restoreState()
+
+        doc.build(story, onFirstPage=_draw_footer, onLaterPages=_draw_footer)
+        pdf_value = buffer.getvalue()
+        buffer.close()
+        return pdf_value
+
+    def _build_van_column(
+        self, products, col_width, header_style, header_right_style,
+        data_style, data_right_style, subtotal_label_style, subtotal_value_style,
+    ):
+        """One 'Del Date / Stock Item / Total Qty' column of the Regal Van
+        layout: a header row, then per product a row per delivery date plus a
+        bold subtotal row - mirrors the col1/col2 divs of the old QWeb
+        template. Returns '' (renders blank) when the column has no products,
+        e.g. the right-hand column on a page with an odd number of products."""
+        if not products:
+            return ''
+
+        date_col = col_width * 0.26
+        name_col = col_width * 0.54
+        qty_col = col_width - date_col - name_col
+
+        rows = [[
+            Paragraph("Del Date", header_style),
+            Paragraph("Stock Item", header_style),
+            Paragraph("Total Qty", header_right_style),
+        ]]
+        for prod in products:
+            for d_entry in prod['dates']:
+                rows.append([
+                    Paragraph(xml_escape(d_entry['delivery_date_str']), data_style),
+                    Paragraph(xml_escape(prod['product_name']), data_style),
+                    Paragraph(xml_escape(d_entry['formatted_qty']), data_right_style),
+                ])
+            rows.append([
+                '',
+                Paragraph("Total", subtotal_label_style),
+                Paragraph(xml_escape(prod['formatted_total_qty']), subtotal_value_style),
+            ])
+
+        table = Table(rows, colWidths=[date_col, name_col, qty_col])
+        table.setStyle(TableStyle([
+            ('LINEBELOW', (0, 0), (-1, 0), 1.5, colors.black),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('TOPPADDING', (0, 0), (-1, -1), 1.5),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 1.5),
+            ('LEFTPADDING', (0, 0), (-1, -1), 0),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+        ]))
+        return table
+
 
 class ReportRequirementCourier(models.AbstractModel):
     _name = 'report.tl_rf_reports.report_requirement_courier'
@@ -243,3 +402,91 @@ class ReportRequirementCourier(models.AbstractModel):
     @api.model
     def _get_report_values(self, docids, data=None):
         return self.env['report.tl_rf_reports.report_requirement']._get_report_values(docids, data=data)
+
+    # ------------------------------------------------------------------
+    # Fast path: Courier (portrait, 1-column) layout. Shares the exact same
+    # data prep as the Regal Van report above (see generate_pdf() there for
+    # why _get_report_values() is reused as-is rather than rewritten).
+    # ------------------------------------------------------------------
+    def generate_pdf(self, wizard):
+        """Returns the finished PDF (bytes) for one Requirement Report wizard
+        (Courier layout), or None when there is nothing to print."""
+        report_requirement = self.env['report.tl_rf_reports.report_requirement']
+        values = report_requirement._get_report_values(wizard.ids)
+        report_results = values.get('report_results') or []
+        if not report_results or not report_results[0].get('categories'):
+            return None
+        res = report_results[0]
+
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buffer, pagesize=A4,
+            leftMargin=12 * mm, rightMargin=12 * mm, topMargin=12 * mm, bottomMargin=18 * mm,
+        )
+        printable_width = A4[0] - (24 * mm)
+
+        title_style = ParagraphStyle('ReqCourierTitle', fontName='Helvetica-Bold', fontSize=17, leading=20)
+        packing_style = ParagraphStyle('ReqCourierPacking', fontName='Helvetica', fontSize=9, leading=12)
+        col_header_style = ParagraphStyle('ReqCourierColHeader', fontName='Helvetica-Bold', fontSize=11, leading=13)
+        qty_style = ParagraphStyle('ReqCourierQty', fontName='Helvetica', fontSize=10.5, leading=13, alignment=2)
+        x_style = ParagraphStyle('ReqCourierX', fontName='Helvetica', fontSize=10.5, leading=13, alignment=1)
+        name_style = ParagraphStyle('ReqCourierName', fontName='Helvetica', fontSize=10.5, leading=13)
+
+        packing_from = xml_escape(res.get('packing_date_from_str', ''))
+        packing_to = xml_escape(res.get('packing_date_to_str', ''))
+
+        story = []
+        for idx, cat_page in enumerate(res['categories']):
+            if idx:
+                story.append(PageBreak())
+
+            header_table = Table(
+                [[
+                    Paragraph(xml_escape(cat_page['title']), title_style),
+                    Paragraph(f"For Packing between {packing_from} and<br/>{packing_to}", packing_style),
+                ]],
+                colWidths=[printable_width * 0.62, printable_width * 0.38],
+            )
+            header_table.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP')]))
+            story.append(header_table)
+            story.append(Spacer(1, 3 * mm))
+
+            rows = [[
+                Paragraph("Total Kg", col_header_style), '',
+                Paragraph("Stock Name", col_header_style),
+            ]]
+            for prod in cat_page['products']:
+                rows.append([
+                    Paragraph(xml_escape(prod['formatted_total_qty']), qty_style),
+                    Paragraph("x", x_style),
+                    Paragraph(xml_escape(prod['product_name']), name_style),
+                ])
+            table = Table(
+                rows, colWidths=[printable_width * 0.13, printable_width * 0.07, printable_width * 0.80],
+                repeatRows=1,
+            )
+            table.setStyle(TableStyle([
+                ('LINEBELOW', (0, 0), (-1, 0), 2, colors.black),
+                ('LINEBELOW', (0, 1), (-1, -1), 0.5, colors.black),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('TOPPADDING', (0, 0), (-1, -1), 4),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ]))
+            story.append(table)
+
+        footer_text = xml_escape(res.get('footer_date_str', ''))
+
+        def _draw_footer(canvas_obj, doc_obj):
+            canvas_obj.saveState()
+            footer_style = ParagraphStyle(
+                'ReqCourierFooter', fontName='Helvetica', fontSize=9, leading=11, textColor=colors.black,
+            )
+            p = Paragraph(footer_text, footer_style)
+            p.wrap(printable_width, 8 * mm)
+            p.drawOn(canvas_obj, 12 * mm, 10 * mm)
+            canvas_obj.restoreState()
+
+        doc.build(story, onFirstPage=_draw_footer, onLaterPages=_draw_footer)
+        pdf_value = buffer.getvalue()
+        buffer.close()
+        return pdf_value

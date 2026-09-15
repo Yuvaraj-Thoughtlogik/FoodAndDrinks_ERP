@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import base64
 from datetime import timedelta
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError, ValidationError
@@ -112,8 +113,28 @@ class PackingListWizard(models.TransientModel):
             if record.packing_date_from and record.packing_date_to and record.packing_date_to < record.packing_date_from:
                 raise ValidationError(_("Packing Date To cannot be earlier than Packing Date From."))
 
+    def _download_action(self, pdf_content, filename):
+        attachment = self.env['ir.attachment'].create({
+            'name': filename,
+            'type': 'binary',
+            'datas': base64.b64encode(pdf_content),
+            'mimetype': 'application/pdf',
+            'res_model': self._name,
+            'res_id': self.id,
+        })
+        return {
+            'type': 'ir.actions.act_url',
+            'url': f'/web/content/{attachment.id}?download=true',
+            'target': 'self',
+        }
+
     def action_print_report(self):
-        """Validates eligible batches or courier orders and triggers the Packing List Report."""
+        """Validates eligible batches or courier orders and triggers the Packing
+        List Report.
+
+        Built directly with ReportLab (generate_pdf() on the report model)
+        instead of QWeb+wkhtmltopdf, so it stays fully synchronous - no
+        background job needed regardless of size."""
         self.ensure_one()
 
         # Defensive: Driver Packing List is always Regal Van Delivery, regardless of what
@@ -136,8 +157,7 @@ class PackingListWizard(models.TransientModel):
             else:
                 order_domain.append(('is_late_order', '=', True))
 
-            matching_orders = self.env['sale.order'].search(order_domain)
-            if not matching_orders:
+            if not self.env['sale.order'].search_count(order_domain):
                 order_type_str = _("Late Courier Delivery") if self.include_late_orders else _("Courier Delivery")
                 raise UserError(_(
                     "No confirmed %s orders found with delivery dates between %s and %s."
@@ -146,41 +166,47 @@ class PackingListWizard(models.TransientModel):
                     self.delivery_date_from.strftime('%d/%m/%Y'),
                     self.delivery_date_to.strftime('%d/%m/%Y'),
                 ))
-            return self.env.ref('tl_rf_reports.action_report_packing_list').report_action(self)
-
-        # Regal Van Delivery (Batch-based)
-        domain = [
-            ('delivery_date', '>=', self.delivery_date_from),
-            ('delivery_date', '<=', self.delivery_date_to),
-        ]
-        if self.depot_ids:
-            domain.append(('depot_id', 'in', self.depot_ids.ids))
-
-        batches = self.env['round.management.batch'].search(domain)
-        if not batches:
-            depot_names = ", ".join(self.depot_ids.mapped('name')) if self.depot_ids else ""
-            depot_label = f" for depot(s) '{depot_names}'" if depot_names else ""
-            raise UserError(_(
-                "No batches found with delivery dates between %s and %s%s."
-            ) % (
-                self.delivery_date_from.strftime('%d/%m/%Y'),
-                self.delivery_date_to.strftime('%d/%m/%Y'),
-                depot_label
-            ))
-
-        # Check if batches have linked sale orders
-        eligible_orders = batches.mapped('order_ids').filtered(
-            lambda so: so.state in ('sale', 'done') and getattr(so, 'delivery_channel', False) in ('regal_van', False)
-        )
-        if not self.include_late_orders:
-            eligible_orders = eligible_orders.filtered(lambda so: not getattr(so, 'is_late_order', False))
         else:
-            eligible_orders = eligible_orders.filtered(lambda so: getattr(so, 'is_late_order', False))
+            # Regal Van Delivery (Batch-based)
+            domain = [
+                ('delivery_date', '>=', self.delivery_date_from),
+                ('delivery_date', '<=', self.delivery_date_to),
+            ]
+            if self.depot_ids:
+                domain.append(('depot_id', 'in', self.depot_ids.ids))
 
-        if not eligible_orders:
-            raise UserError(_("Eligible batches were found, but they do not contain any matching Regal Van Delivery sale orders."))
+            batches = self.env['round.management.batch'].search(domain)
+            if not batches:
+                depot_names = ", ".join(self.depot_ids.mapped('name')) if self.depot_ids else ""
+                depot_label = f" for depot(s) '{depot_names}'" if depot_names else ""
+                raise UserError(_(
+                    "No batches found with delivery dates between %s and %s%s."
+                ) % (
+                    self.delivery_date_from.strftime('%d/%m/%Y'),
+                    self.delivery_date_to.strftime('%d/%m/%Y'),
+                    depot_label
+                ))
 
-        return self.env.ref('tl_rf_reports.action_report_packing_list').report_action(self)
+            eligible_orders = batches.mapped('order_ids').filtered(
+                lambda so: so.state in ('sale', 'done') and getattr(so, 'delivery_channel', False) in ('regal_van', False)
+            )
+            if not self.include_late_orders:
+                eligible_orders = eligible_orders.filtered(lambda so: not getattr(so, 'is_late_order', False))
+            else:
+                eligible_orders = eligible_orders.filtered(lambda so: getattr(so, 'is_late_order', False))
+
+            if not eligible_orders:
+                raise UserError(_("Eligible batches were found, but they do not contain any matching Regal Van Delivery sale orders."))
+
+        report_model = self.env['report.tl_rf_reports.report_packing_list']
+        pdf_content = report_model.generate_pdf(self)
+        if not pdf_content:
+            raise UserError(_("No packing list data was found for the selected criteria."))
+
+        filename_prefix = 'Courier_Packing_List_' if self.delivery_channel == 'courier' else 'Packing_List_'
+        return self._download_action(
+            pdf_content, f"{filename_prefix}{self.delivery_date_from.strftime('%Y%m%d')}.pdf"
+        )
 
     def _action_print_driver_packing_list(self):
         """Driver Packing List: Regal Van Delivery only, filtered by Delivery Date and
@@ -212,4 +238,11 @@ class PackingListWizard(models.TransientModel):
                 "Eligible batches were found, but they do not contain any matching Regal Van Delivery sale orders."
             ))
 
-        return self.env.ref('tl_rf_reports.action_report_driver_packing_list').report_action(self)
+        report_model = self.env['report.tl_rf_reports.report_driver_packing_list_document']
+        pdf_content = report_model.generate_pdf(self)
+        if not pdf_content:
+            raise UserError(_("No driver packing list data was found for the selected criteria."))
+
+        return self._download_action(
+            pdf_content, f"Driver_Packing_List_{self.delivery_date_from.strftime('%Y%m%d')}.pdf"
+        )

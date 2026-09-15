@@ -1,5 +1,6 @@
 from odoo import api, fields, models, tools
 
+
 class SaleOrder(models.Model):
     _inherit = "sale.order"
 
@@ -76,8 +77,7 @@ class SaleOrder(models.Model):
                     "order_channel_id": order.order_channel_id.id,
                 })
         return res
-        
-        
+
     # @api.depends('batch_id', 'batch_id.delivery_channel')
     # def _compute_delivery_channel(self):
     #     for order in self:

@@ -1,3 +1,6 @@
+# -*- coding: utf-8 -*-
+import base64
+
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError, ValidationError
 
@@ -35,8 +38,32 @@ class DeliveryNoteRoundWizard(models.TransientModel):
             if record.delivery_date_from and record.delivery_date_to and record.delivery_date_to < record.delivery_date_from:
                 raise ValidationError(_("Deliver To date cannot be earlier than Deliver From date."))
 
+    def _download_action(self, pdf_content, filename):
+        attachment = self.env['ir.attachment'].create({
+            'name': filename,
+            'type': 'binary',
+            'datas': base64.b64encode(pdf_content),
+            'mimetype': 'application/pdf',
+            'res_model': self._name,
+            'res_id': self.id,
+        })
+        return {
+            'type': 'ir.actions.act_url',
+            'url': f'/web/content/{attachment.id}?download=true',
+            'target': 'self',
+        }
+
     def action_print_report(self):
-        """Lightning-fast validation using search_count before triggering report."""
+        """Validates batches or orders for the selected delivery channel and
+        triggers the Delivery Note Round Report, using lightweight
+        search_count() checks before generating the PDF.
+
+        Both channels are now built directly with ReportLab (generate_pdf() on
+        each report model) instead of QWeb+wkhtmltopdf: wkhtmltopdf renders
+        roughly one page per drop/order, so at a few thousand records that was
+        10+ minutes and a request timeout. ReportLab draws the PDF natively in
+        this process, so both stay fully synchronous - no background job
+        needed."""
         self.ensure_one()
 
         if self.delivery_channel == 'courier':
@@ -53,7 +80,20 @@ class DeliveryNoteRoundWizard(models.TransientModel):
                     self.delivery_date_from.strftime('%d/%m/%Y'),
                     self.delivery_date_to.strftime('%d/%m/%Y'),
                 ))
-            return self.env.ref('tl_rf_reports.action_report_delivery_note_round_courier').report_action(self)
+
+            report_model = self.env['report.tl_rf_reports.report_delivery_note_round_courier']
+            pdf_content = report_model.generate_pdf(self)
+            if not pdf_content:
+                raise UserError(_(
+                    "No confirmed Courier Delivery orders with deliverable lines were found with "
+                    "delivery dates between %s and %s."
+                ) % (
+                    self.delivery_date_from.strftime('%d/%m/%Y'),
+                    self.delivery_date_to.strftime('%d/%m/%Y'),
+                ))
+            return self._download_action(
+                pdf_content, f"Delivery_Note_Round_Courier_{self.delivery_date_from.strftime('%Y%m%d')}.pdf"
+            )
 
         batch_count = self.env['round.management.batch'].search_count([
             ('delivery_date', '>=', self.delivery_date_from),
@@ -67,4 +107,13 @@ class DeliveryNoteRoundWizard(models.TransientModel):
                 self.delivery_date_to.strftime('%d/%m/%Y'),
             ))
 
-        return self.env.ref('tl_rf_reports.action_report_delivery_note_round_van').report_action(self)
+        report_model = self.env['report.tl_rf_reports.report_delivery_note_round_van']
+        pdf_content = report_model.generate_pdf(self)
+        if not pdf_content:
+            raise UserError(_(
+                "Eligible batches were found, but they do not contain any deliverable Regal Van lines "
+                "within the selected criteria."
+            ))
+        return self._download_action(
+            pdf_content, f"Delivery_Note_Round_Van_{self.delivery_date_from.strftime('%Y%m%d')}.pdf"
+        )

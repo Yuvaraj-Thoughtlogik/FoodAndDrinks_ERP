@@ -166,7 +166,6 @@ class SaleOrder(models.Model):
         if self.batch_id and self.batch_id.delivery_channel:
             self.delivery_channel = self.batch_id.delivery_channel
 
-
     @api.onchange('pay_card_reader')
     def _onchange_pay_card_reader(self):
         if self.pay_card_reader:
@@ -497,8 +496,8 @@ class SaleOrder(models.Model):
         for order in self:
             if order.pricelist_id and order.pricelist_id.pricelist_category == 'b2b':
                 order.is_b2b = True
-            #elif order.partner_id and order.partner_id.customer_type == 'b2b_trade':
-                #order.is_b2b = True
+            # elif order.partner_id and order.partner_id.customer_type == 'b2b_trade':
+            # order.is_b2b = True
             else:
                 order.is_b2b = False
 
@@ -510,7 +509,7 @@ class SaleOrder(models.Model):
                 order.is_staff_order = (order.pricelist_id.pricelist_category == 'staff')
             else:
                 order.is_staff_order = False
-            
+
     @api.depends('partner_id', 'partner_id.round_id')
     def _compute_partner_id_set_round(self):
         for rec in self:
@@ -518,7 +517,7 @@ class SaleOrder(models.Model):
                 rec.round_id = rec.partner_id.round_id
             else:
                 rec.round_id = False
-    
+
     @api.depends('round_id')
     def _compute_auto_select_batch_id(self):
         today = fields.Date.context_today(self)
@@ -542,7 +541,7 @@ class SaleOrder(models.Model):
                 ], order='delivery_date desc, id desc', limit=1)
 
             order.batch_id = next_batch.id if next_batch else False
-            
+
     @api.onchange('round_id')
     def _onchange_round_id_auto_select_next_batch(self):
         """
@@ -570,6 +569,7 @@ class SaleOrder(models.Model):
             ], order='delivery_date desc, id desc', limit=1)
 
         self.batch_id = next_batch if next_batch else False
+
             
 class SaleOrderSpecialNote(models.Model):
     _name = 'sale.order.special.note'
@@ -580,15 +580,20 @@ class SaleOrderSpecialNote(models.Model):
 
 
 
+
 class SaleOrderLine(models.Model):
     _inherit = 'sale.order.line'
+
 
     special_requirements_notes_id = fields.Many2one(
         'sale.order.special.note',
         string="Special Notes",
         ondelete='set null',
-    )
-    
+
+   
+
+
+
 class Pricelist(models.Model):
     _inherit = 'product.pricelist'
 
@@ -596,6 +601,7 @@ class Pricelist(models.Model):
         ('staff', 'Staff'),
         ('b2b', 'B2B'),
         ('standard', 'Standard'),
+
     ], string="Pricelist Category", default='standard', required=True)
     
     
@@ -606,3 +612,5 @@ class ProductProduct(models.Model):
         for product in self:
             # Fallback to product name without default code
             product.display_name = product.name or ""
+
+    

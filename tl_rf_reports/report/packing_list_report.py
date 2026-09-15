@@ -1,8 +1,75 @@
 # -*- coding: utf-8 -*-
 
 import datetime
+import io
+from xml.sax.saxutils import escape as xml_escape
+
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle
+from reportlab.lib.units import mm
+from reportlab.pdfgen import canvas
+from reportlab.platypus import (
+    Flowable, HRFlowable, KeepTogether, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
+)
 
 from odoo import api, fields, models, _
+
+
+class _PackingListHeaderMarker(Flowable):
+    """Zero-size flowable that stamps the current group's (customer order, or
+    batch) header text onto the canvas as soon as ReportLab draws it - see
+    report_delivery_note_round_van.py for the full explanation of this
+    technique. Inserted once at the top of each group's content, it makes
+    whatever it sets the "current" header for every physical page that group
+    spans, without any manual page-counting."""
+
+    def __init__(self, header_text):
+        super().__init__()
+        self.header_text = header_text
+        self.width = 0
+        self.height = 0
+
+    def wrap(self, availWidth, availHeight):
+        return (0, 0)
+
+    def draw(self):
+        self.canv.current_header = self.header_text
+
+
+class _PackingListCanvas(canvas.Canvas):
+    """Two-pass canvas: replays every page once the header stamped by
+    _PackingListHeaderMarker for that page is known, so the banner can be
+    drawn identically to how the old QWeb template repeated it on every page
+    of a customer order / batch."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._saved_page_states = []
+        self.current_header = None
+
+    def showPage(self):
+        self._saved_page_states.append(dict(self.__dict__))
+        self._startPage()
+
+    def save(self):
+        for state in self._saved_page_states:
+            self.__dict__.update(state)
+            self._draw_header()
+            super().showPage()
+        super().save()
+
+    def _draw_header(self):
+        if not self.current_header:
+            return
+        self.saveState()
+        margin = 12 * mm
+        width = A4[0] - (2 * margin)
+        style = ParagraphStyle('PackingListHeaderBand', fontName='Helvetica', fontSize=10, leading=13)
+        p = Paragraph(self.current_header, style)
+        _, h = p.wrap(width, 40 * mm)
+        p.drawOn(self, margin, A4[1] - margin - h)
+        self.restoreState()
 
 
 class ReportPackingList(models.AbstractModel):
@@ -408,6 +475,9 @@ class ReportPackingList(models.AbstractModel):
             else 'regal_van'
         )
 
+        lang = self.env.lang or 'en_US'
+        company_ids = tuple(self.env.companies.ids) if self.env.companies else (self.env.company.id,)
+
         # ----------------------------------------------------
         # COURIER DELIVERY FLOW
         # CUSTOMER-WISE PACKING LIST
@@ -476,226 +546,148 @@ class ReportPackingList(models.AbstractModel):
                     else ''
                 )
 
-                order_domain = [
-                    ('delivery_channel', '=', 'courier'),
-                    ('state', 'in', ['sale', 'done']),
-                    (
-                        'delivery_date',
-                        '>=',
-                        wiz.delivery_date_from
-                    ),
-                    (
-                        'delivery_date',
-                        '<=',
-                        wiz.delivery_date_to
-                    ),
-                ]
+                courier_query = """
+                    SELECT 
+                        so.id AS order_id,
+                        so.name AS order_name,
+                        so.delivery_date AS order_delivery_date,
+                        rp_main.id AS main_partner_id,
+                        rp_main.name AS main_partner_name,
+                        rp_main.customer_code AS customer_code,
+                        rp_main.ref AS main_partner_ref,
+                        rpt.name AS partner_title_name,
+                        rp_ship.id AS ship_partner_id,
+                        rp_ship.street AS ship_street,
+                        rp_ship.street2 AS ship_street2,
+                        rp_ship.city AS ship_city,
+                        rp_ship.zip AS ship_zip,
+                        rcs.name AS ship_state_name,
+                        sol.id AS line_id,
+                        sol.product_uom_qty AS line_qty,
+                        sol.name AS line_name,
+                        COALESCE(sol.sort_seq, p.sort_seq, pt.sort_seq, 0) AS sort_num,
+                        p.id AS product_id,
+                        COALESCE(p.weight, pt.weight, 0.0) AS product_weight,
+                        COALESCE(pt.name->>%(lang)s, pt.name->>'en_GB', pt.name->>'en_US', pt.name::text) AS product_name,
+                        pc.id AS categ_id,
+                        pc.name AS categ_name
+                    FROM sale_order so
+                    JOIN res_partner rp_main ON rp_main.id = so.partner_id
+                    LEFT JOIN res_partner_title rpt ON rpt.id = rp_main.title
+                    LEFT JOIN res_partner rp_ship ON rp_ship.id = COALESCE(so.partner_shipping_id, so.partner_id)
+                    LEFT JOIN res_country_state rcs ON rcs.id = rp_ship.state_id
+                    JOIN sale_order_line sol ON sol.order_id = so.id 
+                        AND sol.display_type IS NULL 
+                        AND sol.product_id IS NOT NULL 
+                        AND sol.product_uom_qty > 0
+                    JOIN product_product p ON p.id = sol.product_id
+                    JOIN product_template pt ON pt.id = p.product_tmpl_id
+                    LEFT JOIN product_category pc ON pc.id = pt.categ_id
+                    WHERE so.delivery_channel = 'courier'
+                      AND so.state IN ('sale', 'done')
+                      AND so.delivery_date >= %(date_from)s
+                      AND so.delivery_date <= %(date_to)s
+                      AND COALESCE(so.is_late_order, false) = %(is_late)s
+                      AND (so.company_id IS NULL OR so.company_id IN %(company_ids)s)
+                    ORDER BY so.delivery_date ASC, so.name ASC, sol.id ASC
+                """
+                params = {
+                    'date_from': wiz.delivery_date_from,
+                    'date_to': wiz.delivery_date_to,
+                    'is_late': bool(wiz.include_late_orders),
+                    'company_ids': company_ids,
+                    'lang': lang,
+                }
+                self.env.cr.execute(courier_query, params)
+                c_rows = self.env.cr.dictfetchall()
 
-                if not wiz.include_late_orders:
-                    order_domain.append(
-                        ('is_late_order', '=', False)
-                    )
-                else:
-                    order_domain.append(
-                        ('is_late_order', '=', True)
-                    )
+                # Group by Order
+                orders_map = {}
+                for r in c_rows:
+                    oid = r['order_id']
+                    if oid not in orders_map:
+                        # Format partner names and addresses
+                        name_parts = []
+                        if r['partner_title_name']:
+                            t_name = r['partner_title_name'].strip()
+                            p_name = (r['main_partner_name'] or '').strip()
+                            if not p_name.lower().startswith(t_name.lower()):
+                                name_parts.append(t_name)
+                        if r['main_partner_name']:
+                            name_parts.append(r['main_partner_name'].strip())
+                        cust_name = " ".join(name_parts).strip() or r['main_partner_name'] or ""
 
-                applicable_orders = self.env['sale.order'].search(
-                    order_domain,
-                    order='delivery_date asc, name asc'
-                )
+                        l1_parts = [r['ship_street'] or '', r['ship_street2'] or '', r['ship_city'] or '']
+                        line1 = " ".join([p.strip() for p in l1_parts if p and p.strip()])
+                        l2_parts = [r['ship_state_name'] or '', r['ship_zip'] or '']
+                        line2 = " ".join([p.strip() for p in l2_parts if p and p.strip()])
 
-                for order in applicable_orders:
+                        orders_map[oid] = {
+                            'order_id': oid,
+                            'order_name': r['order_name'],
+                            'delivery_date': r['order_delivery_date'].strftime('%d/%m/%Y') if r['order_delivery_date'] else '',
+                            'customer_code': r['customer_code'] or r['main_partner_ref'] or r['order_name'] or '',
+                            'customer_name': cust_name,
+                            'address_line1': line1,
+                            'address_line2': line2,
+                            'categories_map': {},
+                            'total_order_weight_g': 0.0,
+                        }
 
-                    main_partner = order.partner_id
+                    o_data = orders_map[oid]
+                    categ_name = (r['categ_name'] or _('Other')).strip().upper()
+                    categ_key = (0, categ_name)
 
-                    ship_partner = (
-                        order.partner_shipping_id
-                        or main_partner
-                    )
+                    if categ_key not in o_data['categories_map']:
+                        o_data['categories_map'][categ_key] = {
+                            'categ_name': categ_name,
+                            'products': [],
+                        }
 
-                    customer_code = (
-                        getattr(
-                            main_partner,
-                            'customer_code',
-                            False
-                        )
-                        or getattr(
-                            main_partner,
-                            'ref',
-                            False
-                        )
-                        or order.name
-                        or ''
-                    )
+                    qty_val = float(r['line_qty'] or 0.0)
+                    unit_weight_kg = float(r['product_weight'] or 0.0)
+                    line_weight_kg = unit_weight_kg * qty_val
+                    line_weight_g = round(line_weight_kg * 1000)
+                    o_data['total_order_weight_g'] += line_weight_g
 
-                    customer_name = self._format_customer_name(
-                        main_partner
-                    )
+                    qty_display = int(round(qty_val)) if float(qty_val).is_integer() else qty_val
+                    sort_n = int(r['sort_num']) if r['sort_num'] and int(r['sort_num']) > 0 else None
 
-                    address_dict = self._format_address_lines(
-                        ship_partner
-                    )
+                    o_data['categories_map'][categ_key]['products'].append({
+                        'qty': qty_display,
+                        'product_name': r['product_name'] or r['line_name'] or '',
+                        'weight_g': line_weight_g,
+                        'weight_display': int(round(line_weight_g)),
+                        'sort_num': sort_n,
+                    })
 
-                    categories_map = {}
-
-                    total_order_weight_g = 0.0
-
-                    for line in order.order_line.filtered(
-                        lambda l:
-                            not l.display_type
-                            and l.product_id
-                            and l.product_uom_qty > 0
-                    ):
-
-                        product = line.product_id
-
-                        categ = product.categ_id
-
-                        categ_name = (
-                            (categ.name or _('Other'))
-                            .strip()
-                            .upper()
-                            if categ
-                            else 'OTHER'
-                        )
-
-                        categ_key = (
-                            categ.sequence
-                            if categ
-                            and hasattr(categ, 'sequence')
-                            else 0,
-                            categ_name
-                        )
-
-                        if categ_key not in categories_map:
-                            categories_map[categ_key] = {
-                                'categ_name': categ_name,
-                                'products': [],
-                            }
-
-                        unit_weight_kg = 0.0
-
-                        if hasattr(
-                            line,
-                            '_get_product_unit_weight_in_kg'
-                        ):
-                            unit_weight_kg = (
-                                line
-                                ._get_product_unit_weight_in_kg()
-                            )
-
-                        elif product.weight:
-                            unit_weight_kg = product.weight
-
-                        line_weight_kg = (
-                            unit_weight_kg
-                            * line.product_uom_qty
-                        )
-
-                        line_weight_g = round(
-                            line_weight_kg * 1000
-                        )
-
-                        total_order_weight_g += line_weight_g
-
-                        qty_val = line.product_uom_qty
-
-                        qty_display = (
-                            int(round(qty_val))
-                            if float(qty_val).is_integer()
-                            else qty_val
-                        )
-
-                        sort_num = self._extract_sort_number(
-                            product,
-                            line
-                        )
-
-                        categories_map[categ_key][
-                            'products'
-                        ].append({
-                            'qty': qty_display,
-                            'product_name': (
-                                product.name
-                                or line.name
-                            ),
-                            'weight_g': line_weight_g,
-                            'weight_display': int(
-                                round(line_weight_g)
-                            ),
-                            'sort_num': sort_num,
-                        })
-
-                    # ------------------------------------------------
-                    # CATEGORY SORTING
-                    #
-                    # FROZEN* -> FIRST
-                    # FRESH*  -> SECOND
-                    # OTHER   -> ALPHABETICAL
-                    # ------------------------------------------------
-
+                for oid, o_data in orders_map.items():
                     category_list = []
-
                     for c_key, c_val in sorted(
-                        categories_map.items(),
-                        key=lambda item:
-                            self._get_category_sort_key(
-                                item[1]['categ_name']
-                            )
+                        o_data['categories_map'].items(),
+                        key=lambda item: self._get_category_sort_key(item[1]['categ_name'])
                     ):
-
-                        sorted_prods = sorted(
-                            c_val['products'],
-                            key=self._get_sort_key
-                        )
-
+                        sorted_prods = sorted(c_val['products'], key=self._get_sort_key)
                         if sorted_prods:
                             category_list.append({
-                                'categ_name': c_val[
-                                    'categ_name'
-                                ],
+                                'categ_name': c_val['categ_name'],
                                 'products': sorted_prods,
                             })
 
-                    # Paginate categories for this customer order
-                    order_pages = (
-                        self._paginate_courier_categories(
-                            category_list
-                        )
-                    )
-
+                    order_pages = self._paginate_courier_categories(category_list)
                     all_customer_orders.append({
-                        'order_id': order.id,
-                        'order_name': order.name,
-                        'delivery_date': (
-                            order.delivery_date.strftime(
-                                '%d/%m/%Y'
-                            )
-                            if order.delivery_date
-                            else ''
-                        ),
-                        'customer_code': customer_code,
-                        'customer_name': customer_name,
-                        'address_line1': address_dict[
-                            'line1'
-                        ],
-                        'address_line2': address_dict[
-                            'line2'
-                        ],
+                        'order_id': o_data['order_id'],
+                        'order_name': o_data['order_name'],
+                        'delivery_date': o_data['delivery_date'],
+                        'customer_code': o_data['customer_code'],
+                        'customer_name': o_data['customer_name'],
+                        'address_line1': o_data['address_line1'],
+                        'address_line2': o_data['address_line2'],
                         'pages': order_pages,
-                        'total_weight_g': int(
-                            round(total_order_weight_g)
-                        ),
+                        'total_weight_g': int(round(o_data['total_order_weight_g'])),
                     })
 
-            # Number pages continuously across the whole
-            # courier report
-            all_customer_orders = (
-                self._number_pages_continuously(
-                    all_customer_orders
-                )
-            )
+            all_customer_orders = self._number_pages_continuously(all_customer_orders)
 
             return {
                 'doc_ids': docids,
@@ -703,18 +695,10 @@ class ReportPackingList(models.AbstractModel):
                 'docs': docs,
                 'printed_at': printed_at_str,
                 'delivery_channel': 'courier',
-                'packing_date_from_str': (
-                    packing_date_from_str
-                ),
-                'packing_date_to_str': (
-                    packing_date_to_str
-                ),
-                'delivery_date_from_str': (
-                    delivery_date_from_str
-                ),
-                'delivery_date_to_str': (
-                    delivery_date_to_str
-                ),
+                'packing_date_from_str': packing_date_from_str,
+                'packing_date_to_str': packing_date_to_str,
+                'delivery_date_from_str': delivery_date_from_str,
+                'delivery_date_to_str': delivery_date_to_str,
                 'customer_orders': all_customer_orders,
             }
 
@@ -726,238 +710,136 @@ class ReportPackingList(models.AbstractModel):
         all_batch_groups = []
 
         for wizard in docs:
-
-            batch_domain = [
-                (
-                    'delivery_date',
-                    '>=',
-                    wizard.delivery_date_from
-                ),
-                (
-                    'delivery_date',
-                    '<=',
-                    wizard.delivery_date_to
-                ),
-            ]
-
+            depot_filter = ""
+            params = {
+                'date_from': wizard.delivery_date_from,
+                'date_to': wizard.delivery_date_to,
+                'is_late': bool(wizard.include_late_orders),
+                'company_ids': company_ids,
+                'lang': lang,
+            }
             if wizard.depot_ids:
-                batch_domain.append(
-                    (
-                        'depot_id',
-                        'in',
-                        wizard.depot_ids.ids
-                    )
-                )
+                depot_filter = "AND b.depot_id IN %(depot_ids)s"
+                params['depot_ids'] = tuple(wizard.depot_ids.ids)
 
-            batches = self.env[
-                'round.management.batch'
-            ].search(
-                batch_domain,
-                order='delivery_date asc, code asc'
-            )
+            van_query = f"""
+                SELECT 
+                    b.id AS batch_id,
+                    b.code AS batch_code,
+                    b.reference AS batch_reference,
+                    b.delivery_date AS batch_delivery_date,
+                    sw.id AS depot_id,
+                    sw.name AS depot_name,
+                    rmr.id AS round_id,
+                    rmr.name AS round_name,
+                    so.id AS order_id,
+                    sol.id AS line_id,
+                    COALESCE(NULLIF(sol.box_qty, 0), sol.product_uom_qty, 0.0) AS effective_qty,
+                    sol.box_qty AS box_qty,
+                    sol.product_uom_qty AS product_uom_qty,
+                    COALESCE(sol.sort_seq, p.sort_seq, pt.sort_seq, 0) AS sort_num,
+                    p.id AS product_id,
+                    COALESCE(pt.name->>%(lang)s, pt.name->>'en_GB', pt.name->>'en_US', pt.name::text) AS product_name,
+                    pc.id AS categ_id,
+                    pc.name AS categ_name
+                FROM round_management_batch b
+                LEFT JOIN stock_warehouse sw ON sw.id = b.depot_id
+                LEFT JOIN round_management_round rmr ON rmr.id = b.round_id
+                JOIN sale_order so ON so.batch_id = b.id 
+                    AND so.state IN ('sale', 'done') 
+                    AND (so.delivery_channel = 'regal_van' OR so.delivery_channel IS NULL)
+                    AND COALESCE(so.is_late_order, false) = %(is_late)s
+                JOIN sale_order_line sol ON sol.order_id = so.id 
+                    AND sol.display_type IS NULL 
+                    AND sol.product_id IS NOT NULL 
+                    AND sol.product_uom_qty > 0
+                JOIN product_product p ON p.id = sol.product_id
+                JOIN product_template pt ON pt.id = p.product_tmpl_id
+                LEFT JOIN product_category pc ON pc.id = pt.categ_id
+                WHERE b.delivery_date >= %(date_from)s 
+                  AND b.delivery_date <= %(date_to)s
+                  {depot_filter}
+                  AND (b.company_id IS NULL OR b.company_id IN %(company_ids)s)
+                ORDER BY b.delivery_date ASC, b.code ASC, b.id ASC, sol.id ASC
+            """
+            self.env.cr.execute(van_query, params)
+            v_rows = self.env.cr.dictfetchall()
 
-            for batch in batches:
+            if not v_rows:
+                continue
 
-                orders = batch.order_ids.filtered(
-                    lambda so:
-                        so.state in ('sale', 'done')
-                        and getattr(
-                            so,
-                            'delivery_channel',
-                            False
-                        ) in ('regal_van', False)
-                )
+            batches_map = {}
+            for r in v_rows:
+                bid = r['batch_id']
+                if bid not in batches_map:
+                    batches_map[bid] = {
+                        'batch_info': r,
+                        'categories_map': {},
+                    }
 
-                if not wizard.include_late_orders:
-                    orders = orders.filtered(
-                        lambda so:
-                            not getattr(
-                                so,
-                                'is_late_order',
-                                False
-                            )
-                    )
-                else:
-                    orders = orders.filtered(
-                        lambda so:
-                            getattr(
-                                so,
-                                'is_late_order',
-                                False
-                            )
-                    )
+                b_map = batches_map[bid]
+                categ_key = r['categ_id'] or 0
+                categ_name = (r['categ_name'] or _('Other')).strip().upper()
 
-                if not orders:
-                    continue
+                if categ_key not in b_map['categories_map']:
+                    b_map['categories_map'][categ_key] = {
+                        'categ_name': categ_name,
+                        'products': {},
+                    }
 
-                categories_map = {}
+                pid = r['product_id']
+                c_prods = b_map['categories_map'][categ_key]['products']
+                if pid not in c_prods:
+                    sort_n = int(r['sort_num']) if r['sort_num'] and int(r['sort_num']) > 0 else None
+                    c_prods[pid] = {
+                        'product_id': pid,
+                        'product_name': r['product_name'],
+                        'box_qty': 0.0,
+                        'sort_num': sort_n,
+                        'sort_str': str(sort_n) if sort_n else '',
+                    }
 
-                for order in orders:
+                c_prods[pid]['box_qty'] += float(r['effective_qty'] or 0.0)
 
-                    for line in order.order_line.filtered(
-                        lambda l:
-                            not l.display_type
-                            and l.product_id
-                    ):
-
-                        product = line.product_id
-
-                        categ = product.categ_id
-
-                        categ_name = (
-                            (categ.name or _('Other'))
-                            .strip()
-                            .upper()
-                            if categ
-                            else 'OTHER'
-                        )
-
-                        categ_key = (
-                            categ.id
-                            if categ
-                            else 0
-                        )
-
-                        if categ_key not in categories_map:
-                            categories_map[categ_key] = {
-                                'categ_name': categ_name,
-                                'products': {},
-                            }
-
-                        prod_key = product.id
-
-                        if (
-                            prod_key
-                            not in categories_map[
-                                categ_key
-                            ]['products']
-                        ):
-
-                            sort_num = (
-                                self._extract_sort_number(
-                                    product,
-                                    line
-                                )
-                            )
-
-                            categories_map[
-                                categ_key
-                            ]['products'][prod_key] = {
-                                'product_id': prod_key,
-                                'product_name': product.name,
-                                'box_qty': 0.0,
-                                'sort_num': sort_num,
-                                'sort_str': (
-                                    str(sort_num)
-                                    if sort_num
-                                    else ''
-                                ),
-                            }
-
-                        qty = (
-                            line.box_qty
-                            if (
-                                line.box_qty
-                                and line.box_qty > 0
-                            )
-                            else line.product_uom_qty
-                        )
-
-                        categories_map[
-                            categ_key
-                        ]['products'][prod_key][
-                            'box_qty'
-                        ] += qty
-
+            for bid, b_data in batches_map.items():
+                categories_map = b_data['categories_map']
                 category_list = []
-
                 batch_total_boxes = 0
-
-                # ------------------------------------------------
-                # CATEGORY SORTING
-                #
-                # FROZEN* -> FIRST
-                # FRESH*  -> SECOND
-                # OTHER   -> ALPHABETICAL
-                # ------------------------------------------------
 
                 for c_key, c_val in sorted(
                     categories_map.items(),
-                    key=lambda item:
-                        self._get_category_sort_key(
-                            item[1]['categ_name']
-                        )
+                    key=lambda item: self._get_category_sort_key(item[1]['categ_name'])
                 ):
-
-                    sorted_prods = sorted(
-                        c_val['products'].values(),
-                        key=self._get_sort_key
-                    )
-
+                    sorted_prods = sorted(c_val['products'].values(), key=self._get_sort_key)
                     for p in sorted_prods:
-
                         p['qty_display'] = (
                             int(round(p['box_qty']))
-                            if float(
-                                p['box_qty']
-                            ).is_integer()
+                            if float(p['box_qty']).is_integer()
                             else p['box_qty']
                         )
 
-                    cat_total = int(
-                        round(
-                            sum(
-                                p['box_qty']
-                                for p in sorted_prods
-                            )
-                        )
-                    )
-
+                    cat_total = int(round(sum(p['box_qty'] for p in sorted_prods)))
                     batch_total_boxes += cat_total
 
                     if sorted_prods:
                         category_list.append({
-                            'categ_name': c_val[
-                                'categ_name'
-                            ],
+                            'categ_name': c_val['categ_name'],
                             'products': sorted_prods,
                             'total_boxes': cat_total,
                         })
 
                 if category_list:
-
-                    depot_name = (
-                        batch.depot_id.name
-                        if batch.depot_id
-                        else 'Grimsby'
-                    )
-
+                    b_info = b_data['batch_info']
+                    depot_name = b_info['depot_name'] or 'Grimsby'
                     delivery_date_str = (
-                        batch.delivery_date.strftime(
-                            '%d/%m/%Y'
-                        )
-                        if batch.delivery_date
+                        b_info['batch_delivery_date'].strftime('%d/%m/%Y')
+                        if b_info['batch_delivery_date']
                         else ''
                     )
+                    batch_code = b_info['batch_code'] or ''
+                    batch_name = b_info['round_name'] or b_info['batch_reference'] or ''
 
-                    batch_code = batch.code or ''
-
-                    batch_name = (
-                        batch.round_id.name
-                        if (
-                            batch.round_id
-                            and batch.round_id.name
-                        )
-                        else (
-                            batch.reference or ''
-                        )
-                    )
-
-                    batch_pages = (
-                        self._paginate_batch_categories(
-                            category_list
-                        )
-                    )
+                    batch_pages = self._paginate_batch_categories(category_list)
 
                     all_batch_groups.append({
                         'delivery_date': delivery_date_str,
@@ -968,13 +850,7 @@ class ReportPackingList(models.AbstractModel):
                         'total_boxes': batch_total_boxes,
                     })
 
-        # Number pages continuously across the whole
-        # regal van report
-        all_batch_groups = (
-            self._number_pages_continuously(
-                all_batch_groups
-            )
-        )
+        all_batch_groups = self._number_pages_continuously(all_batch_groups)
 
         return {
             'doc_ids': docids,
@@ -984,3 +860,334 @@ class ReportPackingList(models.AbstractModel):
             'delivery_channel': 'regal_van',
             'batch_groups': all_batch_groups,
         }
+
+    # ------------------------------------------------------------------
+    # Fast path: builds the PDF directly with ReportLab instead of QWeb+
+    # wkhtmltopdf. The raw-SQL data layer above is already fast (it exists
+    # specifically to avoid N+1 ORM queries) and is reused as-is; only the
+    # *rendering* step changes. See report_delivery_note_round_courier.py
+    # for the general approach and report_delivery_note_round_van.py for the
+    # repeating-header-per-group technique (_PackingListHeaderMarker /
+    # _PackingListCanvas above are the same idea, renamed for this file).
+    # ------------------------------------------------------------------
+    PRINTABLE_WIDTH = A4[0] - (24 * mm)
+
+    def generate_pdf(self, wizard):
+        """Returns the finished PDF (bytes) for one Packing List wizard, or
+        None when there is nothing to print."""
+        if wizard.delivery_channel == 'courier':
+            return self._generate_courier_pdf(wizard)
+        return self._generate_van_pdf(wizard)
+
+    def _pdf_styles(self):
+        return {
+            'title': ParagraphStyle('PLTitle', fontName='Helvetica-Bold', fontSize=20, leading=24),
+            'subtitle': ParagraphStyle('PLSubtitle', fontName='Helvetica', fontSize=11, leading=15, alignment=2),
+            'customer': ParagraphStyle('PLCustomer', fontName='Helvetica-Bold', fontSize=13, leading=16),
+            'address': ParagraphStyle('PLAddress', fontName='Helvetica-Bold', fontSize=13, leading=16, alignment=2),
+            'category': ParagraphStyle('PLCategory', fontName='Helvetica-Bold', fontSize=12, leading=15),
+            'col_header': ParagraphStyle('PLColHeader', fontName='Helvetica-BoldOblique', fontSize=9, leading=11),
+            'cell': ParagraphStyle('PLCell', fontName='Helvetica', fontSize=10, leading=13),
+            'cell_bold': ParagraphStyle('PLCellBold', fontName='Helvetica-Bold', fontSize=10, leading=13),
+            'total': ParagraphStyle('PLTotal', fontName='Helvetica-Bold', fontSize=10, leading=13, alignment=2),
+        }
+
+    def _generate_courier_pdf(self, wizard):
+        """Uses plain ORM search() + recordset iteration rather than raw SQL -
+        the ORM already knows how each field is actually translated/stored,
+        so there's no risk of the "assumed jsonb, column is actually varchar"
+        class of bug a hand-written query can hit."""
+        p_from = (
+            wizard.packing_date_from or (wizard.delivery_date_from - datetime.timedelta(days=1))
+            if wizard.delivery_date_from else False
+        )
+        p_to = (
+            wizard.packing_date_to or (wizard.delivery_date_to - datetime.timedelta(days=1))
+            if wizard.delivery_date_to else False
+        )
+        packing_date_from_str = p_from.strftime('%d/%m/%Y') if p_from else ''
+        packing_date_to_str = p_to.strftime('%d/%m/%Y') if p_to else ''
+        delivery_date_from_str = wizard.delivery_date_from.strftime('%d/%m/%Y') if wizard.delivery_date_from else ''
+        delivery_date_to_str = wizard.delivery_date_to.strftime('%d/%m/%Y') if wizard.delivery_date_to else ''
+
+        order_domain = [
+            ('delivery_channel', '=', 'courier'),
+            ('state', 'in', ['sale', 'done']),
+            ('delivery_date', '>=', wizard.delivery_date_from),
+            ('delivery_date', '<=', wizard.delivery_date_to),
+            ('is_late_order', '=', bool(wizard.include_late_orders)),
+        ]
+        orders = self.env['sale.order'].search(order_domain, order='delivery_date asc, name asc')
+        if not orders:
+            return None
+
+        orders_map = {}
+        for order in orders:
+            lines = order.order_line.filtered(
+                lambda l: not l.display_type and l.product_id and l.product_uom_qty > 0
+            )
+            if not lines:
+                continue
+
+            main_partner = order.partner_id
+            ship_partner = order.partner_shipping_id or main_partner
+            cust_name = self._format_customer_name(main_partner)
+            addr = self._format_address_lines(ship_partner)
+
+            o_data = orders_map[order.id] = {
+                'order_name': order.name,
+                'delivery_date': order.delivery_date.strftime('%d/%m/%Y') if order.delivery_date else '',
+                'customer_code': getattr(main_partner, 'customer_code', False) or main_partner.ref or order.name or '',
+                'customer_name': cust_name,
+                'address_line1': addr['line1'],
+                'address_line2': addr['line2'],
+                'categories_map': {},
+                'total_order_weight_g': 0.0,
+            }
+
+            for line in lines:
+                product = line.product_id
+                categ_name = (product.categ_id.name or _('Other')).strip().upper()
+                categ_key = (0, categ_name)
+                if categ_key not in o_data['categories_map']:
+                    o_data['categories_map'][categ_key] = {'categ_name': categ_name, 'products': []}
+
+                qty_val = line.product_uom_qty
+                unit_weight_kg = product.weight or product.product_tmpl_id.weight or 0.0
+                line_weight_g = round(unit_weight_kg * qty_val * 1000)
+                o_data['total_order_weight_g'] += line_weight_g
+
+                sort_num = self._extract_sort_number(product, line)
+                qty_display = int(round(qty_val)) if float(qty_val).is_integer() else qty_val
+                o_data['categories_map'][categ_key]['products'].append({
+                    'qty': qty_display,
+                    'product_name': product.name or line.name or '',
+                    'weight_display': int(round(line_weight_g)),
+                    'sort_num': sort_num,
+                })
+
+        if not orders_map:
+            return None
+
+        styles = self._pdf_styles()
+        width = self.PRINTABLE_WIDTH
+        story = [
+            Table(
+                [[
+                    Paragraph("Courier Packing List", styles['title']),
+                    Paragraph(
+                        f"For Packing between {xml_escape(packing_date_from_str)} and {xml_escape(packing_date_to_str)}"
+                        f"<br/>(Delivery {xml_escape(delivery_date_from_str)}-{xml_escape(delivery_date_to_str)})",
+                        styles['subtitle'],
+                    ),
+                ]],
+                colWidths=[width * 0.5, width * 0.5],
+            ),
+            HRFlowable(width=width, thickness=2, color=colors.black, spaceBefore=3 * mm, spaceAfter=4 * mm),
+        ]
+
+        printed_orders = 0
+        for oid, o_data in orders_map.items():
+            category_list = []
+            for c_key, c_val in sorted(
+                o_data['categories_map'].items(), key=lambda item: self._get_category_sort_key(item[1]['categ_name'])
+            ):
+                sorted_prods = sorted(c_val['products'], key=self._get_sort_key)
+                if sorted_prods:
+                    category_list.append({'categ_name': c_val['categ_name'], 'products': sorted_prods})
+            if not category_list:
+                continue
+
+            if printed_orders:
+                story.append(PageBreak())
+            printed_orders += 1
+
+            header_text = (
+                f"<b>{xml_escape(o_data['customer_code'])}  {xml_escape(o_data['customer_name'])}</b>"
+                f"<br/>{xml_escape(o_data['address_line1'])} {xml_escape(o_data['address_line2'])}"
+            )
+            story.append(_PackingListHeaderMarker(header_text))
+            story.append(Spacer(1, 10 * mm))
+
+            for cat in category_list:
+                rows = [[
+                    Paragraph(str(p['qty']), styles['cell_bold']),
+                    Paragraph("X", styles['cell']),
+                    Paragraph(xml_escape(p['product_name']), styles['cell']),
+                    Paragraph(str(p['weight_display']), styles['cell_bold']),
+                ] for p in cat['products']]
+                table = Table(rows, colWidths=[width * 0.08, width * 0.06, width * 0.72, width * 0.14])
+                table.setStyle(TableStyle([
+                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                    ('ALIGN', (3, 0), (3, -1), 'RIGHT'),
+                    ('TOPPADDING', (0, 0), (-1, -1), 1.5),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 1.5),
+                ]))
+                story.append(KeepTogether([
+                    Paragraph(xml_escape(cat['categ_name']), styles['category']),
+                    HRFlowable(width=width, thickness=1.2, color=colors.black, spaceBefore=1 * mm, spaceAfter=1 * mm),
+                    table,
+                    HRFlowable(width=width, thickness=1.2, color=colors.black, spaceBefore=1 * mm, spaceAfter=3 * mm),
+                ]))
+
+            story.append(Spacer(1, 2 * mm))
+            total_row = Table(
+                [[
+                    Paragraph("Total Weight - Not Inc Fres", styles['total']),
+                    Paragraph(str(int(round(o_data['total_order_weight_g']))), styles['cell_bold']),
+                ]],
+                colWidths=[width * 0.82, width * 0.18],
+            )
+            total_row.setStyle(TableStyle([
+                ('BOX', (1, 0), (1, 0), 2, colors.black),
+                ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+                ('TOPPADDING', (1, 0), (1, 0), 3), ('BOTTOMPADDING', (1, 0), (1, 0), 3),
+                ('RIGHTPADDING', (1, 0), (1, 0), 6), ('LEFTPADDING', (1, 0), (1, 0), 6),
+            ]))
+            story.append(total_row)
+
+        if not printed_orders:
+            return None
+        return self._build_pdf(story)
+
+    def _generate_van_pdf(self, wizard):
+        """Uses plain ORM search() + recordset iteration rather than raw SQL -
+        see the note at the top of _generate_courier_pdf."""
+        batch_domain = [
+            ('delivery_date', '>=', wizard.delivery_date_from),
+            ('delivery_date', '<=', wizard.delivery_date_to),
+        ]
+        if wizard.depot_ids:
+            batch_domain.append(('depot_id', 'in', wizard.depot_ids.ids))
+
+        batches = self.env['round.management.batch'].search(
+            batch_domain, order='delivery_date asc, code asc, id asc'
+        )
+        if not batches:
+            return None
+
+        batches_map = {}
+        for batch in batches:
+            orders = batch.order_ids.filtered(
+                lambda so: so.state in ('sale', 'done')
+                and getattr(so, 'delivery_channel', False) in ('regal_van', False)
+                and bool(getattr(so, 'is_late_order', False)) == bool(wizard.include_late_orders)
+            )
+            if not orders:
+                continue
+
+            b_map = batches_map[batch.id] = {'batch': batch, 'categories_map': {}}
+            for order in orders:
+                lines = order.order_line.filtered(
+                    lambda l: not l.display_type and l.product_id and l.product_uom_qty > 0
+                )
+                for line in lines:
+                    product = line.product_id
+                    categ_name = (product.categ_id.name or _('Other')).strip().upper()
+                    categ_key = product.categ_id.id or 0
+                    if categ_key not in b_map['categories_map']:
+                        b_map['categories_map'][categ_key] = {'categ_name': categ_name, 'products': {}}
+
+                    c_prods = b_map['categories_map'][categ_key]['products']
+                    pid = product.id
+                    if pid not in c_prods:
+                        sort_num = self._extract_sort_number(product, line)
+                        c_prods[pid] = {
+                            'product_id': pid, 'product_name': product.name, 'box_qty': 0.0,
+                            'sort_num': sort_num, 'sort_str': str(sort_num) if sort_num else '',
+                        }
+                    effective_qty = line.box_qty or line.product_uom_qty or 0.0
+                    c_prods[pid]['box_qty'] += effective_qty
+
+        if not batches_map:
+            return None
+
+        styles = self._pdf_styles()
+        width = self.PRINTABLE_WIDTH
+        story = []
+        printed_batches = 0
+        for bid, b_data in batches_map.items():
+            category_list = []
+            batch_total_boxes = 0
+            for c_key, c_val in sorted(
+                b_data['categories_map'].items(), key=lambda item: self._get_category_sort_key(item[1]['categ_name'])
+            ):
+                sorted_prods = sorted(c_val['products'].values(), key=self._get_sort_key)
+                for p in sorted_prods:
+                    p['qty_display'] = int(round(p['box_qty'])) if float(p['box_qty']).is_integer() else p['box_qty']
+                cat_total = int(round(sum(p['box_qty'] for p in sorted_prods)))
+                batch_total_boxes += cat_total
+                if sorted_prods:
+                    category_list.append({'categ_name': c_val['categ_name'], 'products': sorted_prods, 'total_boxes': cat_total})
+            if not category_list:
+                continue
+
+            if printed_batches:
+                story.append(PageBreak())
+            printed_batches += 1
+
+            batch = b_data['batch']
+            depot_name = batch.depot_id.name or 'Grimsby'
+            delivery_date_str = batch.delivery_date.strftime('%d/%m/%Y') if batch.delivery_date else ''
+            batch_code = batch.code or ''
+            batch_name = (batch.round_id.name if batch.round_id else False) or batch.reference or ''
+
+            header_text = (
+                f"<b>Factory Only Packing List</b>&nbsp;&nbsp;&nbsp;{xml_escape(batch_code)}  {xml_escape(batch_name)}"
+                f"<br/>Delivery On: {xml_escape(delivery_date_str)}"
+                + (f"&nbsp;&nbsp;&nbsp;{xml_escape(depot_name)}" if depot_name else '')
+            )
+            story.append(_PackingListHeaderMarker(header_text))
+            story.append(Spacer(1, 14 * mm))
+
+            for cat in category_list:
+                header_row = Table(
+                    [[Paragraph("Quantity", styles['col_header']), Paragraph("Product / Box Contents", styles['col_header']),
+                      Paragraph("Sort", styles['col_header'])]],
+                    colWidths=[width * 0.12, width * 0.76, width * 0.12],
+                )
+                header_row.setStyle(TableStyle([('LINEBELOW', (0, 0), (-1, 0), 1.5, colors.black)]))
+
+                rows = [[
+                    Paragraph(str(p['qty_display']), styles['cell_bold']),
+                    Paragraph(xml_escape(p['product_name'] or ''), styles['cell']),
+                    Paragraph(xml_escape(p['sort_str']), styles['cell']),
+                ] for p in cat['products']]
+                table = Table(rows, colWidths=[width * 0.12, width * 0.76, width * 0.12])
+                table.setStyle(TableStyle([
+                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                    ('ALIGN', (0, 0), (0, -1), 'CENTER'),
+                    ('ALIGN', (2, 0), (2, -1), 'RIGHT'),
+                    ('LINEBELOW', (0, 0), (-1, -1), 0.5, colors.black),
+                    ('TOPPADDING', (0, 0), (-1, -1), 2), ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+                ]))
+
+                elements = [
+                    Paragraph(xml_escape(cat['categ_name']), styles['category']),
+                    Spacer(1, 2 * mm), header_row, table,
+                    Paragraph(f"{cat['total_boxes']} Boxes", styles['total']),
+                    Spacer(1, 5 * mm),
+                ]
+                story.append(KeepTogether(elements))
+
+            story.append(Spacer(1, 8 * mm))
+            story.append(Paragraph("Checked By _____________________", styles['total']))
+
+        if not printed_batches:
+            return None
+        return self._build_pdf(story)
+
+    def _build_pdf(self, story):
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buffer, pagesize=A4,
+            leftMargin=12 * mm, rightMargin=12 * mm, topMargin=32 * mm, bottomMargin=12 * mm,
+        )
+
+        def _make_canvas(*args, **kwargs):
+            return _PackingListCanvas(*args, **kwargs)
+
+        doc.build(story, canvasmaker=_make_canvas)
+        pdf_value = buffer.getvalue()
+        buffer.close()
+        return pdf_value

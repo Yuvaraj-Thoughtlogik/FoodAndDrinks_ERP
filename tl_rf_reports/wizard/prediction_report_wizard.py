@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+import base64
+
 from odoo import api, fields, models
 from odoo.tools import _
 from odoo.exceptions import UserError, ValidationError
@@ -213,8 +215,27 @@ class PredictionReportWizard(models.TransientModel):
         if vals_list:
             self.env['prediction.report.line'].sudo().create(vals_list)
 
+    def _download_action(self, pdf_content, filename):
+        attachment = self.env['ir.attachment'].create({
+            'name': filename,
+            'type': 'binary',
+            'datas': base64.b64encode(pdf_content),
+            'mimetype': 'application/pdf',
+            'res_model': self._name,
+            'res_id': self.id,
+        })
+        return {
+            'type': 'ir.actions.act_url',
+            'url': f'/web/content/{attachment.id}?download=true',
+            'target': 'self',
+        }
+
     def action_print_report(self):
-        """Validates matching orders/lines and triggers the Prediction PDF Report."""
+        """Validates matching orders/lines and triggers the Prediction PDF Report.
+
+        Built directly with ReportLab (generate_pdf() on the report model)
+        instead of QWeb+wkhtmltopdf, same as the other reports in this module -
+        this stays fully synchronous, no background job needed."""
         self.ensure_one()
         domain = self._get_line_domain()
         matching_lines = self.env['sale.order.line'].search_count(domain)
@@ -229,10 +250,23 @@ class PredictionReportWizard(models.TransientModel):
             ))
 
         if self.delivery_channel == 'courier':
-            courier_action = self.env.ref('tl_rf_reports.action_report_prediction_courier', raise_if_not_found=False)
-            if courier_action:
-                return courier_action.report_action(self)
-        return self.env.ref('tl_rf_reports.action_report_prediction').report_action(self)
+            report_model = self.env['report.tl_rf_reports.report_prediction_courier']
+            filename = f"Courier_Prediction_Report_{self.delivery_date_from.strftime('%Y%m%d')}.pdf"
+        else:
+            report_model = self.env['report.tl_rf_reports.report_prediction']
+            filename = f"Prediction_Report_{self.delivery_date_from.strftime('%Y%m%d')}.pdf"
+
+        pdf_content = report_model.generate_pdf(self)
+        if not pdf_content:
+            channel_name = dict(self._fields['delivery_channel'].selection).get(self.delivery_channel, '')
+            raise UserError(_(
+                "No confirmed %s order lines found with delivery dates between %s and %s."
+            ) % (
+                channel_name,
+                self.delivery_date_from.strftime('%d/%m/%Y'),
+                self.delivery_date_to.strftime('%d/%m/%Y'),
+            ))
+        return self._download_action(pdf_content, filename)
 
     def action_view_lines(self):
         """Generates the prediction report lines and opens their list view."""
@@ -406,4 +440,4 @@ class PredictionReportLine(models.TransientModel):
                 'view_mode': 'list,form',
                 'domain': [('id', 'in', created_pos.ids)],
                 'target': 'current',
-            }
+            }

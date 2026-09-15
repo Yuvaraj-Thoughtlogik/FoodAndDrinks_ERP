@@ -1,27 +1,31 @@
-import io
+# -*- coding: utf-8 -*-
 import base64
+import io
 from collections import defaultdict
-from odoo import api, fields, models, _
-from odoo.exceptions import UserError
+from xml.sax.saxutils import escape as xml_escape
 
-from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
-from reportlab.platypus import (
-    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak, KeepTogether, Image
-)
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.graphics.shapes import Drawing, Line
 from reportlab.pdfgen import canvas
+from reportlab.platypus import (
+    Image, KeepTogether, Paragraph, PageBreak, SimpleDocTemplate, Spacer, Table, TableStyle,
+)
+
+from odoo import api, models
+from odoo.tools.image import image_data_uri
+
+from .report_delivery_note_common import DeliveryNoteReportMixin
 
 
-class NumberedCanvas(canvas.Canvas):
-    """
-    Two-pass canvas to dynamically calculate and render 'Page X of Y' 
-    along with the fixed customer service footer on every page.
-    """
+class _CourierNoteCanvas(canvas.Canvas):
+    """Two-pass canvas so the footer disclaimer and "Page X of Y" can be drawn
+    once the total page count is actually known, instead of being guessed."""
+
     def __init__(self, *args, **kwargs):
-        super(NumberedCanvas, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self._saved_page_states = []
 
     def showPage(self):
@@ -29,95 +33,204 @@ class NumberedCanvas(canvas.Canvas):
         self._startPage()
 
     def save(self):
-        num_pages = len(self._saved_page_states)
+        total_pages = len(self._saved_page_states)
         for state in self._saved_page_states:
             self.__dict__.update(state)
-            self.draw_page_decorations(num_pages)
-            super(NumberedCanvas, self).showPage()
-        super(NumberedCanvas, self).save()
+            self._draw_footer(total_pages)
+            super().showPage()
+        super().save()
 
-    def draw_page_decorations(self, page_count):
+    def _draw_footer(self, total_pages):
         self.saveState()
         margin = 9 * mm
         width = A4[0] - (2 * margin)
-        
-        footer_style = ParagraphStyle(
-            'FooterStyle',
-            fontName='Helvetica',
-            fontSize=7.5,
-            leading=9,
-            textColor=colors.HexColor('#333333'),
-            alignment=1
+
+        disclaimer_style = ParagraphStyle(
+            'CourierFooterDisclaimer', fontName='Helvetica', fontSize=7.5,
+            leading=9, textColor=colors.HexColor('#333333'), alignment=1,
         )
-        footer_text = (
-            "The goods received should arrive with you in perfect condition having been held at optimum temperature. "
-            "If for any reason you are unhappy with the goods or you believe they have not been delivered as expected "
-            "then please don't hesitate to contact one of our customer service team on 08453 893 973 or by email to "
-            "info@regalfish.co.uk and someone will be happy to assist with your query."
-        )
-        p = Paragraph(footer_text, footer_style)
-        w, h = p.wrap(width, 15 * mm)
-        p.drawOn(self, margin, 10 * mm)
+        disclaimer = Paragraph(self.disclaimer_text or '', disclaimer_style)
+        disclaimer.wrap(width, 15 * mm)
+        disclaimer.drawOn(self, margin, 10 * mm)
 
         page_style = ParagraphStyle(
-            'PageNumStyle',
-            fontName='Helvetica',
-            fontSize=8,
-            leading=10,
-            textColor=colors.HexColor('#555555'),
-            alignment=1
+            'CourierFooterPageNum', fontName='Helvetica', fontSize=8,
+            leading=10, textColor=colors.HexColor('#555555'), alignment=1,
         )
-        page_text = f"Page {self._pageNumber} of {page_count}"
-        p_page = Paragraph(page_text, page_style)
-        w_p, h_p = p_page.wrap(width, 5 * mm)
-        p_page.drawOn(self, margin, 4 * mm)
+        page_num = Paragraph(f"Page {self._pageNumber} of {total_pages}", page_style)
+        page_num.wrap(width, 5 * mm)
+        page_num.drawOn(self, margin, 4 * mm)
 
         self.restoreState()
 
 
-class DeliveryNoteRoundWizard(models.TransientModel):
-    _inherit = 'delivery.note.round.wizard'
-
-    def action_print_report(self):
-        """Generates the PDF in memory with logo and returns a base64 download action."""
-        self.ensure_one()
-        if self.delivery_channel == 'courier':
-            report_model = self.env['report.tl_rf_reports.report_delivery_note_round_courier']
-            pdf_bytes = report_model.generate_pdf_stream(self)
-            
-            pdf_base64 = base64.b64encode(pdf_bytes)
-            
-            filename = f"Delivery_Note_Round_Courier_{self.delivery_date_from.strftime('%Y%m%d')}.pdf"
-            attachment = self.env['ir.attachment'].create({
-                'name': filename,
-                'type': 'binary',
-                'datas': pdf_base64,
-                'mimetype': 'application/pdf',
-                'res_model': self._name,
-                'res_id': self.id,
-            })
-            
-            return {
-                'type': 'ir.actions.act_url',
-                'url': f'/web/content/{attachment.id}?download=true',
-                'target': 'self',
-            }
-        return super().action_print_report()
-
-
-class ReportDeliveryNoteRoundCourier(models.AbstractModel):
+class ReportDeliveryNoteRoundCourier(DeliveryNoteReportMixin, models.AbstractModel):
     _name = 'report.tl_rf_reports.report_delivery_note_round_courier'
-    _description = 'Direct Memory PDF Generator - Courier'
+    _description = 'Delivery Note Round Report - Courier'
 
-    def _get_company_logo_flowable(self, company, max_width=45*mm, max_height=18*mm):
-        """Extracts company logo binary and converts it to a ReportLab Image object."""
+    # ------------------------------------------------------------------
+    # QWeb / wkhtmltopdf path - kept registered (see report_delivery_note_
+    # round_courier_views.xml) but no longer used by the Print button. See
+    # generate_pdf() below for why: wkhtmltopdf renders roughly one page per
+    # order here, so at a few thousand orders that was 10+ minutes and a
+    # request timeout. Left in place only in case anything still calls the
+    # report action directly.
+    # ------------------------------------------------------------------
+    def _get_order_category_lines(self, order, delivery_product_ids=None, lines=None):
+        """Group an order's lines into categorized buckets (e.g. FROZEN, FRESH, etc.)."""
+        if lines is None:
+            lines = order.order_line.filtered(lambda l: not l.display_type and l.product_id)
+        if delivery_product_ids is not None:
+            lines = [l for l in lines if l.product_id.id in delivery_product_ids]
+
+        cat_dict = {}
+        for line in lines:
+            product = line.product_id
+            categ_name = product.categ_id.name.strip() if product.categ_id and product.categ_id.name else ''
+
+            c_upper = categ_name.upper()
+            if 'FROZEN' in c_upper or 'FREEZE' in c_upper or getattr(product, 'use_frozen', False):
+                cat_key = 'FROZEN'
+                priority = 1
+            elif 'FRESH' in c_upper or 'CHILLED' in c_upper or getattr(product, 'use_fresh', False):
+                cat_key = 'FRESH'
+                priority = 2
+            elif c_upper:
+                cat_key = c_upper
+                priority = 3
+            else:
+                cat_key = 'FRESH'
+                priority = 2
+
+            if cat_key not in cat_dict:
+                cat_dict[cat_key] = {
+                    'name': cat_key,
+                    'priority': priority,
+                    'lines': []
+                }
+
+            qty = self._format_qty(getattr(line, 'product_uom_qty', 0))
+            prod_name = product.name or line.name or ''
+            extra_note = self._extract_hash_note((getattr(line, 'name', '') or '').strip())
+
+            cat_dict[cat_key]['lines'].append({
+                'qty': qty,
+                'product_name': prod_name,
+                'extra_note': extra_note,
+            })
+
+        return sorted(cat_dict.values(), key=lambda c: (c['priority'], c['name']))
+
+    @api.model
+    def _get_report_values(self, docids, data=None):
+        docs = self.env['delivery.note.round.wizard'].browse(docids)
+        courier_orders_data = []
+
+        company = self.env.company
+        company_logo_uri = image_data_uri(company.logo) if company.logo else False
+
+        for wizard in docs:
+            order_domain = [
+                ('delivery_channel', '=', 'courier'),
+                ('state', 'in', ['sale', 'done']),
+                ('delivery_date', '>=', wizard.delivery_date_from),
+                ('delivery_date', '<=', wizard.delivery_date_to),
+                ('picking_ids', '!=', False),
+            ]
+            applicable_orders = self.env['sale.order'].search(
+                order_domain,
+                order='delivery_date asc, name asc'
+            )
+
+            if not applicable_orders:
+                continue
+
+            # Batch pre-fetch pickings, moves, and lines to avoid N+1 SQL queries
+            all_pickings = self.env['stock.picking'].search([
+                ('sale_id', 'in', applicable_orders.ids),
+                ('state', '!=', 'cancel'),
+            ])
+            pickings_by_order = defaultdict(lambda: self.env['stock.picking'])
+            for p in all_pickings:
+                p_type = getattr(p, 'picking_type_id', False)
+                code = getattr(p_type, 'code', False) if p_type else False
+                if code in ('outgoing', False, None):
+                    pickings_by_order[p.sale_id.id] |= p
+
+            all_moves = self.env['stock.move'].search([
+                ('picking_id', 'in', all_pickings.ids),
+                ('state', '!=', 'cancel'),
+            ])
+            picking_to_sale = {p.id: p.sale_id.id for p in all_pickings}
+            delivery_products_by_order = defaultdict(set)
+            for m in all_moves:
+                if m.product_id and m.picking_id.id in picking_to_sale:
+                    delivery_products_by_order[picking_to_sale[m.picking_id.id]].add(m.product_id.id)
+
+            all_lines = self.env['sale.order.line'].search([
+                ('order_id', 'in', applicable_orders.ids),
+                ('display_type', '=', False),
+                ('product_id', '!=', False),
+            ])
+            lines_by_order = defaultdict(list)
+            for l in all_lines:
+                lines_by_order[l.order_id.id].append(l)
+
+            for order in applicable_orders:
+                pickings = pickings_by_order.get(order.id, self.env['stock.picking'])
+                delivery_product_ids = delivery_products_by_order.get(order.id) if pickings else None
+
+                order_lines = lines_by_order.get(order.id, [])
+                categories = self._get_order_category_lines(order, delivery_product_ids, lines=order_lines)
+                if not categories:
+                    continue
+
+                ship_partner = order.partner_shipping_id or order.partner_id
+                main_partner = order.partner_id
+
+                cust_name = self._format_customer_name(main_partner, include_code=False)
+                cust_code = getattr(main_partner, 'customer_code', False) or getattr(main_partner, 'ref', False) or str(main_partner.id)
+                addr_line1, addr_line2 = self._format_address_lines(ship_partner)
+
+                d_date = order.delivery_date or wizard.delivery_date_from
+                delivery_date_str = d_date.strftime('%d/%m/%Y') if d_date else ''
+
+                courier_orders_data.append({
+                    'order': order,
+                    'order_no': order.client_order_ref or order.name or '',
+                    'customer_id': cust_code,
+                    'customer_name': cust_name,
+                    'address_line1': addr_line1,
+                    'address_line2': addr_line2,
+                    'delivery_date': delivery_date_str,
+                    'categories': categories,
+                    'company': order.company_id or company,
+                    'company_logo_uri': company_logo_uri,
+                })
+
+        return {
+            'doc_ids': docids,
+            'doc_model': 'delivery.note.round.wizard',
+            'docs': docs,
+            'courier_orders': courier_orders_data,
+            'company': self.env.company,
+            'company_logo_uri': company_logo_uri,
+        }
+
+    # ------------------------------------------------------------------
+    # Fast path: builds the PDF directly with ReportLab, in one pass, in
+    # memory. No wkhtmltopdf subprocess, no per-page HTML rendering - just
+    # native PDF drawing, so a few thousand orders finishes in seconds
+    # instead of minutes. Used by delivery.note.round.wizard.action_print_
+    # report() for the courier channel; see report_delivery_note_round_van.py
+    # for the same treatment of the Regal Van channel. The QWeb path above is
+    # left registered but unused, for parity/safety.
+    # ------------------------------------------------------------------
+    def _get_company_logo_flowable(self, company, max_width=45 * mm, max_height=18 * mm):
         if not company.logo:
-            return ""
+            return None
         try:
-            logo_data = base64.b64decode(company.logo)
-            logo_stream = io.BytesIO(logo_data)
-            img = Image(logo_stream)
-            
+            img = Image(io.BytesIO(base64.b64decode(company.logo)))
             aspect = img.imageWidth / float(img.imageHeight)
             if aspect > 1:
                 img.drawWidth = max_width
@@ -126,87 +239,104 @@ class ReportDeliveryNoteRoundCourier(models.AbstractModel):
                 img.drawHeight = max_height
                 img.drawWidth = max_height * aspect
             return img
-        except Exception:
-            return ""
+        except Exception:  # noqa: BLE001 - a bad logo must not break the print
+            return None
 
-    def generate_pdf_stream(self, wizard):
-        company = self.env.company
-        logo_image = self._get_company_logo_flowable(company)
-        
-        # 1. Fetch orders
-        orders = self.env['sale.order'].search([
-            ('delivery_channel', '=', 'courier'),
-            ('state', 'in', ['sale', 'done']),
-            ('delivery_date', '>=', wizard.delivery_date_from),
-            ('delivery_date', '<=', wizard.delivery_date_to),
-        ], order='delivery_date asc, name asc')
+    def generate_pdf(self, wizard):
+        """Returns the finished PDF (bytes) for one Courier Delivery Note Round
+        wizard, or None when there is nothing to print.
 
-        if not orders:
-            raise UserError(_("No confirmed Courier orders found for the selected dates."))
+        Uses plain ORM search() + recordset iteration (same data-prep shape as
+        the QWeb-era _get_report_values above) rather than raw SQL or
+        search_read - the ORM already knows how each field is actually
+        translated/stored, so there's no risk of the "assumed jsonb, column is
+        actually varchar" class of bug a hand-written query can hit."""
+        company = wizard.company_id if hasattr(wizard, 'company_id') and wizard.company_id else self.env.company
 
-        order_ids = orders.ids
-
-        sol_read = self.env['sale.order.line'].search_read(
-            [('order_id', 'in', order_ids), ('display_type', '=', False), ('product_id', '!=', False)],
-            ['order_id', 'product_id', 'product_uom_qty', 'name']
+        applicable_orders = self.env['sale.order'].search(
+            [
+                ('delivery_channel', '=', 'courier'),
+                ('state', 'in', ['sale', 'done']),
+                ('delivery_date', '>=', wizard.delivery_date_from),
+                ('delivery_date', '<=', wizard.delivery_date_to),
+                ('picking_ids', '!=', False),
+            ],
+            order='delivery_date asc, name asc',
         )
-        product_ids = list({l['product_id'][0] for l in sol_read if l['product_id']})
-        products = {
-            p['id']: p for p in self.env['product.product'].search_read(
-                [('id', 'in', product_ids)],
-                ['id', 'name', 'categ_id', 'use_frozen', 'use_fresh']
-            )
-        }
+        if not applicable_orders:
+            return None
 
+        # Batch pre-fetch pickings, moves, and lines to avoid N+1 queries.
+        all_pickings = self.env['stock.picking'].search([
+            ('sale_id', 'in', applicable_orders.ids),
+            ('state', '!=', 'cancel'),
+        ])
+        pickings_by_order = defaultdict(lambda: self.env['stock.picking'])
+        for p in all_pickings:
+            p_type = getattr(p, 'picking_type_id', False)
+            code = getattr(p_type, 'code', False) if p_type else False
+            if code in ('outgoing', False, None):
+                pickings_by_order[p.sale_id.id] |= p
+
+        all_moves = self.env['stock.move'].search([
+            ('picking_id', 'in', all_pickings.ids),
+            ('state', '!=', 'cancel'),
+        ])
+        picking_to_sale = {p.id: p.sale_id.id for p in all_pickings}
+        delivery_products_by_order = defaultdict(set)
+        for m in all_moves:
+            if m.product_id and m.picking_id.id in picking_to_sale:
+                delivery_products_by_order[picking_to_sale[m.picking_id.id]].add(m.product_id.id)
+
+        all_lines = self.env['sale.order.line'].search([
+            ('order_id', 'in', applicable_orders.ids),
+            ('display_type', '=', False),
+            ('product_id', '!=', False),
+        ])
         lines_by_order = defaultdict(list)
-        for l in sol_read:
-            p_info = products.get(l['product_id'][0], {})
-            lines_by_order[l['order_id'][0]].append({
-                'product_name': p_info.get('name') or l['product_id'][1],
-                'categ_name': p_info.get('categ_id')[1] if p_info.get('categ_id') else '',
-                'use_frozen': p_info.get('use_frozen', False),
-                'use_fresh': p_info.get('use_fresh', False),
-                'qty': int(l['product_uom_qty']) if l['product_uom_qty'] % 1 == 0 else round(l['product_uom_qty'], 2),
-                'note': l['name'].split('#')[1].strip() if '#' in (l['name'] or '') else '',
-            })
+        for l in all_lines:
+            lines_by_order[l.order_id.id].append(l)
+
+        logo_flowable = self._get_company_logo_flowable(company)
 
         buffer = io.BytesIO()
         doc = SimpleDocTemplate(
-            buffer,
-            pagesize=A4,
-            leftMargin=9 * mm,
-            rightMargin=9 * mm,
-            topMargin=10 * mm,
-            bottomMargin=22 * mm  # Space allocated for footer text + page numbers
+            buffer, pagesize=A4,
+            leftMargin=9 * mm, rightMargin=9 * mm, topMargin=10 * mm, bottomMargin=22 * mm,
         )
-
-        styles = getSampleStyleSheet()
-        normal_style = ParagraphStyle('NormalStyle', fontName='Helvetica', fontSize=10, leading=12)
-        title_style = ParagraphStyle('TitleStyle', fontName='Helvetica', fontSize=13, leading=15)
-        bold_11 = ParagraphStyle('Bold11', fontName='Helvetica-Bold', fontSize=11, leading=13)
-        cat_style = ParagraphStyle('CatStyle', fontName='Helvetica-Bold', fontSize=10, leading=12)
-
+        title_style = ParagraphStyle('CourierTitle', fontName='Helvetica', fontSize=13, leading=15)
+        normal_style = ParagraphStyle('CourierNormal', fontName='Helvetica', fontSize=10, leading=12)
+        bold_style = ParagraphStyle('CourierBold', fontName='Helvetica-Bold', fontSize=11, leading=13)
+        cat_style = ParagraphStyle('CourierCategory', fontName='Helvetica-Bold', fontSize=10, leading=12)
         printable_width = A4[0] - (18 * mm)
-        story = []
 
-        total_orders = len(orders)
-        for idx, order in enumerate(orders):
-            lines_data = lines_by_order.get(order.id, [])
-            if not lines_data:
+        story = []
+        printed_orders = 0
+        for order in applicable_orders:
+            pickings = pickings_by_order.get(order.id, self.env['stock.picking'])
+            delivery_product_ids = delivery_products_by_order.get(order.id) if pickings else None
+
+            order_lines = lines_by_order.get(order.id, [])
+            categories = self._get_order_category_lines(order, delivery_product_ids, lines=order_lines)
+            if not categories:
                 continue
 
-            d_date = getattr(order, 'delivery_date', False) or wizard.delivery_date_from
+            if printed_orders:
+                story.append(PageBreak())
+            printed_orders += 1
+
+            ship_partner = order.partner_shipping_id or order.partner_id
+            main_partner = order.partner_id
+            cust_name = self._format_customer_name(main_partner, include_code=False)
+            cust_code = getattr(main_partner, 'customer_code', False) or getattr(main_partner, 'ref', False) or str(main_partner.id)
+            addr_line1, addr_line2 = self._format_address_lines(ship_partner)
+
+            d_date = order.delivery_date or wizard.delivery_date_from
             delivery_date_str = d_date.strftime('%d/%m/%Y') if d_date else ''
 
-            header_text = f"Customer Delivery Note: For Delivery {delivery_date_str}"
-            header_table_data = [[
-                logo_image if logo_image else "",
-                Paragraph(header_text, title_style)
-            ]]
-            
             header_table = Table(
-                header_table_data, 
-                colWidths=[printable_width * 0.25, printable_width * 0.75]
+                [[logo_flowable or "", Paragraph(f"Customer Delivery Note: For Delivery {xml_escape(delivery_date_str)}", title_style)]],
+                colWidths=[printable_width * 0.25, printable_width * 0.75],
             )
             header_table.setStyle(TableStyle([
                 ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
@@ -214,98 +344,67 @@ class ReportDeliveryNoteRoundCourier(models.AbstractModel):
             ]))
             story.append(header_table)
             story.append(Spacer(1, 4 * mm))
-
-            main_partner = order.partner_id
-            ship_partner = order.partner_shipping_id or main_partner
-            cust_code = getattr(main_partner, 'customer_code', False) or main_partner.ref or str(main_partner.id)
-
-            cust_id_text = f"Customer ID &nbsp;&nbsp;<b>{cust_code}</b>"
-            story.append(Paragraph(cust_id_text, normal_style))
+            story.append(Paragraph(f"Customer ID&nbsp;&nbsp;<b>{xml_escape(cust_code)}</b>", normal_style))
             story.append(Spacer(1, 2 * mm))
 
-            addr1 = ", ".join([p for p in [ship_partner.street, ship_partner.street2] if p])
-            addr2 = ", ".join([p for p in [ship_partner.city, ship_partner.zip] if p])
-
-            cust_table_data = [
+            cust_table = Table(
                 [
-                    Paragraph(f"<b>{main_partner.name or ''}</b>", bold_11),
-                    Paragraph("Deliver To:", normal_style),
-                    Paragraph(f"<b>{addr1}</b>", bold_11)
+                    [Paragraph(f"<b>{xml_escape(cust_name)}</b>", bold_style), Paragraph("Deliver To:", normal_style),
+                     Paragraph(f"<b>{xml_escape(addr_line1)}</b>", bold_style)],
+                    ["", "", Paragraph(f"<b>{xml_escape(addr_line2)}</b>", bold_style) if addr_line2 else ""],
                 ],
-                [
-                    "",
-                    "",
-                    Paragraph(f"<b>{addr2}</b>", bold_11) if addr2 else ""
-                ]
-            ]
-            cust_table = Table(cust_table_data, colWidths=[printable_width * 0.42, printable_width * 0.15, printable_width * 0.43])
-            cust_table.setStyle(TableStyle([
-                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                ('SPAN', (0, 0), (0, 1)),
-            ]))
+                colWidths=[printable_width * 0.42, printable_width * 0.15, printable_width * 0.43],
+            )
+            cust_table.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'), ('SPAN', (0, 0), (0, 1))]))
             story.append(cust_table)
             story.append(Spacer(1, 3 * mm))
 
-            d = Drawing(printable_width, 1)
-            d.add(Line(0, 0, printable_width, 0, strokeWidth=1, strokeColor=colors.black))
-            story.append(d)
+            rule = Drawing(printable_width, 1)
+            rule.add(Line(0, 0, printable_width, 0, strokeWidth=1, strokeColor=colors.black))
+            story.append(rule)
             story.append(Spacer(1, 2 * mm))
 
-            cat_dict = {}
-            for line in lines_data:
-                c_upper = line['categ_name'].upper()
-                if 'FROZEN' in c_upper or 'FREEZE' in c_upper or line['use_frozen']:
-                    cat_key = 'FROZEN'
-                    priority = 1
-                elif 'FRESH' in c_upper or 'CHILLED' in c_upper or line['use_fresh']:
-                    cat_key = 'FRESH'
-                    priority = 2
-                else:
-                    cat_key = c_upper or 'FRESH'
-                    priority = 3 if c_upper else 2
+            for cat in categories:
+                cat_rule = Drawing(printable_width, 1)
+                cat_rule.add(Line(0, 0, printable_width, 0, strokeWidth=1, strokeColor=colors.black))
 
-                if cat_key not in cat_dict:
-                    cat_dict[cat_key] = {'priority': priority, 'lines': []}
-                cat_dict[cat_key]['lines'].append(line)
-
-            sorted_cats = sorted(cat_dict.items(), key=lambda c: (c[1]['priority'], c[0]))
-
-            for cat_name, cat_val in sorted_cats:
-                cat_elements = []
-                cat_elements.append(Paragraph(cat_name, cat_style))
-                
-                d_cat = Drawing(printable_width, 1)
-                d_cat.add(Line(0, 0, printable_width, 0, strokeWidth=1, strokeColor=colors.black))
-                cat_elements.append(d_cat)
-                cat_elements.append(Spacer(1, 1 * mm))
-
-                table_rows = []
-                for l in cat_val['lines']:
-                    item_name = l['product_name'] + (f" {l['note']}" if l['note'] else '')
-                    table_rows.append([
-                        Paragraph(str(l['qty']), normal_style),
-                        Paragraph("X", normal_style),
-                        Paragraph(item_name, normal_style)
-                    ])
-
-                items_table = Table(table_rows, colWidths=[printable_width * 0.06, printable_width * 0.06, printable_width * 0.88])
+                item_rows = [
+                    [Paragraph(str(item['qty']), normal_style), Paragraph("X", normal_style),
+                     Paragraph(
+                         xml_escape(item['product_name']) + (f" {xml_escape(item['extra_note'])}" if item['extra_note'] else ''),
+                         normal_style,
+                     )]
+                    for item in cat['lines']
+                ]
+                items_table = Table(item_rows, colWidths=[printable_width * 0.06, printable_width * 0.06, printable_width * 0.88])
                 items_table.setStyle(TableStyle([
                     ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                    ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
                     ('TOPPADDING', (0, 0), (-1, -1), 1),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
                 ]))
-                cat_elements.append(items_table)
-                cat_elements.append(Spacer(1, 1 * mm))
-                cat_elements.append(d_cat)
-                cat_elements.append(Spacer(1, 3 * mm))
 
-                story.append(KeepTogether(cat_elements))
+                story.append(KeepTogether([
+                    Paragraph(xml_escape(cat['name']), cat_style), cat_rule, Spacer(1, 1 * mm),
+                    items_table, Spacer(1, 1 * mm), cat_rule, Spacer(1, 3 * mm),
+                ]))
 
-            if idx < total_orders - 1:
-                story.append(PageBreak())
+        if not printed_orders:
+            return None
 
-        doc.build(story, canvasmaker=NumberedCanvas)
+        disclaimer_text = (
+            "The goods received should arrive with you in perfect condition having been held at optimum "
+            "temperature. If for any reason you are unhappy with the goods or you believe they have not been "
+            "delivered as expected then please don't hesitate to contact one of our customer service team on "
+            f"{xml_escape(company.phone or '')} or by email to {xml_escape(company.email or '')} and someone "
+            "will be happy to assist with your query."
+        )
 
+        def _make_canvas(*args, **kwargs):
+            c = _CourierNoteCanvas(*args, **kwargs)
+            c.disclaimer_text = disclaimer_text
+            return c
+
+        doc.build(story, canvasmaker=_make_canvas)
         pdf_value = buffer.getvalue()
         buffer.close()
         return pdf_value

@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+import base64
+
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError, ValidationError
 
@@ -66,8 +68,32 @@ class BatchReportWizard(models.TransientModel):
             if record.delivery_date_from and record.delivery_date_to and record.delivery_date_to < record.delivery_date_from:
                 raise ValidationError(_("Delivery Date To cannot be earlier than Delivery Date From."))
 
+    def _download_action(self, pdf_content, filename):
+        attachment = self.env['ir.attachment'].create({
+            'name': filename,
+            'type': 'binary',
+            'datas': base64.b64encode(pdf_content),
+            'mimetype': 'application/pdf',
+            'res_model': self._name,
+            'res_id': self.id,
+        })
+        return {
+            'type': 'ir.actions.act_url',
+            'url': f'/web/content/{attachment.id}?download=true',
+            'target': 'self',
+        }
+
     def action_print_report(self):
-        """Validates eligible batches or courier orders and triggers the Dock Weight Breakdown Report."""
+        """Validates eligible batches or courier orders and triggers the Dock
+        Weight Breakdown Report.
+
+        The PDF is now built directly with ReportLab (generate_pdf() on the
+        report model) instead of QWeb+wkhtmltopdf, so the report action is a
+        synchronous download rather than the old report_action() call - see
+        report/dock_weight_breakdown_report.py. The "print report + open the
+        underlying lines" client action wrapping (print_and_open_lines) is
+        unchanged; only the report_action piece inside it is now an
+        ir.actions.act_url download."""
         self.ensure_one()
 
         if self.delivery_channel == 'courier':
@@ -90,17 +116,29 @@ class BatchReportWizard(models.TransientModel):
                     self.delivery_date_from.strftime('%d/%m/%Y'),
                     self.delivery_date_to.strftime('%d/%m/%Y'),
                 ))
-            report_act = self.env.ref('tl_rf_reports.action_report_dock_weight_breakdown').report_action(self)
+
+            report_model = self.env['report.tl_rf_reports.report_dock_weight_breakdown']
+            pdf_content = report_model.generate_pdf(self)
+            if not pdf_content:
+                raise UserError(_(
+                    "No confirmed Courier Delivery orders with matching product weights were found with "
+                    "delivery dates between %s and %s."
+                ) % (
+                    self.delivery_date_from.strftime('%d/%m/%Y'),
+                    self.delivery_date_to.strftime('%d/%m/%Y'),
+                ))
+            report_act = self._download_action(
+                pdf_content, f"Courier_Dock_Weight_{self.delivery_date_from.strftime('%Y%m%d')}.pdf"
+            )
             lines_act = self.action_view_lines()
-            # return {
-            #     'type': 'ir.actions.client',
-            #     'tag': 'print_and_open_lines',
-            #     'params': {
-            #         'report_action': report_act,
-            #         'lines_action': lines_act,
-            #     }
-            # }
-            return self.env.ref('tl_rf_reports.action_report_dock_weight_breakdown').report_action(self)
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'print_and_open_lines',
+                'params': {
+                    'report_action': report_act,
+                    'lines_action': lines_act,
+                }
+            }
 
         # Regal Van Delivery (Batch-based)
         domain = [
@@ -134,18 +172,25 @@ class BatchReportWizard(models.TransientModel):
         if not eligible_orders:
             raise UserError(_("Eligible batches were found, but they do not contain any matching Regal Van Delivery sale orders."))
 
-        report_act = self.env.ref('tl_rf_reports.action_report_dock_weight_breakdown').report_action(self)
+        report_model = self.env['report.tl_rf_reports.report_dock_weight_breakdown']
+        pdf_content = report_model.generate_pdf(self)
+        if not pdf_content:
+            raise UserError(_(
+                "Eligible batches were found, but they do not contain any matching Regal Van Delivery "
+                "sale order lines with weight data."
+            ))
+        report_act = self._download_action(
+            pdf_content, f"Dock_Weight_Breakdown_{self.delivery_date_from.strftime('%Y%m%d')}.pdf"
+        )
         lines_act = self.action_view_lines()
-        # return {
-        #     'type': 'ir.actions.client',
-        #     'tag': 'print_and_open_lines',
-        #     'params': {
-        #         'report_action': report_act,
-        #         'lines_action': lines_act,
-        #     }
-        # }
-
-        return self.env.ref('tl_rf_reports.action_report_dock_weight_breakdown').report_action(self)
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'print_and_open_lines',
+            'params': {
+                'report_action': report_act,
+                'lines_action': lines_act,
+            }
+        }
 
     def action_view_lines(self):
         """Opens the Sale Order Line list view with grouping by category (Courier) or depot and category (Regal Van)."""

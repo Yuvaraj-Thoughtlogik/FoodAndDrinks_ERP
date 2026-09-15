@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+import base64
+
 from odoo import api, fields, models
 from odoo.tools import _
 from odoo.exceptions import UserError, ValidationError
@@ -82,8 +84,29 @@ class RequirementReportWizard(models.TransientModel):
 
         return domain
 
+    def _download_action(self, pdf_content, filename):
+        attachment = self.env['ir.attachment'].create({
+            'name': filename,
+            'type': 'binary',
+            'datas': base64.b64encode(pdf_content),
+            'mimetype': 'application/pdf',
+            'res_model': self._name,
+            'res_id': self.id,
+        })
+        return {
+            'type': 'ir.actions.act_url',
+            'url': f'/web/content/{attachment.id}?download=true',
+            'target': 'self',
+        }
+
     def action_print_report(self):
-        """Validates matching orders/lines and triggers the Requirement PDF Report."""
+        """Validates matching orders/lines and triggers the Requirement PDF Report.
+
+        Built directly with ReportLab (generate_pdf() on the matching report
+        model) instead of QWeb+wkhtmltopdf - see report/requirement_report.py.
+        Which report model is used still depends on delivery_channel exactly
+        as before (Courier -> report_requirement_courier, Regal Van ->
+        report_requirement); only how the PDF gets produced/returned changed."""
         self.ensure_one()
         domain = self._get_line_domain()
         matching_lines = self.env['sale.order.line'].search_count(domain)
@@ -98,10 +121,26 @@ class RequirementReportWizard(models.TransientModel):
             ))
 
         if self.delivery_channel == 'courier':
-            courier_action = self.env.ref('tl_rf_reports.action_report_requirement_courier', raise_if_not_found=False)
-            if courier_action:
-                return courier_action.report_action(self)
-        return self.env.ref('tl_rf_reports.action_report_requirement').report_action(self)
+            report_model = self.env['report.tl_rf_reports.report_requirement_courier']
+            filename_prefix = 'Courier_Requirement_Report_'
+        else:
+            report_model = self.env['report.tl_rf_reports.report_requirement']
+            filename_prefix = 'Requirement_Report_'
+
+        pdf_content = report_model.generate_pdf(self)
+        if not pdf_content:
+            channel_name = dict(self._fields['delivery_channel'].selection).get(self.delivery_channel, '')
+            raise UserError(_(
+                "No confirmed %s order lines found with delivery dates between %s and %s."
+            ) % (
+                channel_name,
+                self.delivery_date_from.strftime('%d/%m/%Y'),
+                self.delivery_date_to.strftime('%d/%m/%Y'),
+            ))
+
+        return self._download_action(
+            pdf_content, f"{filename_prefix}{self.delivery_date_from.strftime('%Y%m%d')}.pdf"
+        )
 
     def action_view_lines(self):
         """Opens the Sale Order Line list view grouped by category and delivery date."""
