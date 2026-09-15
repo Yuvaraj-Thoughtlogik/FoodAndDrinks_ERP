@@ -83,7 +83,9 @@ class ProductionReportWizard(models.TransientModel):
     @api.onchange('delivery_date_from')
     def _onchange_delivery_date_from(self):
         if self.delivery_date_from:
+            self.delivery_date_to = self.delivery_date_from
             self.packing_date_from = self.delivery_date_from - timedelta(days=1)
+            self.packing_date_to = self.delivery_date_from - timedelta(days=1)
 
     @api.onchange('delivery_date_to')
     def _onchange_delivery_date_to(self):

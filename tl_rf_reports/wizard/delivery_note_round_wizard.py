@@ -32,6 +32,15 @@ class DeliveryNoteRoundWizard(models.TransientModel):
         help="Ending delivery date for delivery note selection."
     )
 
+    @api.onchange('delivery_date_from')
+    def _onchange_delivery_date_from(self):
+        """Keep 'Delivery Date To' in sync with 'Delivery Date From' whenever
+        the start date changes, so a single-day selection (e.g. both = Sep 14)
+        is the default without extra clicks. If the user later picks a later
+        'To' date manually, that stays untouched until 'From' changes again."""
+        if self.delivery_date_from:
+            self.delivery_date_to = self.delivery_date_from
+
     @api.constrains('delivery_date_from', 'delivery_date_to')
     def _check_dates(self):
         for record in self:

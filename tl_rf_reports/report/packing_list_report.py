@@ -17,16 +17,12 @@ from odoo import api, fields, models, _
 
 
 class _PackingListHeaderMarker(Flowable):
-    """Zero-size flowable that stamps the current group's (customer order, or
-    batch) header text onto the canvas as soon as ReportLab draws it - see
-    report_delivery_note_round_van.py for the full explanation of this
-    technique. Inserted once at the top of each group's content, it makes
-    whatever it sets the "current" header for every physical page that group
-    spans, without any manual page-counting."""
+    """Zero-size flowable that stamps the current group's header text or dict onto
+    the canvas as soon as ReportLab draws it."""
 
-    def __init__(self, header_text):
+    def __init__(self, header_data):
         super().__init__()
-        self.header_text = header_text
+        self.header_data = header_data
         self.width = 0
         self.height = 0
 
@@ -34,19 +30,20 @@ class _PackingListHeaderMarker(Flowable):
         return (0, 0)
 
     def draw(self):
-        self.canv.current_header = self.header_text
+        self.canv.current_header = self.header_data
 
 
 class _PackingListCanvas(canvas.Canvas):
     """Two-pass canvas: replays every page once the header stamped by
-    _PackingListHeaderMarker for that page is known, so the banner can be
-    drawn identically to how the old QWeb template repeated it on every page
-    of a customer order / batch."""
+    _PackingListHeaderMarker for that page is known, drawing the 2-column batch
+    header banner and footer for Regal Van reports."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._saved_page_states = []
         self.current_header = None
+        self.printed_at_text = ''
+        self.delivery_channel = 'regal_van'
 
     def showPage(self):
         self._saved_page_states.append(dict(self.__dict__))
@@ -55,20 +52,73 @@ class _PackingListCanvas(canvas.Canvas):
     def save(self):
         for state in self._saved_page_states:
             self.__dict__.update(state)
-            self._draw_header()
+            self._draw_decorations()
             super().showPage()
         super().save()
 
-    def _draw_header(self):
-        if not self.current_header:
-            return
+    def _draw_decorations(self):
         self.saveState()
         margin = 12 * mm
         width = A4[0] - (2 * margin)
-        style = ParagraphStyle('PackingListHeaderBand', fontName='Helvetica', fontSize=10, leading=13)
-        p = Paragraph(self.current_header, style)
-        _, h = p.wrap(width, 40 * mm)
-        p.drawOn(self, margin, A4[1] - margin - h)
+
+        if self.delivery_channel == 'regal_van':
+            if self.current_header and isinstance(self.current_header, dict):
+                h_data = self.current_header
+                title_style = ParagraphStyle(
+                    'PLVanTitle', fontName='Helvetica-Bold', fontSize=18, leading=22, textColor=colors.black
+                )
+                batch_style = ParagraphStyle(
+                    'PLVanBatch', fontName='Helvetica-Bold', fontSize=14, leading=17, textColor=colors.black
+                )
+                date_style = ParagraphStyle(
+                    'PLVanDate', fontName='Helvetica-Bold', fontSize=12, leading=15, alignment=2, textColor=colors.black
+                )
+                depot_style = ParagraphStyle(
+                    'PLVanDepot', fontName='Helvetica-Bold', fontSize=12, leading=15, alignment=2, textColor=colors.black
+                )
+
+                left_flow = [
+                    Paragraph("Factory Only Packing List", title_style),
+                    Paragraph(
+                        f"{xml_escape(h_data.get('batch_code', ''))}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{xml_escape(h_data.get('batch_name', ''))}",
+                        batch_style,
+                    ),
+                ]
+                right_flow = [
+                    Paragraph(f"Delivery On: {xml_escape(h_data.get('delivery_date', ''))}", date_style),
+                ]
+                if h_data.get('depot_name'):
+                    right_flow.append(Paragraph(xml_escape(h_data.get('depot_name', '')), depot_style))
+
+                header_tbl = Table(
+                    [[left_flow, right_flow]],
+                    colWidths=[width * 0.58, width * 0.42],
+                )
+                header_tbl.setStyle(TableStyle([
+                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                    ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                    ('TOPPADDING', (0, 0), (-1, -1), 0),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+                ]))
+                _, h = header_tbl.wrap(width, 35 * mm)
+                header_tbl.drawOn(self, margin, A4[1] - margin - h)
+
+            if self.printed_at_text:
+                footer_style_right = ParagraphStyle(
+                    'PLVanFooterR', fontName='Helvetica', fontSize=9, leading=11, alignment=2, textColor=colors.black
+                )
+                footer_r = Paragraph(f"Printed at: {xml_escape(self.printed_at_text)}", footer_style_right)
+                footer_r.wrap(width, 8 * mm)
+                footer_r.drawOn(self, margin, 6 * mm)
+
+            page_style_center = ParagraphStyle(
+                'PLVanFooterC', fontName='Helvetica', fontSize=9, leading=11, alignment=0, textColor=colors.black
+            )
+            page_p = Paragraph(str(self._pageNumber), page_style_center)
+            page_p.wrap(40 * mm, 8 * mm)
+            page_p.drawOn(self, margin + (width * 0.48), 6 * mm)
+
         self.restoreState()
 
 
@@ -298,6 +348,7 @@ class ReportPackingList(models.AbstractModel):
                 prod_idx += num_to_take
 
                 is_cat_complete = prod_idx >= total_prods
+                is_fresh_or_smoked = ('FRESH' in cat_name) or ('SMOKED' in cat_name)
 
                 current_page_categories.append({
                     'categ_name': cat_name,
@@ -305,7 +356,7 @@ class ReportPackingList(models.AbstractModel):
                     'is_complete': is_cat_complete,
                     'total_boxes': (
                         total_boxes
-                        if is_cat_complete
+                        if (is_cat_complete and is_fresh_or_smoked)
                         else False
                     ),
                 })
@@ -879,24 +930,8 @@ class ReportPackingList(models.AbstractModel):
             return self._generate_courier_pdf(wizard)
         return self._generate_van_pdf(wizard)
 
-    def _pdf_styles(self):
-        return {
-            'title': ParagraphStyle('PLTitle', fontName='Helvetica-Bold', fontSize=20, leading=24),
-            'subtitle': ParagraphStyle('PLSubtitle', fontName='Helvetica', fontSize=11, leading=15, alignment=2),
-            'customer': ParagraphStyle('PLCustomer', fontName='Helvetica-Bold', fontSize=13, leading=16),
-            'address': ParagraphStyle('PLAddress', fontName='Helvetica-Bold', fontSize=13, leading=16, alignment=2),
-            'category': ParagraphStyle('PLCategory', fontName='Helvetica-Bold', fontSize=12, leading=15),
-            'col_header': ParagraphStyle('PLColHeader', fontName='Helvetica-BoldOblique', fontSize=9, leading=11),
-            'cell': ParagraphStyle('PLCell', fontName='Helvetica', fontSize=10, leading=13),
-            'cell_bold': ParagraphStyle('PLCellBold', fontName='Helvetica-Bold', fontSize=10, leading=13),
-            'total': ParagraphStyle('PLTotal', fontName='Helvetica-Bold', fontSize=10, leading=13, alignment=2),
-        }
-
     def _generate_courier_pdf(self, wizard):
-        """Uses plain ORM search() + recordset iteration rather than raw SQL -
-        the ORM already knows how each field is actually translated/stored,
-        so there's no risk of the "assumed jsonb, column is actually varchar"
-        class of bug a hand-written query can hit."""
+        """Generates pixel-perfect Courier Packing List PDF matching reference design."""
         p_from = (
             wizard.packing_date_from or (wizard.delivery_date_from - datetime.timedelta(days=1))
             if wizard.delivery_date_from else False
@@ -969,90 +1004,206 @@ class ReportPackingList(models.AbstractModel):
         if not orders_map:
             return None
 
-        styles = self._pdf_styles()
+        styles = {
+            'doc_title': ParagraphStyle('CourierDocTitle', fontName='Helvetica-Bold', fontSize=22, leading=26, textColor=colors.black),
+            'doc_dates': ParagraphStyle('CourierDocDates', fontName='Helvetica', fontSize=10.5, leading=14, alignment=2, textColor=colors.black),
+            'cust_name': ParagraphStyle('CourierCustName', fontName='Helvetica-Bold', fontSize=13, leading=16, textColor=colors.black),
+            'cust_addr': ParagraphStyle('CourierCustAddr', fontName='Helvetica-Bold', fontSize=13, leading=16, alignment=2, textColor=colors.black),
+            'category': ParagraphStyle('CourierCategory', fontName='Helvetica-Bold', fontSize=12, leading=15, textColor=colors.black),
+            'cell_qty': ParagraphStyle('CourierQty', fontName='Helvetica-Bold', fontSize=11, leading=14, textColor=colors.black),
+            'cell_x': ParagraphStyle('CourierX', fontName='Helvetica-Bold', fontSize=11, leading=14, alignment=1, textColor=colors.black),
+            'cell_name': ParagraphStyle('CourierName', fontName='Helvetica', fontSize=11, leading=14, textColor=colors.black),
+            'cell_weight': ParagraphStyle('CourierWeight', fontName='Helvetica', fontSize=11, leading=14, alignment=2, textColor=colors.black),
+            'polly_label': ParagraphStyle('CourierPollyLabel', fontName='Helvetica', fontSize=10.5, leading=13, textColor=colors.black),
+            'total_label': ParagraphStyle('CourierTotalLabel', fontName='Helvetica-Bold', fontSize=10.5, leading=13, alignment=2, textColor=colors.black),
+            'total_val': ParagraphStyle('CourierTotalVal', fontName='Helvetica-Bold', fontSize=11, leading=13, alignment=2, textColor=colors.black),
+        }
         width = self.PRINTABLE_WIDTH
-        story = [
-            Table(
-                [[
-                    Paragraph("Courier Packing List", styles['title']),
-                    Paragraph(
-                        f"For Packing between {xml_escape(packing_date_from_str)} and {xml_escape(packing_date_to_str)}"
-                        f"<br/>(Delivery {xml_escape(delivery_date_from_str)}-{xml_escape(delivery_date_to_str)})",
-                        styles['subtitle'],
-                    ),
-                ]],
-                colWidths=[width * 0.5, width * 0.5],
-            ),
-            HRFlowable(width=width, thickness=2, color=colors.black, spaceBefore=3 * mm, spaceAfter=4 * mm),
-        ]
+        story = []
+
+        # Top Document Header on First Page
+        top_header_table = Table(
+            [[
+                Paragraph("Courier Packing List", styles['doc_title']),
+                Paragraph(
+                    f"For Packing between {xml_escape(packing_date_from_str)} and {xml_escape(packing_date_to_str)}<br/>"
+                    f"(Delivery {xml_escape(delivery_date_from_str)}-{xml_escape(delivery_date_to_str)})",
+                    styles['doc_dates'],
+                ),
+            ]],
+            colWidths=[width * 0.45, width * 0.55],
+        )
+        top_header_table.setStyle(TableStyle([
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 0),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+            ('TOPPADDING', (0, 0), (-1, -1), 0),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ]))
+        story.append(top_header_table)
+        story.append(HRFlowable(width=width, thickness=2, color=colors.black, spaceBefore=2 * mm, spaceAfter=4 * mm))
 
         printed_orders = 0
         for oid, o_data in orders_map.items():
             category_list = []
             for c_key, c_val in sorted(
-                o_data['categories_map'].items(), key=lambda item: self._get_category_sort_key(item[1]['categ_name'])
+                o_data['categories_map'].items(),
+                key=lambda item: self._get_category_sort_key(item[1]['categ_name'])
             ):
                 sorted_prods = sorted(c_val['products'], key=self._get_sort_key)
                 if sorted_prods:
-                    category_list.append({'categ_name': c_val['categ_name'], 'products': sorted_prods})
+                    category_list.append({
+                        'categ_name': c_val['categ_name'],
+                        'products': sorted_prods,
+                    })
             if not category_list:
                 continue
 
-            if printed_orders:
+            if printed_orders > 0:
                 story.append(PageBreak())
             printed_orders += 1
 
-            header_text = (
-                f"<b>{xml_escape(o_data['customer_code'])}  {xml_escape(o_data['customer_name'])}</b>"
-                f"<br/>{xml_escape(o_data['address_line1'])} {xml_escape(o_data['address_line2'])}"
-            )
-            story.append(_PackingListHeaderMarker(header_text))
-            story.append(Spacer(1, 10 * mm))
+            # Customer Header
+            cust_left_text = f"<b>{xml_escape(o_data['customer_code'])}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{xml_escape(o_data['customer_name'])}</b>"
+            cust_right_parts = []
+            if o_data['address_line1']:
+                cust_right_parts.append(xml_escape(o_data['address_line1']))
+            if o_data['address_line2']:
+                cust_right_parts.append(xml_escape(o_data['address_line2']))
+            cust_right_text = f"<b>{'<br/>'.join(cust_right_parts)}</b>"
 
-            for cat in category_list:
-                rows = [[
-                    Paragraph(str(p['qty']), styles['cell_bold']),
-                    Paragraph("X", styles['cell']),
-                    Paragraph(xml_escape(p['product_name']), styles['cell']),
-                    Paragraph(str(p['weight_display']), styles['cell_bold']),
-                ] for p in cat['products']]
-                table = Table(rows, colWidths=[width * 0.08, width * 0.06, width * 0.72, width * 0.14])
-                table.setStyle(TableStyle([
-                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                    ('ALIGN', (3, 0), (3, -1), 'RIGHT'),
-                    ('TOPPADDING', (0, 0), (-1, -1), 1.5),
-                    ('BOTTOMPADDING', (0, 0), (-1, -1), 1.5),
-                ]))
-                story.append(KeepTogether([
-                    Paragraph(xml_escape(cat['categ_name']), styles['category']),
-                    HRFlowable(width=width, thickness=1.2, color=colors.black, spaceBefore=1 * mm, spaceAfter=1 * mm),
-                    table,
-                    HRFlowable(width=width, thickness=1.2, color=colors.black, spaceBefore=1 * mm, spaceAfter=3 * mm),
-                ]))
-
-            story.append(Spacer(1, 2 * mm))
-            total_row = Table(
+            cust_table = Table(
                 [[
-                    Paragraph("Total Weight - Not Inc Fres", styles['total']),
-                    Paragraph(str(int(round(o_data['total_order_weight_g']))), styles['cell_bold']),
+                    Paragraph(cust_left_text, styles['cust_name']),
+                    Paragraph(cust_right_text, styles['cust_addr']),
                 ]],
-                colWidths=[width * 0.82, width * 0.18],
+                colWidths=[width * 0.45, width * 0.55],
             )
-            total_row.setStyle(TableStyle([
-                ('BOX', (1, 0), (1, 0), 2, colors.black),
-                ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
-                ('TOPPADDING', (1, 0), (1, 0), 3), ('BOTTOMPADDING', (1, 0), (1, 0), 3),
-                ('RIGHTPADDING', (1, 0), (1, 0), 6), ('LEFTPADDING', (1, 0), (1, 0), 6),
+            cust_table.setStyle(TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                ('TOPPADDING', (0, 0), (-1, -1), 0),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
             ]))
-            story.append(total_row)
+            story.append(cust_table)
+            story.append(HRFlowable(width=width, thickness=2, color=colors.black, spaceBefore=2 * mm, spaceAfter=3 * mm))
+
+            # Categories and items
+            for cat in category_list:
+                story.append(Spacer(1, 2 * mm))
+                story.append(Paragraph(xml_escape(cat['categ_name']), styles['category']))
+                story.append(Spacer(1, 1 * mm))
+
+                rows = []
+                for p in cat['products']:
+                    rows.append([
+                        Paragraph(str(p['qty']), styles['cell_qty']),
+                        Paragraph("X", styles['cell_x']),
+                        Paragraph(xml_escape(p['product_name']), styles['cell_name']),
+                        Paragraph(str(p['weight_display']), styles['cell_weight']),
+                    ])
+
+                prod_table = Table(
+                    rows,
+                    colWidths=[28, 22, width - 28 - 22 - 70, 70],
+                )
+                prod_table.setStyle(TableStyle([
+                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                    ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                    ('TOPPADDING', (0, 0), (-1, -1), 2),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+                    ('ALIGN', (0, 0), (0, -1), 'LEFT'),
+                    ('ALIGN', (1, 0), (1, -1), 'CENTER'),
+                    ('ALIGN', (2, 0), (2, -1), 'LEFT'),
+                    ('ALIGN', (3, 0), (3, -1), 'RIGHT'),
+                ]))
+                story.append(prod_table)
+
+            # Full width line after products
+            story.append(HRFlowable(width=width, thickness=2, color=colors.black, spaceBefore=3 * mm, spaceAfter=3 * mm))
+
+            # Bottom Summary
+            polly_box_w = 32 * mm
+            polly_rows = [
+                [
+                    Table([['']], colWidths=[polly_box_w], rowHeights=[6.5 * mm], style=[('BOX', (0, 0), (-1, -1), 1.5, colors.black), ('BACKGROUND', (0, 0), (-1, -1), colors.white)]),
+                    Paragraph("Large Polly (s)", styles['polly_label']),
+                ],
+                [
+                    Table([['']], colWidths=[polly_box_w], rowHeights=[6.5 * mm], style=[('BOX', (0, 0), (-1, -1), 1.5, colors.black), ('BACKGROUND', (0, 0), (-1, -1), colors.white)]),
+                    Paragraph("Small Polly", styles['polly_label']),
+                ],
+                [
+                    Table([['']], colWidths=[polly_box_w], rowHeights=[6.5 * mm], style=[('BOX', (0, 0), (-1, -1), 1.5, colors.black), ('BACKGROUND', (0, 0), (-1, -1), colors.white)]),
+                    Paragraph("Dry Ice", styles['polly_label']),
+                ],
+            ]
+            polly_table = Table(
+                polly_rows,
+                colWidths=[polly_box_w + 3 * mm, 60 * mm],
+            )
+            polly_table.setStyle(TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                ('TOPPADDING', (0, 0), (-1, -1), 1.5),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 1.5),
+            ]))
+
+            tot_weight_str = str(int(round(o_data['total_order_weight_g'])))
+            weight_box = Table(
+                [[Paragraph(tot_weight_str, styles['total_val'])]],
+                colWidths=[24 * mm],
+                rowHeights=[7 * mm],
+            )
+            weight_box.setStyle(TableStyle([
+                ('BOX', (0, 0), (-1, -1), 2, colors.black),
+                ('BACKGROUND', (0, 0), (-1, -1), colors.white),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+                ('LEFTPADDING', (0, 0), (-1, -1), 4),
+                ('TOPPADDING', (0, 0), (-1, -1), 0),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+            ]))
+
+            total_table = Table(
+                [[
+                    Paragraph("Total Weight - Not Inc Fres", styles['total_label']),
+                    weight_box,
+                ]],
+                colWidths=[55 * mm, 26 * mm],
+            )
+            total_table.setStyle(TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                ('TOPPADDING', (0, 0), (-1, -1), 0),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+            ]))
+
+            summary_table = Table(
+                [[polly_table, total_table]],
+                colWidths=[width * 0.55, width * 0.45],
+            )
+            summary_table.setStyle(TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                ('TOPPADDING', (0, 0), (-1, -1), 0),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+            ]))
+            story.append(summary_table)
 
         if not printed_orders:
             return None
-        return self._build_pdf(story)
+
+        return self._build_pdf(story, delivery_channel='courier')
 
     def _generate_van_pdf(self, wizard):
-        """Uses plain ORM search() + recordset iteration rather than raw SQL -
-        see the note at the top of _generate_courier_pdf."""
+        """Generates pixel-perfect Factory Only Packing List (Regal Van) PDF matching reference design."""
         batch_domain = [
             ('delivery_date', '>=', wizard.delivery_date_from),
             ('delivery_date', '<=', wizard.delivery_date_to),
@@ -1093,8 +1244,11 @@ class ReportPackingList(models.AbstractModel):
                     if pid not in c_prods:
                         sort_num = self._extract_sort_number(product, line)
                         c_prods[pid] = {
-                            'product_id': pid, 'product_name': product.name, 'box_qty': 0.0,
-                            'sort_num': sort_num, 'sort_str': str(sort_num) if sort_num else '',
+                            'product_id': pid,
+                            'product_name': product.name,
+                            'box_qty': 0.0,
+                            'sort_num': sort_num,
+                            'sort_str': str(sort_num) if sort_num else '',
                         }
                     effective_qty = line.box_qty or line.product_uom_qty or 0.0
                     c_prods[pid]['box_qty'] += effective_qty
@@ -1102,15 +1256,31 @@ class ReportPackingList(models.AbstractModel):
         if not batches_map:
             return None
 
-        styles = self._pdf_styles()
+        now_utc = fields.Datetime.now()
+        now_local = fields.Datetime.context_timestamp(self, now_utc)
+        printed_at_str = now_local.strftime('%d/%m/%Y %H:%M:%S')
+
+        styles = {
+            'category': ParagraphStyle('PLVanCategory', fontName='Helvetica-Bold', fontSize=12, leading=15, textColor=colors.black),
+            'col_header_qty': ParagraphStyle('PLVanColQty', fontName='Helvetica-BoldOblique', fontSize=9.5, leading=12, alignment=1, textColor=colors.black),
+            'col_header_prod': ParagraphStyle('PLVanColProd', fontName='Helvetica-BoldOblique', fontSize=9.5, leading=12, alignment=0, textColor=colors.black),
+            'col_header_sort': ParagraphStyle('PLVanColSort', fontName='Helvetica', fontSize=9.5, leading=12, alignment=2, textColor=colors.black),
+            'cell_qty': ParagraphStyle('PLVanCellQty', fontName='Helvetica-Bold', fontSize=9.5, leading=12, alignment=1, textColor=colors.black),
+            'cell_prod': ParagraphStyle('PLVanCellProd', fontName='Helvetica', fontSize=9.5, leading=12, alignment=0, textColor=colors.black),
+            'cell_sort': ParagraphStyle('PLVanCellSort', fontName='Helvetica', fontSize=9.5, leading=12, alignment=2, textColor=colors.black),
+            'boxes_label': ParagraphStyle('PLVanBoxes', fontName='Helvetica-Bold', fontSize=11, leading=14, alignment=0, textColor=colors.black),
+            'checked_by': ParagraphStyle('PLVanCheckedBy', fontName='Helvetica', fontSize=10.5, leading=13, alignment=2, textColor=colors.black),
+        }
         width = self.PRINTABLE_WIDTH
         story = []
         printed_batches = 0
+
         for bid, b_data in batches_map.items():
             category_list = []
             batch_total_boxes = 0
             for c_key, c_val in sorted(
-                b_data['categories_map'].items(), key=lambda item: self._get_category_sort_key(item[1]['categ_name'])
+                b_data['categories_map'].items(),
+                key=lambda item: self._get_category_sort_key(item[1]['categ_name'])
             ):
                 sorted_prods = sorted(c_val['products'].values(), key=self._get_sort_key)
                 for p in sorted_prods:
@@ -1118,13 +1288,13 @@ class ReportPackingList(models.AbstractModel):
                 cat_total = int(round(sum(p['box_qty'] for p in sorted_prods)))
                 batch_total_boxes += cat_total
                 if sorted_prods:
-                    category_list.append({'categ_name': c_val['categ_name'], 'products': sorted_prods, 'total_boxes': cat_total})
+                    category_list.append({
+                        'categ_name': c_val['categ_name'],
+                        'products': sorted_prods,
+                        'total_boxes': cat_total,
+                    })
             if not category_list:
                 continue
-
-            if printed_batches:
-                story.append(PageBreak())
-            printed_batches += 1
 
             batch = b_data['batch']
             depot_name = batch.depot_id.name or 'Grimsby'
@@ -1132,60 +1302,100 @@ class ReportPackingList(models.AbstractModel):
             batch_code = batch.code or ''
             batch_name = (batch.round_id.name if batch.round_id else False) or batch.reference or ''
 
-            header_text = (
-                f"<b>Factory Only Packing List</b>&nbsp;&nbsp;&nbsp;{xml_escape(batch_code)}  {xml_escape(batch_name)}"
-                f"<br/>Delivery On: {xml_escape(delivery_date_str)}"
-                + (f"&nbsp;&nbsp;&nbsp;{xml_escape(depot_name)}" if depot_name else '')
-            )
-            story.append(_PackingListHeaderMarker(header_text))
-            story.append(Spacer(1, 14 * mm))
+            batch_header_data = {
+                'batch_code': batch_code,
+                'batch_name': batch_name,
+                'delivery_date': delivery_date_str,
+                'depot_name': depot_name,
+            }
 
-            for cat in category_list:
-                header_row = Table(
-                    [[Paragraph("Quantity", styles['col_header']), Paragraph("Product / Box Contents", styles['col_header']),
-                      Paragraph("Sort", styles['col_header'])]],
-                    colWidths=[width * 0.12, width * 0.76, width * 0.12],
-                )
-                header_row.setStyle(TableStyle([('LINEBELOW', (0, 0), (-1, 0), 1.5, colors.black)]))
+            batch_pages = self._paginate_batch_categories(category_list)
 
-                rows = [[
-                    Paragraph(str(p['qty_display']), styles['cell_bold']),
-                    Paragraph(xml_escape(p['product_name'] or ''), styles['cell']),
-                    Paragraph(xml_escape(p['sort_str']), styles['cell']),
-                ] for p in cat['products']]
-                table = Table(rows, colWidths=[width * 0.12, width * 0.76, width * 0.12])
-                table.setStyle(TableStyle([
-                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                    ('ALIGN', (0, 0), (0, -1), 'CENTER'),
-                    ('ALIGN', (2, 0), (2, -1), 'RIGHT'),
-                    ('LINEBELOW', (0, 0), (-1, -1), 0.5, colors.black),
-                    ('TOPPADDING', (0, 0), (-1, -1), 2), ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
-                ]))
+            for page_idx, page in enumerate(batch_pages):
+                if printed_batches > 0 or page_idx > 0:
+                    story.append(PageBreak())
+                if page_idx == 0:
+                    story.append(_PackingListHeaderMarker(batch_header_data))
 
-                elements = [
-                    Paragraph(xml_escape(cat['categ_name']), styles['category']),
-                    Spacer(1, 2 * mm), header_row, table,
-                    Paragraph(f"{cat['total_boxes']} Boxes", styles['total']),
-                    Spacer(1, 5 * mm),
-                ]
-                story.append(KeepTogether(elements))
+                for cat in page['categories']:
+                    cat_name = cat['categ_name']
+                    story.append(Paragraph(xml_escape(cat_name), styles['category']))
+                    story.append(Spacer(1, 1 * mm))
 
-            story.append(Spacer(1, 8 * mm))
-            story.append(Paragraph("Checked By _____________________", styles['total']))
+                    # Column Header Table
+                    col_widths = [22 * mm, width - 42 * mm, 20 * mm]
+                    header_row = Table(
+                        [[
+                            Paragraph("Quantity", styles['col_header_qty']),
+                            Paragraph("Product / Box Contents", styles['col_header_prod']),
+                            Paragraph("Sort", styles['col_header_sort']),
+                        ]],
+                        colWidths=col_widths,
+                    )
+                    header_row.setStyle(TableStyle([
+                        ('VALIGN', (0, 0), (-1, -1), 'BOTTOM'),
+                        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                        ('TOPPADDING', (0, 0), (-1, -1), 1),
+                        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+                        ('LINEBELOW', (0, 0), (-1, -1), 1.5, colors.black),
+                    ]))
+                    story.append(header_row)
+
+                    # Product rows
+                    rows = []
+                    for p in cat['products']:
+                        rows.append([
+                            Paragraph(str(p['qty_display']), styles['cell_qty']),
+                            Paragraph(xml_escape(p['product_name'] or ''), styles['cell_prod']),
+                            Paragraph(xml_escape(p['sort_str'] or ''), styles['cell_sort']),
+                        ])
+
+                    table = Table(rows, colWidths=col_widths)
+                    table.setStyle(TableStyle([
+                        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                        ('TOPPADDING', (0, 0), (-1, -1), 2.5),
+                        ('BOTTOMPADDING', (0, 0), (-1, -1), 2.5),
+                        ('LINEBELOW', (0, 0), (-1, -1), 0.6, colors.black),
+                    ]))
+                    story.append(table)
+
+                    # Show "XX Boxes" ONLY when category is complete AND ('FRESH' in cat_name or 'SMOKED' in cat_name)
+                    if cat.get('is_complete') and ('FRESH' in cat_name or 'SMOKED' in cat_name):
+                        story.append(Spacer(1, 1.5 * mm))
+                        story.append(Paragraph(f"{cat['total_boxes']} Boxes", styles['boxes_label']))
+                        story.append(Spacer(1, 3 * mm))
+                    else:
+                        story.append(Spacer(1, 4 * mm))
+
+                if page.get('is_last_page'):
+                    story.append(Spacer(1, 6 * mm))
+                    story.append(Paragraph("Checked By ________________", styles['checked_by']))
+
+            printed_batches += 1
 
         if not printed_batches:
             return None
-        return self._build_pdf(story)
 
-    def _build_pdf(self, story):
+        return self._build_pdf(story, printed_at_text=printed_at_str, delivery_channel='regal_van')
+
+    def _build_pdf(self, story, printed_at_text='', delivery_channel='regal_van'):
         buffer = io.BytesIO()
+        top_margin = 28 * mm if delivery_channel == 'regal_van' else 12 * mm
+        bottom_margin = 14 * mm if delivery_channel == 'regal_van' else 12 * mm
         doc = SimpleDocTemplate(
             buffer, pagesize=A4,
-            leftMargin=12 * mm, rightMargin=12 * mm, topMargin=32 * mm, bottomMargin=12 * mm,
+            leftMargin=12 * mm, rightMargin=12 * mm,
+            topMargin=top_margin, bottomMargin=bottom_margin,
         )
 
         def _make_canvas(*args, **kwargs):
-            return _PackingListCanvas(*args, **kwargs)
+            c = _PackingListCanvas(*args, **kwargs)
+            c.printed_at_text = printed_at_text
+            c.delivery_channel = delivery_channel
+            return c
 
         doc.build(story, canvasmaker=_make_canvas)
         pdf_value = buffer.getvalue()
