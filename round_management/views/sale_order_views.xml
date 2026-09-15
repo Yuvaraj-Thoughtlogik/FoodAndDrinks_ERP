@@ -262,7 +262,7 @@
             <!-- Replace the default 'name' field so it becomes the primary Enter-key action -->
             <xpath expr="//search/field[@name='name']" position="replace">
                 <field name="name" 
-                       string="Order / Customer / Zip / Phone" 
+                       string="Order / Customer Code / Zip / Phone" 
                        filter_domain="['|', '|', '|', '|',
                            ('name', 'ilike', self),
                            ('partner_id.name', 'ilike', self),
