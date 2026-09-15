@@ -18,9 +18,9 @@ class RoundManagementBatch(models.Model):
     code = fields.Char(string='Batch Code', required=True, copy=False, default=_default_batch_code)
     round_id = fields.Many2one('round.management.round', string='Round', required=True,domain="[('state', '=', 'active')]")
     round_code = fields.Char(related='round_id.code', string='Round Code', readonly=True,store=True)
-    reference = fields.Char(string='Reference')
-    depot_id = fields.Many2one('stock.warehouse', string='Depot')
-    delivery_date = fields.Date(string='Delivery Date', default=fields.Date.context_today)
+    reference = fields.Char(string='Reference', required=True)
+    depot_id = fields.Many2one('stock.warehouse', string='Depot', required=True)
+    delivery_date = fields.Date(string='Delivery Date', default=fields.Date.context_today, required=True)
     delivery_times = fields.Char(string='Delivery Times', compute='_compute_delivery_times', store=True)
     week_number = fields.Char(string='ISO Week No.', compute='_compute_week_number', store=True)
     state = fields.Selection([
@@ -160,7 +160,13 @@ class RoundManagementBatch(models.Model):
             ('courier', 'Courier Delivery'),
         ],
         string='Delivery Channels',
+        required=True,
     )
+    
+    @api.onchange('round_id')
+    def _onchange_round_id_set_reference(self):
+        if self.round_id:
+            self.reference = self.round_id.name
 
     @api.onchange('round_id')
     def _onchange_round_id(self):
@@ -534,7 +540,7 @@ class RoundManagementBatch(models.Model):
         domain = [
             ('round_id', '=', round_id),
             ('state', '=', 'act'),
-            ('delivery_channel','!=','courier'),
+            ('delivery_channel', '!=', 'courier'),
             ('delivery_date', '>=', start_date),
             ('delivery_date', '<=', end_date),
         ]
@@ -546,8 +552,13 @@ class RoundManagementBatch(models.Model):
         return self.search(domain)
 
     def _get_active_batch_warning_message(self, active_batches):
-        """Builds a formatted warning message separating batches before and after delivery date."""
+        """Builds a formatted warning message displaying Reference - Delivery Date without time."""
         sections = []
+
+        def format_batch_line(batch):
+            ref = batch.reference or batch.code or ''
+            date_str = batch.delivery_date.strftime('%d-%m-%Y') if batch.delivery_date else ''
+            return f"   • {ref} - {date_str}" if date_str else f"   • {ref}"
 
         batches_before = active_batches.filtered(
             lambda b: b.delivery_date and self.delivery_date and b.delivery_date < self.delivery_date
@@ -560,29 +571,29 @@ class RoundManagementBatch(models.Model):
         )
 
         if batches_before:
-            before_list = "\n".join(f"   • {b.display_name}" for b in batches_before)
-            sections.append(_("Active Batches Before Delivery Date (Within 4 Weeks):\n%s") % before_list)
+            before_list = "\n".join(format_batch_line(b) for b in batches_before)
+            sections.append(f"Active Batches Before Delivery Date (Within 4 Weeks):\n{before_list}")
 
         if batches_same:
-            same_list = "\n".join(f"   • {b.display_name}" for b in batches_same)
-            sections.append(_("Active Batches on Same Date:\n%s") % same_list)
+            same_list = "\n".join(format_batch_line(b) for b in batches_same)
+            sections.append(f"Active Batches on Same Date:\n{same_list}")
 
         if batches_after:
-            after_list = "\n".join(f"   • {b.display_name}" for b in batches_after)
-            sections.append(_("Active Batches After Delivery Date (Within 4 Weeks):\n%s") % after_list)
+            after_list = "\n".join(format_batch_line(b) for b in batches_after)
+            sections.append(f"Active Batches After Delivery Date (Within 4 Weeks):\n{after_list}")
 
         other_batches = active_batches - batches_before - batches_same - batches_after
         if other_batches:
-            other_list = "\n".join(f"   • {b.display_name}" for b in other_batches)
-            sections.append(_("Other Active Batches:\n%s") % other_list)
+            other_list = "\n".join(format_batch_line(b) for b in other_batches)
+            sections.append(f"Other Active Batches:\n{other_list}")
 
         sections_str = "\n\n".join(sections)
 
-        return _(
+        return (
             "Existing active batch(es) found for this round within 4 weeks:\n\n"
-            "%(sections)s\n\n"
+            f"{sections_str}\n\n"
             "Do you wish to continue?"
-        ) % {'sections': sections_str}
+        )
 
     def _open_active_batch_warning_wizard(self, active_batches, trigger_start=False):
         """Opens the custom transient wizard with OK and Cancel buttons."""
@@ -606,8 +617,6 @@ class RoundManagementBatch(models.Model):
             'target': 'new',
             'context': context,
         }
-
-   
 
     @api.onchange('round_id', 'delivery_date')
     def _onchange_check_existing_active_batches(self):
