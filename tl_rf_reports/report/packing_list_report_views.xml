@@ -80,7 +80,7 @@
                                                 and
                                                 <t t-esc="packing_date_to_str"/>
                                             </div>
-                                            <div>(Delivery<t t-esc="delivery_date_from_str"/>-<t
+                                            <div>(Delivery <t t-esc="delivery_date_from_str"/>-<t
                                                     t-esc="delivery_date_to_str"/>)
                                             </div>
                                         </div>
@@ -91,7 +91,7 @@
 
                                 <!-- Customer Info Header: repeated on every page of this order -->
                                 <div style="width: 100%; margin-top: 2px; margin-bottom: 4px;">
-                                    <div style="float: left; width: 42%;">
+                                    <div style="float: left; width: 45%;">
                                         <div style="font-size: 17px; font-weight: bold; color: #000000; line-height: 1.3;">
                                             <span style="display: inline-block; min-width: 85px;">
                                                 <t t-esc="order['customer_code']"/>
@@ -101,7 +101,7 @@
                                             </span>
                                         </div>
                                     </div>
-                                    <div style="float: right; width: 58%; text-align: right;">
+                                    <div style="float: right; width: 55%; text-align: right;">
                                         <div style="font-size: 17px; font-weight: bold; color: #000000; line-height: 1.3;">
                                             <t t-if="order.get('address_line1')">
                                                 <div>
@@ -137,20 +137,47 @@
                                             <div style="float: left; width: calc(100% - 155px); text-align: left; padding-left: 8px;">
                                                 <t t-esc="prod['product_name']"/>
                                             </div>
-                                            <div style="float: right; width: 95px; text-align: right; font-weight: bold;">
+                                            <div style="float: right; width: 95px; text-align: right; font-weight: normal;">
                                                 <t t-esc="prod['weight_display']"/>
                                             </div>
                                             <div style="clear: both;"/>
                                         </div>
                                     </t>
-
-                                    <div style="width: 100%; border-bottom: 2px solid #000000; margin-top: 6px; margin-bottom: 8px;"/>
                                 </t>
 
                                 <!-- Bottom Section: only on the LAST page of this order -->
                                 <t t-if="page['is_last_page']">
+                                    <div style="width: 100%; border-bottom: 2px solid #000000; margin-top: 8px; margin-bottom: 10px;"/>
+
                                     <div style="width: 100%; margin-top: 4px;">
-                                        <div style="float: right; text-align: right;">
+                                        <!-- <div style="float: left; width: 55%;">
+                                            <div style="margin-bottom: 6px; line-height: 22px;">
+                                                <div style="width: 75px; height: 22px; border: 2px solid #000000; display: inline-block; vertical-align: middle; margin-right: 10px; background-color: #ffffff;">
+                                                    &#160;
+                                                </div>
+                                                <span style="font-size: 15px; font-weight: normal; color: #000000; vertical-align: middle;">
+                                                    Large Polly (s)
+                                                </span>
+                                            </div>
+                                            <div style="margin-bottom: 6px; line-height: 22px;">
+                                                <div style="width: 75px; height: 22px; border: 2px solid #000000; display: inline-block; vertical-align: middle; margin-right: 10px; background-color: #ffffff;">
+                                                    &#160;
+                                                </div>
+                                                <span style="font-size: 15px; font-weight: normal; color: #000000; vertical-align: middle;">
+                                                    Small Polly
+                                                </span>
+                                            </div>
+                                            <div style="margin-bottom: 6px; line-height: 22px;">
+                                                <div style="width: 75px; height: 22px; border: 2px solid #000000; display: inline-block; vertical-align: middle; margin-right: 10px; background-color: #ffffff;">
+                                                    &#160;
+                                                </div>
+                                                <span style="font-size: 15px; font-weight: normal; color: #000000; vertical-align: middle;">
+                                                    Dry Ice
+                                                </span>
+                                            </div>
+                                        </div> -->
+
+                                        <div style="float: right; width: 45%; text-align: right;">
                                             <span style="font-size: 14px; font-weight: bold; color: #000000; margin-right: 8px; vertical-align: middle;">
                                                 Total Weight - Not Inc Fres
                                             </span>
@@ -158,53 +185,9 @@
                                                 <t t-esc="order['total_weight_g']"/>
                                             </span>
                                         </div>
-
-<!--                                        <div style="float: left;">-->
-<!--                                            <div style="margin-bottom: 6px; line-height: 24px;">-->
-<!--                                                <div style="width: 75px; height: 24px; border: 2px solid #000000; display: inline-block; vertical-align: middle; margin-right: 10px; background-color: #ffffff;">-->
-<!--                                                    &#160;-->
-<!--                                                </div>-->
-<!--                                                <span style="font-size: 15px; font-weight: bold; color: #000000; vertical-align: middle;">-->
-<!--                                                    Large Polly (s)-->
-<!--                                                </span>-->
-<!--                                            </div>-->
-<!--                                            <div style="margin-bottom: 6px; line-height: 24px;">-->
-<!--                                                <div style="width: 75px; height: 24px; border: 2px solid #000000; display: inline-block; vertical-align: middle; margin-right: 10px; background-color: #ffffff;">-->
-<!--                                                    &#160;-->
-<!--                                                </div>-->
-<!--                                                <span style="font-size: 15px; font-weight: bold; color: #000000; vertical-align: middle;">-->
-<!--                                                    Small Polly-->
-<!--                                                </span>-->
-<!--                                            </div>-->
-<!--                                            <div style="margin-bottom: 6px; line-height: 24px;">-->
-<!--                                                <div style="width: 75px; height: 24px; border: 2px solid #000000; display: inline-block; vertical-align: middle; margin-right: 10px; background-color: #ffffff;">-->
-<!--                                                    &#160;-->
-<!--                                                </div>-->
-<!--                                                <span style="font-size: 15px; font-weight: bold; color: #000000; vertical-align: middle;">-->
-<!--                                                    Dry Ice-->
-<!--                                                </span>-->
-<!--                                            </div>-->
-<!--                                        </div>-->
                                         <div style="clear: both;"/>
                                     </div>
                                 </t>
-
-<!--                                &lt;!&ndash; Footer: continuous page numbering across the whole courier report &ndash;&gt;-->
-<!--                                <div class="footer"-->
-<!--                                     style="font-family: Arial, Helvetica, sans-serif; font-size: 10px; color: #000000; border-top: none; padding: 0; width: 100%;">-->
-<!--                                    <div style="position: relative; width: 100%; text-align: center;">-->
-<!--                                        <span style="font-size: 10px; font-weight: normal;">-->
-<!--                                            Page-->
-<!--                                            <t t-esc="page['page_number']"/>-->
-<!--                                            of-->
-<!--                                            <t t-esc="page['total_pages']"/>-->
-<!--                                        </span>-->
-<!--                                        <span style="position: absolute; right: 0; top: 0; font-size: 10px;">-->
-<!--                                            Printed at:-->
-<!--                                            <t t-esc="printed_at"/>-->
-<!--                                        </span>-->
-<!--                                    </div>-->
-<!--                                </div>-->
                             </div>
                         </t>
                     </t>
@@ -237,20 +220,11 @@
                 <t t-if="batch_groups">
                     <t t-foreach="batch_groups" t-as="group">
                         <t t-foreach="group['pages']" t-as="page">
-                            <!--
-                                Page-break rule:
-                                - Break before the FIRST page of a NEW batch (always start a new batch on a fresh page).
-                                - Break before any CONTINUATION page of the same batch, i.e. when this batch's
-                                  content overflowed the previous page (page_first is False within this group).
-                                - Do NOT break between the last page of one batch and the first page of the next
-                                  batch's own first page other than the mandatory "new batch = new page" rule above
-                                  (that's already covered by group_first).
-                            -->
                             <div class="article packing-page"
                                  t-attf-style="#{'page-break-before: always;' if not (group_first and page_first) else ''}">
                                 <!-- Batch Header: repeated on every page -->
                                 <div style="width: 100%; border: none !important; margin-bottom: 12px;">
-                                    <div style="float: left; width: 60%; border: none !important;">
+                                    <div style="float: left; width: 58%; border: none !important;">
                                         <div style="font-size: 22px; font-weight: bold; color: #000000; line-height: 1.2;">
                                             Factory Only Packing List
                                         </div>
@@ -263,7 +237,7 @@
                                             </span>
                                         </div>
                                     </div>
-                                    <div style="float: right; width: 40%; text-align: right; border: none !important;">
+                                    <div style="float: right; width: 42%; text-align: right; border: none !important;">
                                         <div style="font-size: 16px; font-weight: bold; color: #000000; line-height: 1.2;">
                                             <span>Delivery On:</span>
                                             <t t-esc="group['delivery_date']"/>
@@ -309,13 +283,10 @@
                                             </div>
                                         </t>
 
-                                        <!-- Only show box total when this category is complete on this page -->
-                                        <t t-if="cat.get('is_complete')">
-                                            <div style="margin-top: 2px; margin-bottom: 14px;">
-                                                <div style="border-top: 2px solid #000000; width: 110px; text-align: center; padding-top: 3px; font-size: 15px; font-weight: bold; color: #000000;">
-                                                    <t t-esc="cat['total_boxes']"/>
-                                                    Boxes
-                                                </div>
+                                        <!-- Only show box total when this category is complete on this page and is FRESH or SMOKED -->
+                                        <t t-if="cat.get('is_complete') and ('FRESH' in cat['categ_name'] or 'SMOKED' in cat['categ_name'])">
+                                            <div style="margin-top: 4px; margin-bottom: 12px; font-size: 15px; font-weight: bold; color: #000000;">
+                                                <t t-esc="cat['total_boxes']"/> Boxes
                                             </div>
                                         </t>
                                     </t>
@@ -323,7 +294,7 @@
                                     <!-- Checked By: only on last page of this batch -->
                                     <t t-if="page['is_last_page']">
                                         <div style="margin-top: 25px; margin-bottom: 10px; text-align: right; padding-right: 10px; page-break-inside: avoid;">
-                                            <span style="font-size: 14px; font-weight: 500; color: #000000;">Checked By
+                                            <span style="font-size: 14px; font-weight: normal; color: #000000;">Checked By
                                                 _____________________
                                             </span>
                                         </div>
@@ -333,8 +304,11 @@
                                 <!-- Footer: continuous page numbering across the WHOLE regal van report -->
                                 <div class="footer"
                                      style="font-family: Arial, Helvetica, sans-serif; font-size: 10px; color: #000000; border-top: none; padding: 0; width: 100%;">
-                                    <div style="position: relative; width: 100%;">
-                                        <span style="position: absolute; left: 0; top: 0; font-size: 10px;">
+                                    <div style="position: relative; width: 100%; text-align: center;">
+                                        <span style="font-size: 10px; font-weight: normal;">
+                                            <t t-esc="page['page_number']"/>
+                                        </span>
+                                        <span style="position: absolute; right: 0; top: 0; font-size: 10px;">
                                             Printed at:
                                             <t t-esc="printed_at"/>
                                         </span>
