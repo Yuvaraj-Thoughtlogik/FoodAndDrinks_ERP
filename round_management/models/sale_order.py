@@ -141,6 +141,31 @@ class SaleOrder(models.Model):
     pay_cheque = fields.Boolean(string="Cheque", default=False)
     pay_card = fields.Boolean(string="Card", default=False)
 
+    delivery_channel = fields.Selection(
+        selection=[
+            ('regal_van', 'Regal Van Delivery'),
+            ('courier', 'Courier Delivery'),
+        ],
+        string='Delivery Channel',
+        compute='_compute_delivery_channel',
+        store=True,
+        readonly=False,
+        help="Automatically mapped based on the selected Round Batch."
+    )
+
+    @api.depends('batch_id', 'batch_id.delivery_channel')
+    def _compute_delivery_channel(self):
+        for order in self:
+            if order.batch_id and order.batch_id.delivery_channel:
+                order.delivery_channel = order.batch_id.delivery_channel
+            elif not order.delivery_channel:
+                order.delivery_channel = False
+
+    @api.onchange('batch_id')
+    def _onchange_batch_id_set_delivery_channel(self):
+        if self.batch_id and self.batch_id.delivery_channel:
+            self.delivery_channel = self.batch_id.delivery_channel
+
     @api.onchange('pay_card_reader')
     def _onchange_pay_card_reader(self):
         if self.pay_card_reader:
@@ -470,8 +495,8 @@ class SaleOrder(models.Model):
         for order in self:
             if order.pricelist_id and order.pricelist_id.pricelist_category == 'b2b':
                 order.is_b2b = True
-            #elif order.partner_id and order.partner_id.customer_type == 'b2b_trade':
-                #order.is_b2b = True
+            # elif order.partner_id and order.partner_id.customer_type == 'b2b_trade':
+            # order.is_b2b = True
             else:
                 order.is_b2b = False
 
@@ -483,7 +508,7 @@ class SaleOrder(models.Model):
                 order.is_staff_order = (order.pricelist_id.pricelist_category == 'staff')
             else:
                 order.is_staff_order = False
-            
+
     @api.depends('partner_id', 'partner_id.round_id')
     def _compute_partner_id_set_round(self):
         for rec in self:
@@ -491,7 +516,7 @@ class SaleOrder(models.Model):
                 rec.round_id = rec.partner_id.round_id
             else:
                 rec.round_id = False
-    
+
     @api.depends('round_id')
     def _compute_auto_select_batch_id(self):
         today = fields.Date.context_today(self)
@@ -515,7 +540,7 @@ class SaleOrder(models.Model):
                 ], order='delivery_date desc, id desc', limit=1)
 
             order.batch_id = next_batch.id if next_batch else False
-            
+
     @api.onchange('round_id')
     def _onchange_round_id_auto_select_next_batch(self):
         """
@@ -543,15 +568,16 @@ class SaleOrder(models.Model):
             ], order='delivery_date desc, id desc', limit=1)
 
         self.batch_id = next_batch if next_batch else False
-            
+
+
 class SaleOrderLine(models.Model):
     _inherit = 'sale.order.line'
 
-    
     special_requirements_notes = fields.Text(
         string="Special Notes"
     )
-    
+
+
 class Pricelist(models.Model):
     _inherit = 'product.pricelist'
 
