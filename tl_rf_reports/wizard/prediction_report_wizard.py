@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import base64
+import io
 
 from odoo import api, fields, models
 from odoo.tools import _
@@ -14,11 +15,14 @@ class PredictionReportWizard(models.TransientModel):
         selection=[
             ('regal_van', 'Regal Van Delivery'),
             ('courier', 'Courier Delivery'),
+            ('both', 'Both'),
         ],
         string='Delivery Channel',
         required=True,
         default='regal_van',
-        help="Select delivery channel for the report."
+        help="Select delivery channel for the report. 'Both' prints the "
+             "existing Regal Van and Courier reports one after the other, "
+             "combined into a single PDF."
     )
     delivery_date_from = fields.Date(
         string='Delivery Date From',
@@ -239,13 +243,34 @@ class PredictionReportWizard(models.TransientModel):
             'target': 'self',
         }
 
+    def _get_channel_wizard(self, channel):
+        """Returns a throwaway prediction.report.wizard record - a copy of
+        this wizard with delivery_channel forced to a single real channel
+        ('regal_van' or 'courier') - so the existing, unmodified per-channel
+        report logic (_get_line_domain(), generate_pdf()) can be reused as-is
+        for each half of the 'Both' combined report."""
+        self.ensure_one()
+        return self.create({
+            'delivery_channel': channel,
+            'delivery_date_from': self.delivery_date_from,
+            'delivery_date_to': self.delivery_date_to,
+            'depot_ids': [(6, 0, self.depot_ids.ids)],
+            'categ_ids': [(6, 0, self.categ_ids.ids)],
+        })
+
     def action_print_report(self):
         """Validates matching orders/lines and triggers the Prediction PDF Report.
 
         Built directly with ReportLab (generate_pdf() on the report model)
         instead of QWeb+wkhtmltopdf, same as the other reports in this module -
-        this stays fully synchronous, no background job needed."""
+        this stays fully synchronous, no background job needed.
+
+        'Both' is handled separately by _action_print_combined_report()."""
         self.ensure_one()
+
+        if self.delivery_channel == 'both':
+            return self._action_print_combined_report()
+
         domain = self._get_line_domain()
         matching_lines = self.env['sale.order.line'].search_count(domain)
         if not matching_lines:
@@ -276,6 +301,63 @@ class PredictionReportWizard(models.TransientModel):
                 self.delivery_date_to.strftime('%d/%m/%Y'),
             ))
         return self._download_action(pdf_content, filename)
+
+    def _action_print_combined_report(self):
+        """'Both': generates the Regal Van and Courier prediction reports
+        separately, using their existing/unmodified report logic and
+        templates, then concatenates them into a single PDF - Regal Van
+        first, Courier second. Each is a fully independent document, so
+        appending their pages always starts the Courier report on a fresh
+        page, never mid-page.
+
+        Whichever channel has no matching data is silently skipped (rather
+        than failing the whole print), and this only raises when neither
+        channel has anything to print."""
+        self.ensure_one()
+
+        van_wizard = self._get_channel_wizard('regal_van')
+        courier_wizard = self._get_channel_wizard('courier')
+        SaleOrderLine = self.env['sale.order.line']
+
+        try:
+            has_van = bool(SaleOrderLine.search_count(van_wizard._get_line_domain()))
+            has_courier = bool(SaleOrderLine.search_count(courier_wizard._get_line_domain()))
+
+            if not has_van and not has_courier:
+                raise UserError(_(
+                    "No confirmed Regal Van or Courier order lines found with delivery dates between %s and %s."
+                ) % (
+                    self.delivery_date_from.strftime('%d/%m/%Y'),
+                    self.delivery_date_to.strftime('%d/%m/%Y'),
+                ))
+
+            van_pdf = self.env['report.tl_rf_reports.report_prediction'].generate_pdf(van_wizard) if has_van else None
+            courier_pdf = self.env['report.tl_rf_reports.report_prediction_courier'].generate_pdf(courier_wizard) if has_courier else None
+        finally:
+            (van_wizard | courier_wizard).unlink()
+
+        # Order matters: Regal Van always first, Courier always second.
+        pdfs = [pdf for pdf in (van_pdf, courier_pdf) if pdf]
+        if not pdfs:
+            raise UserError(_(
+                "No confirmed Regal Van or Courier order lines with printable data were found with "
+                "delivery dates between %s and %s."
+            ) % (
+                self.delivery_date_from.strftime('%d/%m/%Y'),
+                self.delivery_date_to.strftime('%d/%m/%Y'),
+            ))
+
+        if len(pdfs) == 1:
+            combined_pdf = pdfs[0]
+        else:
+            streams = [io.BytesIO(pdf) for pdf in pdfs]
+            merged_stream = self.env['ir.actions.report']._merge_pdfs(streams)
+            combined_pdf = merged_stream.getvalue()
+            merged_stream.close()
+
+        return self._download_action(
+            combined_pdf, f"Prediction_Report_Combined_{self.delivery_date_from.strftime('%Y%m%d')}.pdf"
+        )
 
     def action_view_lines(self):
         """Generates the prediction report lines and opens their list view."""

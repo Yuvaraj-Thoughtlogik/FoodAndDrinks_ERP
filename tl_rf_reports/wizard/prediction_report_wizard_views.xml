@@ -46,7 +46,8 @@
                     <button name="action_print_report" string="Print PDF" type="object"
                         class="btn-secondary" icon="fa-print" data-hotkey="p" />
                     <button name="action_view_lines" string="View Lines" type="object"
-                        class="btn-primary" icon="fa-list" data-hotkey="q" />
+                        class="btn-primary" icon="fa-list" data-hotkey="q"
+                        invisible="delivery_channel == 'both'" />
                     <button string="Cancel" class="btn-secondary" special="cancel" data-hotkey="x" />
                 </footer>
             </form>
