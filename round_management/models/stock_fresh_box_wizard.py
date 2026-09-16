@@ -32,7 +32,9 @@ class StockFreshBoxHistoryLine(models.Model):
     history_id = fields.Many2one('stock.fresh.box.history', string="History Record", ondelete='cascade')
     sale_order_id = fields.Many2one('sale.order', string="Sales Order", store=True)
     sale_line_id = fields.Many2one('sale.order.line', string="Sales Order Line", store=True)
-    special_requirements_notes = fields.Text(string="Special Notes")
+    
+    # Updated: Replaced special_requirements_notes with Many2one field
+    special_requirements_notes_id = fields.Many2one('sale.order.special.note', string="Special Notes", store=True)
     
     order_number = fields.Char(string="Order Number", store=True)
     customer_code = fields.Char(string="Customer Code", store=True)
@@ -95,13 +97,16 @@ class StockFreshBoxWizard(models.TransientModel):
     def _get_line_effective_weight(self, line):
         product = line.product_id
         ordered_qty = line.product_uom_qty
-       
+        
         match_pack_kg = re.search(r'(\d+(?:\.\d+)?)\s*(?:KG|Kilo)', product.name or '', re.IGNORECASE)
         if match_pack_kg:
             return ordered_qty * float(match_pack_kg.group(1))
-       
+        
+        note_rel = getattr(line, 'special_requirements_notes_id', False)
+        note_text_val = note_rel.display_name or note_rel.name if note_rel else ''
+
         notes_to_check = [
-            line.special_requirements_notes or '',
+            note_text_val,
             line.name or ''
         ]
 
@@ -116,7 +121,6 @@ class StockFreshBoxWizard(models.TransientModel):
         self.ensure_one()
         self.line_ids.unlink()
 
-      
         domain = [
             ('order_id.state', 'in', ['sale', 'done']),
             ('order_id.delivery_channel', '=', self.delivery_channel),
@@ -141,7 +145,6 @@ class StockFreshBoxWizard(models.TransientModel):
         if not order_lines:
             raise UserError(_("No order lines found matching the selected criteria."))
 
-       
         invalid_batches_info = []
         validated_batches = set()
 
@@ -179,7 +182,6 @@ class StockFreshBoxWizard(models.TransientModel):
             )
             raise UserError(error_msg)
 
-        
         mrp_bom_obj = self.env['mrp.bom']
         unique_products = order_lines.mapped('product_id')
         boms_per_product = mrp_bom_obj._bom_find(unique_products)
@@ -212,6 +214,7 @@ class StockFreshBoxWizard(models.TransientModel):
             assembly_val = raw_assembly if raw_assembly in ['A', 'B', 'C'] else ''
 
             line_uom = line.product_uom_id if hasattr(line, 'product_uom_id') else product.uom_id
+            note_rel = getattr(line, 'special_requirements_notes_id', False)
 
             base_vals = {
                 'wizard_id': self.id,
@@ -219,7 +222,7 @@ class StockFreshBoxWizard(models.TransientModel):
                 'sale_line_id': line.id,
                 'order_number': order.name,
                 'customer_code': customer_code_val,
-                'special_requirements_notes': line.special_requirements_notes or '',
+                'special_requirements_notes_id': note_rel.id if note_rel else False,
                 'round_batch_id': round_batch.id if round_batch else False,
                 'round_id': round_obj.id if round_obj else False,
                 'delivery_date': getattr(order, 'delivery_date', False),
@@ -240,7 +243,6 @@ class StockFreshBoxWizard(models.TransientModel):
             line_uom = getattr(line, 'product_uom_id', False) or line.product_id.uom_id
             is_kg_uom = self._is_weight_uom(line_uom)
 
-            
             if has_bom and is_kg_uom:
                 max_box_capacity = 1.0
                 number_of_boxes = math.ceil(total_weight / max_box_capacity)
@@ -257,7 +259,6 @@ class StockFreshBoxWizard(models.TransientModel):
                     })
                     wizard_line_vals.append(line_dict)
 
-            
             else:
                 line_dict = base_vals.copy()
                 line_dict.update({
@@ -285,11 +286,9 @@ class StockFreshBoxWizard(models.TransientModel):
         mrp_bom_obj = self.env['mrp.bom']
         mrp_production_obj = self.env['mrp.production']
 
-        # Find BoMs for products in wizard lines
         unique_products = self.line_ids.mapped('product_id')
         boms_per_product = mrp_bom_obj._bom_find(unique_products)
 
-        # TRIGGER MO CREATION ONLY FOR: HAS BOM AND HAS WEIGHT/KG UOM
         lines_to_generate_mo = self.line_ids.filtered(
             lambda l: boms_per_product.get(l.product_id) and self._is_weight_uom(l.uom_id)
         )
@@ -297,7 +296,6 @@ class StockFreshBoxWizard(models.TransientModel):
         if not lines_to_generate_mo:
             raise UserError(_("No items with a valid BoM and KG/Weight UoM were found to generate MOs."))
 
-        
         existing_mos = mrp_production_obj.search([
             ('delivery_date', '>=', self.start_date),
             ('delivery_date', '<=', self.end_date),
@@ -308,7 +306,6 @@ class StockFreshBoxWizard(models.TransientModel):
         existing_mo_map = {mo.origin: mo for mo in existing_mos if mo.origin}
         processed_mos = self.env['mrp.production']
 
-      
         for line in lines_to_generate_mo:
             cat_prefix = f"[{line.category_id.name}] " if line.category_id else ""
             origin_ref = f"{cat_prefix}{line.order_number} (Line {line.sale_line_id.id}) - {line.box_number}"
@@ -329,7 +326,6 @@ class StockFreshBoxWizard(models.TransientModel):
                 })
                 processed_mos |= new_mo
 
-       
         mo_to_purge = existing_mos - processed_mos
         for old_mo in mo_to_purge:
             if old_mo.state == 'draft':
@@ -338,7 +334,6 @@ class StockFreshBoxWizard(models.TransientModel):
             elif old_mo.state == 'confirmed':
                 old_mo.action_cancel()
 
-       
         history_rec = self.env['stock.fresh.box.history'].create({
             'start_date': self.start_date,
             'end_date': self.end_date,
@@ -374,7 +369,7 @@ class StockFreshBoxWizard(models.TransientModel):
                 'category_id': line.category_id.id if line.category_id else False,
                 'box_number': line.box_number,
                 'box_weight': line.box_weight,
-                'special_requirements_notes': line.sale_line_id.special_requirements_notes or '',
+                'special_requirements_notes_id': line.special_requirements_notes_id.id if line.special_requirements_notes_id else False,
             } for line in self.line_ids
         ]
 
@@ -403,7 +398,10 @@ class StockFreshBoxWizardLine(models.TransientModel):
     wizard_id = fields.Many2one('stock.fresh.box.wizard', string="Wizard Reference", ondelete='cascade')
     sale_order_id = fields.Many2one('sale.order', string="Sales Order")
     sale_line_id = fields.Many2one('sale.order.line', string="Order Line")
-    special_requirements_notes = fields.Text(string="Special Notes")
+    
+    # Updated: Replaced special_requirements_notes with Many2one field
+    special_requirements_notes_id = fields.Many2one('sale.order.special.note', string="Special Notes")
+
     # Header Info
     order_number = fields.Char(string="Order Number")
     customer_code = fields.Char(string="Customer Code")
