@@ -13,16 +13,18 @@ class TestRoundBatchValidation(TransactionCase):
         self.Round = self.env['round.management.round']
         self.Batch = self.env['round.management.batch']
 
-        # Sample Round
+        self.test_depot = self.env['stock.warehouse'].search([], limit=1)
+
         self.test_round = self.Round.create({
             'name': 'Test Round A',
         })
 
-        # Active base batch on 1 October 2026
         self.active_batch = self.Batch.create({
             'round_id': self.test_round.id,
             'delivery_date': date(2026, 10, 1),
             'state': 'act',
+            'depot_id': self.test_depot.id,
+            'reference': 'TEST-REF-001',
         })
 
     def test_active_batch_warning_within_4_weeks_before(self):

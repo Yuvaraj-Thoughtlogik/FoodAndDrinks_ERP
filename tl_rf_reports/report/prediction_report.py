@@ -409,22 +409,45 @@ class ReportPrediction(models.AbstractModel):
     NAVY = colors.HexColor('#002060')
     GREY = colors.HexColor('#555555')
 
-    def _draw_prediction_footer(self, canvas_obj, doc_obj, footer_date_str):
-        """Draws the (constant, per-document) footer date at the bottom-left
-        of every page - the only footer content the old QWeb template
-        actually rendered (the "Page X of Y" markup there was commented
-        out), so there is no need for a two-pass canvas here: nothing drawn
-        depends on the eventual total page count."""
-        canvas_obj.saveState()
+    def _make_numbered_canvas(self, footer_date_str):
+        """Returns a reportlab Canvas subclass that stamps the print date
+        (left, navy) alongside a real "Page X of Y" (right, navy) on every
+        page footer. Reportlab only knows the final page count once the
+        whole story has been laid out, so this defers drawing each page's
+        footer until save(), after every page has already been counted -
+        same technique as the courier report's footer.
+        """
+        navy = self.NAVY
         margin = 12 * mm
-        footer_style = ParagraphStyle(
-            'PredictionFooterDate', fontName='Helvetica-Oblique', fontSize=9,
-            leading=11, textColor=colors.black,
-        )
-        footer = Paragraph(xml_escape(footer_date_str or ''), footer_style)
-        _, h = footer.wrap(A4[0] - (2 * margin), 10 * mm)
-        footer.drawOn(canvas_obj, margin, 8 * mm)
-        canvas_obj.restoreState()
+
+        class _NumberedCanvas(canvas.Canvas):
+            def __init__(self, *args, **kwargs):
+                canvas.Canvas.__init__(self, *args, **kwargs)
+                self._saved_page_states = []
+
+            def showPage(self):
+                self._saved_page_states.append(dict(self.__dict__))
+                self._startPage()
+
+            def save(self):
+                total_pages = len(self._saved_page_states)
+                for state in self._saved_page_states:
+                    self.__dict__.update(state)
+                    self._draw_footer(total_pages)
+                    canvas.Canvas.showPage(self)
+                canvas.Canvas.save(self)
+
+            def _draw_footer(self, total_pages):
+                self.saveState()
+                self.setFont('Helvetica-Oblique', 9)
+                self.setFillColor(navy)
+                self.drawString(margin, 8 * mm, footer_date_str or '')
+                self.setFont('Helvetica-BoldOblique', 9)
+                self.setFillColor(navy)
+                self.drawRightString(A4[0] - margin, 8 * mm, f'Page {self._pageNumber} of {total_pages}')
+                self.restoreState()
+
+        return _NumberedCanvas
 
     def generate_pdf(self, wizard):
         """Returns the finished PDF (bytes) for one Prediction Report wizard
@@ -525,10 +548,8 @@ class ReportPrediction(models.AbstractModel):
             prediction_table.setStyle(TableStyle(style_commands))
             story.append(prediction_table)
 
-        def _on_page(canvas_obj, doc_obj):
-            self._draw_prediction_footer(canvas_obj, doc_obj, data['footer_date_str'])
-
-        doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
+        numbered_canvas = self._make_numbered_canvas(data['footer_date_str'])
+        doc.build(story, canvasmaker=numbered_canvas)
         pdf_value = buffer.getvalue()
         buffer.close()
         return pdf_value
@@ -543,12 +564,14 @@ class ReportPredictionCourier(models.AbstractModel):
     Delivery Date, Stock Code and Quantity Ordered (no depot pivot, no
     date-collapsing: every row repeats its own Delivery Date).
 
-    BOM handling here is also intentionally different from the main report:
-    - Kit/Component BOM (mrp.bom type == 'phantom') -> product is replaced
-      by its components, qty scaled to the Sale Order Line qty.
-    - Manufacturing BOM (mrp.bom type == 'normal') -> NOT expanded; the
-      finished product is displayed as-is.
-    - No BOM -> the product is displayed as-is.
+    BOM handling: same policy as the main report - BOM type does not
+    matter (Manufacture or Kit both count). If the product has ANY
+    applicable BOM, its components are displayed instead of the product,
+    qty scaled to the Sale Order Line qty and consolidated across
+    products/orders. No BOM -> the product is displayed as-is. This is
+    delegated to the main report's own _find_bom()/_explode_bom() (single
+    level, both BOM types) so both reports share one BOM-explosion
+    implementation instead of drifting apart.
     """
 
     _name = 'report.tl_rf_reports.report_prediction_courier'
@@ -556,76 +579,6 @@ class ReportPredictionCourier(models.AbstractModel):
 
     NAVY = colors.HexColor('#002060')
     GREY = colors.HexColor('#555555')
-
-    # ------------------------------------------------------------------
-    # BOM helpers (Kit/Component BOM only - Manufacturing BOMs are
-    # intentionally left un-expanded for this report)
-    # ------------------------------------------------------------------
-    def _find_kit_bom(self, product):
-        BomModel = self.env['mrp.bom']
-        company_ids = [self.env.company.id, False]
-
-        bom = BomModel.search([
-            ('product_id', '=', product.id),
-            ('type', '=', 'phantom'),
-            ('company_id', 'in', company_ids),
-        ], limit=1, order='sequence, id')
-
-        if not bom:
-            bom = BomModel.search([
-                ('product_tmpl_id', '=', product.product_tmpl_id.id),
-                ('product_id', '=', False),
-                ('type', '=', 'phantom'),
-                ('company_id', 'in', company_ids),
-            ], limit=1, order='sequence, id')
-
-        return bom
-
-    def _explode_kit_bom(self, product, qty, bom_cache):
-        """Return [(reporting_product, reporting_qty), ...] for one Sale
-        Order Line. Only Kit/Component (phantom) BOMs are expanded; a
-        Manufacturing BOM or no BOM both fall through to the product as-is.
-        """
-        if product.id not in bom_cache:
-            bom_cache[product.id] = self._find_kit_bom(product)
-        bom = bom_cache[product.id]
-
-        if not bom:
-            return [(product, qty)]
-
-        finished_uom = bom.product_uom_id or product.uom_id
-        order_uom = product.uom_id
-        try:
-            qty_in_bom_uom = order_uom._compute_quantity(qty, finished_uom)
-        except Exception:
-            qty_in_bom_uom = qty
-
-        bom_produced_qty = bom.product_qty or 1.0
-
-        result = []
-        for bom_line in bom.bom_line_ids:
-            component = bom_line.product_id
-            if not component:
-                continue
-            if hasattr(bom_line, '_skip_bom_line') and bom_line._skip_bom_line(product):
-                continue
-
-            line_qty = bom_line.product_qty
-            if bom_line.product_uom_id and bom_line.product_uom_id != component.uom_id:
-                try:
-                    line_qty = bom_line.product_uom_id._compute_quantity(line_qty, component.uom_id)
-                except Exception:
-                    line_qty = bom_line.product_qty
-
-            qty_per_unit = (line_qty / bom_produced_qty) if bom_produced_qty else 0.0
-            comp_qty = qty_per_unit * qty_in_bom_uom
-            if comp_qty:
-                result.append((component, comp_qty))
-
-        if not result:
-            return [(product, qty)]
-
-        return result
 
     # ------------------------------------------------------------------
     # QWeb data path - kept only for parity (see the main report's
@@ -726,7 +679,7 @@ class ReportPredictionCourier(models.AbstractModel):
             round_date_str = d_date.strftime('%d/%m/%Y') if d_date else ''
             date_sort_key = d_date.strftime('%Y-%m-%d') if d_date else '9999-99-99'
 
-            for item_product, item_qty in self._explode_kit_bom(product, qty, bom_cache):
+            for item_product, item_qty in main_report._explode_bom(product, qty, bom_cache):
                 if not item_qty:
                     continue
                 item_pid = item_product.id

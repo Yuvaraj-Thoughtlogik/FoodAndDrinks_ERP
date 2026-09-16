@@ -17,11 +17,20 @@ from odoo import api, fields, models, _
 
 class _DriverPackingListHeaderMarker(Flowable):
     """Same technique as _PackingListHeaderMarker in packing_list_report.py -
-    see report_delivery_note_round_van.py for the full explanation."""
+    see report_delivery_note_round_van.py for the full explanation.
 
-    def __init__(self, header_text):
+    Carries the two-column batch header (title/code/name on the left,
+    delivery date/depot on the right - matching the confirmed QWeb design
+    for this report) as structured parts rather than one flat string, plus
+    the report's "Printed at" timestamp, both of which _DriverPackingListCanvas
+    re-draws on every page of this batch until the next batch's marker
+    replaces them.
+    """
+
+    def __init__(self, header_parts, printed_at):
         super().__init__()
-        self.header_text = header_text
+        self.header_parts = header_parts
+        self.printed_at = printed_at
         self.width = 0
         self.height = 0
 
@@ -29,36 +38,94 @@ class _DriverPackingListHeaderMarker(Flowable):
         return (0, 0)
 
     def draw(self):
-        self.canv.current_header = self.header_text
+        self.canv.current_header_parts = self.header_parts
+        self.canv.printed_at = self.printed_at
 
 
 class _DriverPackingListCanvas(canvas.Canvas):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._saved_page_states = []
-        self.current_header = None
+        self.current_header_parts = None
+        self.printed_at = None
 
     def showPage(self):
         self._saved_page_states.append(dict(self.__dict__))
         self._startPage()
 
     def save(self):
+        num_pages = len(self._saved_page_states)
         for state in self._saved_page_states:
             self.__dict__.update(state)
             self._draw_header()
+            self._draw_footer(num_pages)
             super().showPage()
         super().save()
 
     def _draw_header(self):
-        if not self.current_header:
+        parts = self.current_header_parts
+        if not parts:
             return
         self.saveState()
         margin = 12 * mm
         width = A4[0] - (2 * margin)
-        style = ParagraphStyle('DriverPackingListHeaderBand', fontName='Helvetica', fontSize=10, leading=13)
-        p = Paragraph(self.current_header, style)
-        _, h = p.wrap(width, 40 * mm)
-        p.drawOn(self, margin, A4[1] - margin - h)
+
+        title_style = ParagraphStyle('DPLTitle', fontName='Helvetica-Bold', fontSize=16.5, leading=20)
+        code_name_style = ParagraphStyle('DPLCodeName', fontName='Helvetica-Bold', fontSize=12, leading=15, spaceBefore=3)
+        right_style = ParagraphStyle('DPLHeaderRight', fontName='Helvetica-Bold', fontSize=12, leading=15, alignment=2)
+
+        code_name_text = xml_escape(parts.get('batch_code') or '')
+        if parts.get('batch_name'):
+            code_name_text += '&nbsp;&nbsp;&nbsp;&nbsp;' + xml_escape(parts['batch_name'])
+
+        right_text = 'Delivery On: ' + xml_escape(parts.get('delivery_date') or '')
+        if parts.get('depot_name'):
+            right_text += '<br/>' + xml_escape(parts['depot_name'])
+
+        header_table = Table(
+            [[
+                [Paragraph(xml_escape(parts.get('title') or ''), title_style),
+                 Paragraph(code_name_text, code_name_style)],
+                Paragraph(right_text, right_style),
+            ]],
+            colWidths=[width * 0.6, width * 0.4],
+        )
+        header_table.setStyle(TableStyle([
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 0),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+            ('TOPPADDING', (0, 0), (-1, -1), 0),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+        ]))
+
+        _, h = header_table.wrap(width, 40 * mm)
+        header_table.drawOn(self, margin, A4[1] - margin - h)
+        self.restoreState()
+
+    def _draw_footer(self, num_pages):
+        """Plain continuous page number ("1", "2", "3", ... - not "Page X of
+        Y") centered at the bottom, matching the confirmed reference output,
+        plus "Printed at: ..." right-aligned on the same footer line.
+        Numbering runs across the whole report, not restarted per batch -
+        self._pageNumber already counts every page of the document, batches
+        included, since batches are separated by PageBreak() flowables
+        rather than separate docs."""
+        self.saveState()
+        margin = 12 * mm
+        width = A4[0] - (2 * margin)
+        center_style = ParagraphStyle('DPLFooterPage', fontName='Helvetica', fontSize=7.5, leading=9, alignment=1)
+        right_style = ParagraphStyle('DPLFooterPrinted', fontName='Helvetica', fontSize=7.5, leading=9, alignment=2)
+
+        page_p = Paragraph(str(self._pageNumber), center_style)
+        _, h = page_p.wrap(width, 10 * mm)
+        y = margin - h - (2 * mm)
+        page_p.drawOn(self, margin, y)
+
+        if self.printed_at:
+            printed_p = Paragraph('Printed at: ' + xml_escape(self.printed_at), right_style)
+            printed_p.wrap(width, 10 * mm)
+            printed_p.drawOn(self, margin, y)
+
         self.restoreState()
 
 
@@ -561,16 +628,38 @@ class ReportDriverPackingList(models.AbstractModel):
 
     def _pdf_styles(self):
         return {
+            # 16px bold uppercase category name -> ~12pt bold.
             'category': ParagraphStyle('DPLCategory', fontName='Helvetica-Bold', fontSize=12, leading=15),
-            'col_header': ParagraphStyle('DPLColHeader', fontName='Helvetica-BoldOblique', fontSize=9, leading=11),
-            'cell': ParagraphStyle('DPLCell', fontName='Helvetica', fontSize=10, leading=13),
-            'cell_bold': ParagraphStyle('DPLCellBold', fontName='Helvetica-Bold', fontSize=10, leading=13),
-            'total': ParagraphStyle('DPLTotal', fontName='Helvetica-Bold', fontSize=10, leading=13, alignment=2),
+            # "Quantity" / "Product / Box Contents" column headers: 14px
+            # bold italic -> ~10.5pt.
+            'col_header': ParagraphStyle('DPLColHeader', fontName='Helvetica-BoldOblique', fontSize=10.5, leading=13),
+            # "Sort" column header is deliberately plain/smaller in the
+            # confirmed design: 13px normal weight -> ~9.75pt, right-aligned.
+            'col_header_sort': ParagraphStyle('DPLColHeaderSort', fontName='Helvetica', fontSize=9.75, leading=12, alignment=2),
+            # Product / Sort cell text: 15px normal -> ~11pt.
+            'cell': ParagraphStyle('DPLCell', fontName='Helvetica', fontSize=11, leading=14),
+            'cell_sort': ParagraphStyle('DPLCellSort', fontName='Helvetica', fontSize=11, leading=14, alignment=2),
+            # Quantity cell: same size, bold, right-aligned.
+            'cell_bold': ParagraphStyle('DPLCellBold', fontName='Helvetica-Bold', fontSize=11, leading=14, alignment=2),
+            # "Checked By ___": 14px -> ~10.5pt, right-aligned.
+            'checked_by': ParagraphStyle('DPLCheckedBy', fontName='Helvetica', fontSize=10.5, leading=13, alignment=2),
         }
 
     def generate_pdf(self, wizard):
         """Returns the finished PDF (bytes) for one Driver Packing List
         wizard, or None when there is nothing to print.
+
+        This is now the ACTIVE rendering path (wired from the wizard's
+        print button - see packing_list_wizard.py), replacing the QWeb
+        template. The visual design deliberately mirrors the confirmed
+        QWeb layout: title "Drivers Packing List : Customer" with the
+        batch code/name below it on the left, "Delivery On" + depot on the
+        right, uppercase bold category headers, a Quantity/Product/Sort
+        column header row, quantity right-aligned with 2 decimal places,
+        no "Boxes" total line, and "Checked By ___" once at the end of
+        each batch. Category/Batch grouping, sorting (Frozen -> Fresh ->
+        alphabetical, then Product Master sort number) and BOM explosion
+        are unchanged from before.
 
         Uses plain ORM search() + recordset iteration rather than raw SQL,
         reusing this class's own _find_bom/_explode_bom helpers (defined
@@ -626,24 +715,30 @@ class ReportDriverPackingList(models.AbstractModel):
         if not batches_map:
             return None
 
+        now_utc = fields.Datetime.now()
+        now_local = fields.Datetime.context_timestamp(self, now_utc)
+        printed_at_str = now_local.strftime('%d/%m/%Y %H:%M:%S')
+
         styles = self._pdf_styles()
         width = self.PRINTABLE_WIDTH
+        # 75px / 65px fixed columns out of a ~527pt printable width, same
+        # proportions as the confirmed QWeb column widths.
+        qty_w = width * 0.12
+        sort_w = width * 0.10
+        prod_w = width - qty_w - sort_w
         story = []
         printed_batches = 0
 
         for batch_id, b_data in batches_map.items():
             category_list = []
-            batch_total_boxes = 0
             for c_key, c_val in sorted(
                 b_data['categories_map'].items(), key=lambda item: self._get_category_sort_key(item[1]['categ_name'])
             ):
                 sorted_prods = sorted(c_val['products'].values(), key=self._get_sort_key)
                 for p in sorted_prods:
                     p['qty_display'] = f"{p['box_qty']:.2f}"
-                cat_total = int(round(sum(p['box_qty'] for p in sorted_prods)))
-                batch_total_boxes += cat_total
                 if sorted_prods:
-                    category_list.append({'categ_name': c_val['categ_name'], 'products': sorted_prods, 'total_boxes': cat_total})
+                    category_list.append({'categ_name': c_val['categ_name'], 'products': sorted_prods})
             if not category_list:
                 continue
 
@@ -657,45 +752,48 @@ class ReportDriverPackingList(models.AbstractModel):
             batch_code = batch.code or ''
             batch_name = (batch.round_id.name if batch.round_id else False) or batch.reference or ''
 
-            header_text = (
-                f"<b>Drivers Packing List : Customer</b>&nbsp;&nbsp;&nbsp;{xml_escape(batch_code)}  {xml_escape(batch_name)}"
-                f"<br/>Delivery On: {xml_escape(delivery_date_str)}"
-                + (f"&nbsp;&nbsp;&nbsp;{xml_escape(depot_name)}" if depot_name else '')
-            )
-            story.append(_DriverPackingListHeaderMarker(header_text))
-            story.append(Spacer(1, 14 * mm))
+            header_parts = {
+                'title': 'Drivers Packing List : Customer',
+                'batch_code': batch_code,
+                'batch_name': batch_name,
+                'delivery_date': delivery_date_str,
+                'depot_name': depot_name,
+            }
+            story.append(_DriverPackingListHeaderMarker(header_parts, printed_at_str))
+            story.append(Spacer(1, 4 * mm))
 
             for cat in category_list:
                 header_row = Table(
                     [[Paragraph("Quantity", styles['col_header']), Paragraph("Product / Box Contents", styles['col_header']),
-                      Paragraph("Sort", styles['col_header'])]],
-                    colWidths=[width * 0.12, width * 0.76, width * 0.12],
+                      Paragraph("Sort", styles['col_header_sort'])]],
+                    colWidths=[qty_w, prod_w, sort_w],
                 )
-                header_row.setStyle(TableStyle([('LINEBELOW', (0, 0), (-1, 0), 1.5, colors.black)]))
+                header_row.setStyle(TableStyle([
+                    ('LINEBELOW', (0, 0), (-1, 0), 2, colors.black),
+                    ('LEFTPADDING', (1, 0), (1, 0), 8), ('RIGHTPADDING', (0, 0), (0, 0), 8),
+                ]))
 
                 rows_ = [[
                     Paragraph(xml_escape(p['qty_display']), styles['cell_bold']),
                     Paragraph(xml_escape(p['product_name'] or ''), styles['cell']),
-                    Paragraph(xml_escape(p['sort_str']), styles['cell']),
+                    Paragraph(xml_escape(p['sort_str']), styles['cell_sort']),
                 ] for p in cat['products']]
-                table = Table(rows_, colWidths=[width * 0.12, width * 0.76, width * 0.12])
+                table = Table(rows_, colWidths=[qty_w, prod_w, sort_w])
                 table.setStyle(TableStyle([
                     ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                    ('ALIGN', (0, 0), (0, -1), 'CENTER'),
-                    ('ALIGN', (2, 0), (2, -1), 'RIGHT'),
+                    ('LEFTPADDING', (1, 0), (1, -1), 8), ('RIGHTPADDING', (0, 0), (0, -1), 8),
                     ('LINEBELOW', (0, 0), (-1, -1), 0.5, colors.black),
-                    ('TOPPADDING', (0, 0), (-1, -1), 2), ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+                    ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
                 ]))
 
                 story.append(KeepTogether([
                     Paragraph(xml_escape(cat['categ_name']), styles['category']),
                     Spacer(1, 2 * mm), header_row, table,
-                    Paragraph(f"{cat['total_boxes']} Boxes", styles['total']),
                     Spacer(1, 5 * mm),
                 ]))
 
             story.append(Spacer(1, 8 * mm))
-            story.append(Paragraph("Checked By _____________________", styles['total']))
+            story.append(Paragraph("Checked By _____________________", styles['checked_by']))
 
         if not printed_batches:
             return None
