@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Surfaces the Depot / Delivery Date / Category fields used by the
+         Production Report (models/mrp_production.py, report/production_report.py)
+         directly on the standard Manufacturing Orders list and form, so they're
+         visible when browsing Manufacturing > Manufacturing Orders too, not only
+         from the Production Report wizard's "View Lines" screen. -->
+    <record id="mrp_production_tree_view_depot" model="ir.ui.view">
+        <field name="name">mrp.production.list.depot</field>
+        <field name="model">mrp.production</field>
+        <field name="inherit_id" ref="mrp.mrp_production_tree_view"/>
+        <field name="arch" type="xml">
+            <field name="product_id" position="after">
+                <field name="product_categ_id" string="Category" optional="hide"/>
+                <field name="depot_id" optional="show"/>
+                <field name="batch_delivery_date" optional="show"/>
+            </field>
+        </field>
+    </record>
+
+    <record id="mrp_production_form_view_depot" model="ir.ui.view">
+        <field name="name">mrp.production.form.depot</field>
+        <field name="model">mrp.production</field>
+        <field name="inherit_id" ref="mrp.mrp_production_form_view"/>
+        <field name="arch" type="xml">
+            <field name="user_id" position="after">
+                <field name="depot_id"/>
+                <field name="batch_delivery_date"/>
+            </field>
+        </field>
+    </record>
+</odoo>
