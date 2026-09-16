@@ -147,7 +147,7 @@
                             <t t-esc="res.get('footer_date_str', '')"/>
                         </div>
                         <div style="float: right; width: 50%; text-align: right;">
-                            <!-- Page <span class="page"/> of <span class="topage"/> -->
+                             Page <span class="page"/> of <span class="topage"/>
                         </div>
                     </div>
                 </div>
@@ -157,14 +157,6 @@
 
     <!-- ============================================================== -->
     <!-- COURIER PREDICTION REPORT TEMPLATE                              -->
-    <!-- Kept for parity only - the report is actually rendered by       -->
-    <!-- ReportPredictionCourier.generate_pdf() (ReportLab), which        -->
-    <!-- shares the same data source (_fetch_prediction_data) as this     -->
-    <!-- template's _get_report_values(), so the two stay in sync.        -->
-    <!-- Structurally different from the main report: grouped by          -->
-    <!-- product with one row per Sale Order Line (Round/Sale Order,      -->
-    <!-- Delivery Date, Stock Code, Quantity Ordered) instead of a         -->
-    <!-- date/depot pivot.                                                -->
     <!-- ============================================================== -->
     <template id="report_prediction_courier">
         <t t-call="web.html_container">
