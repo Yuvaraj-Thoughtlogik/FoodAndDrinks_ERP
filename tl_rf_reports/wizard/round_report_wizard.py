@@ -112,11 +112,12 @@ class BatchReportWizard(models.TransientModel):
                 ('state', 'in', ['sale', 'done']),
                 ('delivery_date', '>=', self.delivery_date_from),
                 ('delivery_date', '<=', self.delivery_date_to),
+                # Late is line-based (order flagged late, line added after
+                # confirm, or line qty changed after confirm) - matching on
+                # order_line.late_order picks up orders with at least one
+                # qualifying line, not just orders flagged late as a whole.
+                ('order_line.late_order', '=', bool(self.include_late_orders)),
             ]
-            if not self.include_late_orders:
-                order_domain.append(('is_late_order', '=', False))
-            else:
-                order_domain.append(('is_late_order', '=', True))
 
             matching_orders = self.env['sale.order'].search(order_domain)
             if not matching_orders:
@@ -174,10 +175,17 @@ class BatchReportWizard(models.TransientModel):
         eligible_orders = batches.mapped('order_ids').filtered(
             lambda so: so.state in ('sale', 'done') and getattr(so, 'delivery_channel', False) in ('regal_van', False)
         )
-        if not self.include_late_orders:
-            eligible_orders = eligible_orders.filtered(lambda so: not getattr(so, 'is_late_order', False))
-        else:
-            eligible_orders = eligible_orders.filtered(lambda so: getattr(so, 'is_late_order', False))
+        is_late = bool(self.include_late_orders)
+        # Late is line-based (order flagged late, line added after confirm,
+        # or line qty changed after confirm) - keep orders with at least one
+        # qualifying line, not just orders flagged late as a whole.
+        eligible_orders = eligible_orders.filtered(
+            lambda so: any(
+                bool(l.late_order) == is_late
+                for l in so.order_line
+                if not l.display_type and l.product_id and l.product_uom_qty > 0
+            )
+        )
 
         if not eligible_orders:
             raise UserError(_("Eligible batches were found, but they do not contain any matching Regal Van Delivery sale orders."))
@@ -193,14 +201,15 @@ class BatchReportWizard(models.TransientModel):
             pdf_content, f"Dock_Weight_Breakdown_{self.delivery_date_from.strftime('%Y%m%d')}.pdf"
         )
         lines_act = self.action_view_lines()
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'print_and_open_lines',
-            'params': {
-                'report_action': report_act,
-                'lines_action': lines_act,
-            }
-        }
+        # return {
+        #     'type': 'ir.actions.client',
+        #     'tag': 'print_and_open_lines',
+        #     'params': {
+        #         'report_action': report_act,
+        #         'lines_action': lines_act,
+        #     }
+        # }
+        return report_act
 
     def action_view_lines(self):
         """Opens the Sale Order Line list view with grouping by category (Courier) or depot and category (Regal Van)."""
@@ -214,11 +223,8 @@ class BatchReportWizard(models.TransientModel):
                 ('order_id.delivery_date', '<=', self.delivery_date_to),
                 ('display_type', '=', False),
                 ('product_id', '!=', False),
+                ('late_order', '=', bool(self.include_late_orders)),
             ]
-            if not self.include_late_orders:
-                domain.append(('is_late_order', '=', False))
-            else:
-                domain.append(('is_late_order', '=', True))
 
             matching_lines = self.env['sale.order.line'].search_count(domain)
             if not matching_lines:
@@ -257,10 +263,7 @@ class BatchReportWizard(models.TransientModel):
         ]
         if self.depot_ids:
             domain.append(('depot_id', 'in', self.depot_ids.ids))
-        if not self.include_late_orders:
-            domain.append(('is_late_order', '=', False))
-        else:
-            domain.append(('is_late_order', '=', True))
+        domain.append(('late_order', '=', bool(self.include_late_orders)))
 
         matching_lines = self.env['sale.order.line'].search_count(domain)
         if not matching_lines:

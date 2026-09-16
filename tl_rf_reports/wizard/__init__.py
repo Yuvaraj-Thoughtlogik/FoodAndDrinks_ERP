@@ -6,3 +6,4 @@ from . import requirement_report_wizard
 from . import production_report_wizard
 from . import prediction_report_wizard
 from . import active_batch_report_wizard
+from . import round_batch_activity_wizard

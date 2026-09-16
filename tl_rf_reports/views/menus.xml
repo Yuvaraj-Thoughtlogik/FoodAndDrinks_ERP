@@ -6,11 +6,11 @@
         parent="round_management.menu_round_management_root"
         sequence="50" />
     <!-- Active Batch Report Menu Item under Round Management -> Reporting -->
-    <menuitem id="menu_report_active_batch"
-        name="Active Batch Report"
-        parent="menu_round_reporting_root"
-        action="action_active_batch_report_wizard"
-        sequence="5" />
+<!--    <menuitem id="menu_report_active_batch"-->
+<!--        name="Active Batch Report"-->
+<!--        parent="menu_round_reporting_root"-->
+<!--        action="action_active_batch_report_wizard"-->
+<!--        sequence="5" />-->
     <!-- Dock Weight Breakdown Report Menu Item -->
     <menuitem id="menu_report_dock_weight_breakdown"
         name="Dock Weight Breakdown Report"
@@ -53,6 +53,13 @@
         parent="menu_round_reporting_root"
         action="action_production_report_wizard"
         sequence="40" />
+
+    <!-- Round Batch Activity Report Menu Item under Round Management -> Reporting -->
+    <menuitem id="menu_report_round_batch_activity"
+        name="Round Batch Activity"
+        parent="menu_round_reporting_root"
+        action="action_round_batch_activity_wizard"
+        sequence="45" />
 
     <record id="action_bulk_confirm_orders" model='ir.actions.server'>
         <field name="name">Bulk Confirm Orders</field>
