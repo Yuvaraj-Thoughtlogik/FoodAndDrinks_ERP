@@ -65,10 +65,10 @@ class _PackingListCanvas(canvas.Canvas):
             if self.current_header and isinstance(self.current_header, dict):
                 h_data = self.current_header
                 title_style = ParagraphStyle(
-                    'PLVanTitle', fontName='Helvetica-Bold', fontSize=18, leading=22, textColor=colors.black
+                    'PLVanTitle', fontName='Helvetica-Bold', fontSize=16.5, leading=20, textColor=colors.black
                 )
                 batch_style = ParagraphStyle(
-                    'PLVanBatch', fontName='Helvetica-Bold', fontSize=14, leading=17, textColor=colors.black
+                    'PLVanBatch', fontName='Helvetica-Bold', fontSize=12, leading=15, spaceBefore=3, textColor=colors.black
                 )
                 date_style = ParagraphStyle(
                     'PLVanDate', fontName='Helvetica-Bold', fontSize=12, leading=15, alignment=2, textColor=colors.black
@@ -1014,9 +1014,8 @@ class ReportPackingList(models.AbstractModel):
             'cell_x': ParagraphStyle('CourierX', fontName='Helvetica-Bold', fontSize=11, leading=14, alignment=1, textColor=colors.black),
             'cell_name': ParagraphStyle('CourierName', fontName='Helvetica', fontSize=11, leading=14, textColor=colors.black),
             'cell_weight': ParagraphStyle('CourierWeight', fontName='Helvetica', fontSize=11, leading=14, alignment=2, textColor=colors.black),
-            'polly_label': ParagraphStyle('CourierPollyLabel', fontName='Helvetica', fontSize=10.5, leading=13, textColor=colors.black),
             'total_label': ParagraphStyle('CourierTotalLabel', fontName='Helvetica-Bold', fontSize=10.5, leading=13, alignment=2, textColor=colors.black),
-            'total_val': ParagraphStyle('CourierTotalVal', fontName='Helvetica-Bold', fontSize=11, leading=13, alignment=2, textColor=colors.black),
+            'total_val': ParagraphStyle('CourierTotalVal', fontName='Helvetica', fontSize=11, leading=13, alignment=2, textColor=colors.black),
         }
         width = self.PRINTABLE_WIDTH
         story = []
@@ -1121,37 +1120,20 @@ class ReportPackingList(models.AbstractModel):
                 ]))
                 story.append(prod_table)
 
+                # Category divider: a line after EVERY category, not just once
+                # at the end of the order (client wants each category's block
+                # visually closed off before the next one starts).
+                story.append(HRFlowable(width=width, thickness=1, color=colors.black, spaceBefore=1.5 * mm, spaceAfter=2 * mm))
+
             # Full width line after products
-            story.append(HRFlowable(width=width, thickness=2, color=colors.black, spaceBefore=3 * mm, spaceAfter=3 * mm))
+            story.append(HRFlowable(width=width, thickness=2, color=colors.black, spaceBefore=1 * mm, spaceAfter=3 * mm))
 
             # Bottom Summary
-            polly_box_w = 32 * mm
-            polly_rows = [
-                [
-                    Table([['']], colWidths=[polly_box_w], rowHeights=[6.5 * mm], style=[('BOX', (0, 0), (-1, -1), 1.5, colors.black), ('BACKGROUND', (0, 0), (-1, -1), colors.white)]),
-                    Paragraph("Large Polly (s)", styles['polly_label']),
-                ],
-                [
-                    Table([['']], colWidths=[polly_box_w], rowHeights=[6.5 * mm], style=[('BOX', (0, 0), (-1, -1), 1.5, colors.black), ('BACKGROUND', (0, 0), (-1, -1), colors.white)]),
-                    Paragraph("Small Polly", styles['polly_label']),
-                ],
-                [
-                    Table([['']], colWidths=[polly_box_w], rowHeights=[6.5 * mm], style=[('BOX', (0, 0), (-1, -1), 1.5, colors.black), ('BACKGROUND', (0, 0), (-1, -1), colors.white)]),
-                    Paragraph("Dry Ice", styles['polly_label']),
-                ],
-            ]
-            polly_table = Table(
-                polly_rows,
-                colWidths=[polly_box_w + 3 * mm, 60 * mm],
-            )
-            polly_table.setStyle(TableStyle([
-                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                ('LEFTPADDING', (0, 0), (-1, -1), 0),
-                ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-                ('TOPPADDING', (0, 0), (-1, -1), 1.5),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 1.5),
-            ]))
-
+            # NOTE: the "Large Polly (s) / Small Polly / Dry Ice" checkboxes
+            # were removed per client request (this is why the legacy QWeb
+            # template already has that block commented out - editing the
+            # XML alone never took effect because the QWeb template is not
+            # what actually renders this report; this ReportLab method is).
             tot_weight_str = str(int(round(o_data['total_order_weight_g'])))
             weight_box = Table(
                 [[Paragraph(tot_weight_str, styles['total_val'])]],
@@ -1169,12 +1151,14 @@ class ReportPackingList(models.AbstractModel):
                 ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
             ]))
 
+            # Middle empty column is just a gap between the label and the box.
             total_table = Table(
                 [[
                     Paragraph("Total Weight - Not Inc Fres", styles['total_label']),
+                    '',
                     weight_box,
                 ]],
-                colWidths=[55 * mm, 26 * mm],
+                colWidths=[55 * mm, 5 * mm, 26 * mm],
             )
             total_table.setStyle(TableStyle([
                 ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
@@ -1183,19 +1167,11 @@ class ReportPackingList(models.AbstractModel):
                 ('TOPPADDING', (0, 0), (-1, -1), 0),
                 ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
             ]))
-
-            summary_table = Table(
-                [[polly_table, total_table]],
-                colWidths=[width * 0.55, width * 0.45],
-            )
-            summary_table.setStyle(TableStyle([
-                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                ('LEFTPADDING', (0, 0), (-1, -1), 0),
-                ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-                ('TOPPADDING', (0, 0), (-1, -1), 0),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
-            ]))
-            story.append(summary_table)
+            # No polly-box column anymore - just the weight total, flush
+            # right (matches the QWeb template's `float: right` block now
+            # that the left-hand polly column is gone).
+            total_table.hAlign = 'RIGHT'
+            story.append(total_table)
 
         if not printed_orders:
             return None
@@ -1262,12 +1238,12 @@ class ReportPackingList(models.AbstractModel):
 
         styles = {
             'category': ParagraphStyle('PLVanCategory', fontName='Helvetica-Bold', fontSize=12, leading=15, textColor=colors.black),
-            'col_header_qty': ParagraphStyle('PLVanColQty', fontName='Helvetica-BoldOblique', fontSize=9.5, leading=12, alignment=1, textColor=colors.black),
-            'col_header_prod': ParagraphStyle('PLVanColProd', fontName='Helvetica-BoldOblique', fontSize=9.5, leading=12, alignment=0, textColor=colors.black),
-            'col_header_sort': ParagraphStyle('PLVanColSort', fontName='Helvetica', fontSize=9.5, leading=12, alignment=2, textColor=colors.black),
-            'cell_qty': ParagraphStyle('PLVanCellQty', fontName='Helvetica-Bold', fontSize=9.5, leading=12, alignment=1, textColor=colors.black),
-            'cell_prod': ParagraphStyle('PLVanCellProd', fontName='Helvetica', fontSize=9.5, leading=12, alignment=0, textColor=colors.black),
-            'cell_sort': ParagraphStyle('PLVanCellSort', fontName='Helvetica', fontSize=9.5, leading=12, alignment=2, textColor=colors.black),
+            'col_header_qty': ParagraphStyle('PLVanColQty', fontName='Helvetica-BoldOblique', fontSize=10.5, leading=13, alignment=1, textColor=colors.black),
+            'col_header_prod': ParagraphStyle('PLVanColProd', fontName='Helvetica-BoldOblique', fontSize=10.5, leading=13, alignment=0, textColor=colors.black),
+            'col_header_sort': ParagraphStyle('PLVanColSort', fontName='Helvetica', fontSize=9.75, leading=12, alignment=2, textColor=colors.black),
+            'cell_qty': ParagraphStyle('PLVanCellQty', fontName='Helvetica-Bold', fontSize=11.25, leading=15, alignment=1, textColor=colors.black),
+            'cell_prod': ParagraphStyle('PLVanCellProd', fontName='Helvetica', fontSize=11.25, leading=15, alignment=0, textColor=colors.black),
+            'cell_sort': ParagraphStyle('PLVanCellSort', fontName='Helvetica', fontSize=11.25, leading=15, alignment=2, textColor=colors.black),
             'boxes_label': ParagraphStyle('PLVanBoxes', fontName='Helvetica-Bold', fontSize=11, leading=14, alignment=0, textColor=colors.black),
             'checked_by': ParagraphStyle('PLVanCheckedBy', fontName='Helvetica', fontSize=10.5, leading=13, alignment=2, textColor=colors.black),
         }
@@ -1322,8 +1298,9 @@ class ReportPackingList(models.AbstractModel):
                     story.append(Paragraph(xml_escape(cat_name), styles['category']))
                     story.append(Spacer(1, 1 * mm))
 
-                    # Column Header Table
-                    col_widths = [22 * mm, width - 42 * mm, 20 * mm]
+                    # Column Header Table (widths mirror the original QWeb
+                    # template's fixed 75px / 65px Quantity & Sort columns)
+                    col_widths = [20 * mm, width - 37 * mm, 17 * mm]
                     header_row = Table(
                         [[
                             Paragraph("Quantity", styles['col_header_qty']),
@@ -1334,7 +1311,9 @@ class ReportPackingList(models.AbstractModel):
                     )
                     header_row.setStyle(TableStyle([
                         ('VALIGN', (0, 0), (-1, -1), 'BOTTOM'),
-                        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                        ('LEFTPADDING', (0, 0), (0, -1), 0),
+                        ('LEFTPADDING', (1, 0), (1, -1), 7.5),
+                        ('LEFTPADDING', (2, 0), (2, -1), 0),
                         ('RIGHTPADDING', (0, 0), (-1, -1), 0),
                         ('TOPPADDING', (0, 0), (-1, -1), 1),
                         ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
@@ -1354,11 +1333,12 @@ class ReportPackingList(models.AbstractModel):
                     table = Table(rows, colWidths=col_widths)
                     table.setStyle(TableStyle([
                         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                        ('LEFTPADDING', (0, 0), (0, -1), 0),
+                        ('LEFTPADDING', (1, 0), (1, -1), 7.5),
                         ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-                        ('TOPPADDING', (0, 0), (-1, -1), 2.5),
-                        ('BOTTOMPADDING', (0, 0), (-1, -1), 2.5),
-                        ('LINEBELOW', (0, 0), (-1, -1), 0.6, colors.black),
+                        ('TOPPADDING', (0, 0), (-1, -1), 3),
+                        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+                        ('LINEBELOW', (0, 0), (-1, -1), 0.75, colors.black),
                     ]))
                     story.append(table)
 

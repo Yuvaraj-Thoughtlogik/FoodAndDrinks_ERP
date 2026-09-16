@@ -181,9 +181,13 @@ class ListFilterConfigField(models.Model):
     def _sync_wizard_fields(self):
         """Create / refresh the real fields backing these rows in the popup.
 
-        Everything is created in a single ``ir.model.fields.create`` call: each
-        one triggers a registry reload, so batching keeps configuring 50 fields
-        fast instead of painful.
+        Main fields are created in one ``ir.model.fields.create`` call and
+        "to" fields in a second one: each call triggers a single registry
+        reload, so batching keeps configuring 50 fields fast instead of
+        painful. The two passes are required, not just an optimisation --
+        a "to" field's ``compute`` can depend on its "from" field, and that
+        dependency is only resolvable once the "from" field has gone through
+        its own registry reload.
         """
         if not self:
             return
@@ -197,6 +201,7 @@ class ListFilterConfigField(models.Model):
             stale.sudo().unlink()
 
         vals_list, owners = [], []
+        to_vals_list, to_owners = [], []
         for rec in self:
             shape = ops.shape_of(rec.ttype, rec.operator)
             if not shape:
@@ -210,17 +215,34 @@ class ListFilterConfigField(models.Model):
             owners.append((rec, 'wizard_field_id'))
 
             if ops.needs_range(rec.operator):
-                vals_list.append(dict(
+                to_name = rec._wizard_field_name('_to')
+                to_vals = dict(
                     base,
-                    name=rec._wizard_field_name('_to'),
+                    name=to_name,
                     field_description='%s (to)' % rec.display_label,
                     **rec._m2m_table_values(shape, suffix='_to')
-                ))
-                owners.append((rec, 'wizard_field_to_id'))
+                )
+                if rec.field_family == 'date':
+                    # End Date defaults to Start Date whenever it changes, but
+                    # stays a normal editable input the rest of the time.
+                    from_name = rec._wizard_field_name()
+                    to_vals.update(
+                        compute="for record in self:\n    record[%r] = record[%r]"
+                                % (to_name, from_name),
+                        depends=from_name,
+                        readonly=False,
+                    )
+                to_vals_list.append(to_vals)
+                to_owners.append((rec, 'wizard_field_to_id'))
 
         if vals_list:
             created = IrModelFields.create(vals_list)
             for (rec, target), field in zip(owners, created):
+                rec.write({target: field.id})
+
+        if to_vals_list:
+            created_to = IrModelFields.create(to_vals_list)
+            for (rec, target), field in zip(to_owners, created_to):
                 rec.write({target: field.id})
 
         self.mapped('config_id')._build_wizard_view()
