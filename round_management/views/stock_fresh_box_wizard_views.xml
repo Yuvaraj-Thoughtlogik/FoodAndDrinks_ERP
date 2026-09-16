@@ -36,7 +36,7 @@
                                     <field name="round_batch_id"/>
                                     <field name="product_id"/>
                                     <field name="product_desc"/>
-                                    <field name="special_requirements_notes" optional="show"/>
+                                    <field name="special_requirements_notes_id" optional="show"/>
                                     <field name="category_id"/>
                                     
                                    <!-- <field name="box_number"/>-->
@@ -90,7 +90,7 @@
                 <field name="product_name" string="BX_PRODUCT"/>
                 <field name="box_weight" string="BX_Weight / Qty" sum="Total Weight"/>
                 <field name="product_desc" string="BX_DESC"/>
-                <field name="special_requirements_notes" string="SPECIAL NOTES" optional="show"/>
+                <field name="special_requirements_notes_id" string="SPECIAL NOTES" optional="show"/>
                 <field name="uom_id" string="UOM_TYPE"/>
                 <field name="category_id" string="PRODUCT CATEG"/>
                 <field name="is_assembly" string="BX_ORDPRODUCTISASSEMBLY"/>
@@ -279,3 +279,4 @@
 
     
 </odoo>
+
