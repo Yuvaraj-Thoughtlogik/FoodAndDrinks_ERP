@@ -20,7 +20,7 @@ class RoundManagementBatch(models.Model):
                                domain="[('state', '=', 'active')]")
     round_code = fields.Char(related='round_id.code', string='Round Code', readonly=True, store=True)
     reference = fields.Char(string='Reference', required=True)
-    depot_id = fields.Many2one('stock.warehouse', string='Depot', required=True)
+    # depot_id = fields.Many2one('stock.warehouse', string='Depot', required=True)
     delivery_date = fields.Date(string='Delivery Date', default=fields.Date.context_today, required=True)
     delivery_times = fields.Char(string='Delivery Times', compute='_compute_delivery_times', store=True)
     week_number = fields.Char(string='ISO Week No.', compute='_compute_week_number', store=True)
@@ -159,6 +159,22 @@ class RoundManagementBatch(models.Model):
         string='Delivery Channels',
         required=True,
     )
+
+    depot_id = fields.Many2one(
+        'stock.warehouse',
+        string='Depot',
+        required=True,
+        compute='_compute_depot_id',
+        store=True,
+        readonly=False,
+        precompute=True,
+    )
+
+    @api.depends('round_id')
+    def _compute_depot_id(self):
+        for record in self:
+            if record.round_id.depot_id:
+                record.depot_id = record.round_id.depot_id
 
     @api.onchange('round_id')
     def _onchange_round_id_set_reference(self):
