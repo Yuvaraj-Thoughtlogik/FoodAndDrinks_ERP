@@ -75,8 +75,8 @@ class ProductionReportWizard(models.TransientModel):
         'wizard_id',
         'category_id',
         string='Categories',
-        domain=[('name', 'in', ['Fresh', 'Chilled'])],
-        default=_default_category_ids,
+        # domain=[('name', 'in', ['Fresh', 'Chilled'])],
+        # default=_default_category_ids,
         help="Select Fresh, Chilled, or both product categories to include in the report."
     )
 
@@ -149,10 +149,12 @@ class ProductionReportWizard(models.TransientModel):
 
     def _get_production_domain(self):
         """Domain for the draft Regal Van Manufacturing Orders backing the
-        Production Report and its "View Lines" screen. Each draft MO
-        represents exactly one box of its product (see
-        round_management.StockFreshBoxWizard.action_generate_mo), so the
-        report's "Quantity" per product is a COUNT of matching MOs.
+        Production Report. A draft MO's own top-level product is a generic
+        pack (e.g. "Salmon Fish Pack"), not the box-type product to report
+        on - that lives on its raw-material component lines (move_raw_ids,
+        see report/production_report.py) - so this domain does NOT filter by
+        category; category_ids is applied to the component lines instead
+        (see _get_component_move_domain() below and generate_pdf()).
 
         Filters through round_batch_id (not the ambiguous delivery_date/
         batch_id fields also defined on mrp.production by round_management's
@@ -169,8 +171,27 @@ class ProductionReportWizard(models.TransientModel):
         ]
         if self.depot_ids:
             domain.append(('depot_id', 'in', self.depot_ids.ids))
+        return domain
+
+    def _get_component_move_domain(self):
+        """Domain for the draft Regal Van Manufacturing Orders' raw material
+        component lines (move_raw_ids) backing the Production Report's "View
+        Lines" screen - the same records report/production_report.py's
+        generate_pdf() groups Depot -> Category -> Product from, filtered/
+        grouped by the *component's* category and product, not the MO's own."""
+        self.ensure_one()
+        domain = [
+            ('raw_material_production_id', '!=', False),
+            ('raw_material_production_id.state', '=', 'draft'),
+            ('raw_material_production_id.delivery_channel', '=', 'regal_van'),
+            ('raw_material_production_id.round_batch_id.delivery_date', '>=', self.delivery_date_from),
+            ('raw_material_production_id.round_batch_id.delivery_date', '<=', self.delivery_date_to),
+            ('raw_material_production_id.is_late_order', '=', self.include_late_orders),
+        ]
+        if self.depot_ids:
+            domain.append(('raw_material_production_id.depot_id', 'in', self.depot_ids.ids))
         if self.category_ids:
-            domain.append(('product_categ_id', 'in', self.category_ids.ids))
+            domain.append(('product_id.categ_id', 'in', self.category_ids.ids))
         return domain
 
     def action_print_report(self):
@@ -181,7 +202,7 @@ class ProductionReportWizard(models.TransientModel):
         below, no QWeb/wkhtmltopdf, no background job."""
         self.ensure_one()
         if self.delivery_channel == 'courier':
-            raise UserError(_("Production Report is only available for Regal Van Delivery."))
+            raise UserError(_("Production Report is not yet available for Courier Delivery."))
 
         domain = self._get_production_domain()
         productions = self.env['mrp.production'].search(domain)
@@ -213,16 +234,17 @@ class ProductionReportWizard(models.TransientModel):
         }
 
     def action_view_lines(self):
-        """Opens the underlying draft Manufacturing Order records (one row
-        per box) grouped by Depot -> Category, matching the Production
-        Report's filters - same pattern as
+        """Opens the underlying draft MOs' raw material component lines (one
+        row per box - e.g. "0.5 kg Cod Fillets Boned" - see
+        report/production_report.py) grouped by Depot -> Category, matching
+        the Production Report's filters - same pattern as
         RequirementReportWizard.action_view_lines()."""
         self.ensure_one()
         if self.delivery_channel == 'courier':
             raise UserError(_("Production Report is only available for Regal Van Delivery."))
 
-        domain = self._get_production_domain()
-        if not self.env['mrp.production'].search_count(domain):
+        domain = self._get_component_move_domain()
+        if not self.env['stock.move'].search_count(domain):
             raise UserError(_(
                 "No draft Manufacturing Orders found for Regal Van Delivery with delivery dates between %s and %s."
             ) % (
@@ -233,13 +255,13 @@ class ProductionReportWizard(models.TransientModel):
         return {
             'name': _('Production Report - Manufacturing Order Lines'),
             'type': 'ir.actions.act_window',
-            'res_model': 'mrp.production',
+            'res_model': 'stock.move',
             'view_mode': 'list,form',
             'views': [
-                (self.env.ref('tl_rf_reports.view_mrp_production_production_report_list').id, 'list'),
+                (self.env.ref('tl_rf_reports.view_stock_move_production_report_list').id, 'list'),
                 (False, 'form'),
             ],
-            'search_view_id': [self.env.ref('tl_rf_reports.view_mrp_production_production_report_search').id, 'search'],
+            'search_view_id': [self.env.ref('tl_rf_reports.view_stock_move_production_report_search').id, 'search'],
             'domain': domain,
             'context': {
                 'search_default_group_by_depot': 1,

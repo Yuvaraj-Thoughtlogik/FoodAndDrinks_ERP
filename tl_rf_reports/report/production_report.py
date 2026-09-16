@@ -97,10 +97,10 @@ class _ProductionReportCanvas(canvas.Canvas):
             footer_r.drawOn(self, margin, 6 * mm)
 
         page_style = ParagraphStyle(
-            'PRFooterPage', fontName='Helvetica', fontSize=9, leading=11, alignment=0, textColor=colors.black
+            'PRFooterPage', fontName='Helvetica', fontSize=9, leading=11, alignment=1, textColor=colors.black
         )
         page_p = Paragraph(str(self._pageNumber), page_style)
-        page_p.wrap(40 * mm, 8 * mm)
+        page_p.wrap(width, 8 * mm)
         page_p.drawOn(self, margin, 6 * mm)
 
         self.restoreState()
@@ -207,11 +207,13 @@ class ReportProductionReport(models.AbstractModel):
     # QWeb template, no wkhtmltopdf, no background job (see the "Print
     # Label" flow in production_report_wizard.py for the sibling pattern).
     # `productions` is the draft mrp.production recordset already filtered
-    # by ProductionReportWizard._get_production_domain(). Each draft MO
-    # represents exactly one box of its product - see
-    # round_management.StockFreshBoxWizard.action_generate_mo - so the
-    # "Quantity" column is a COUNT of MOs per product, not a sum of
-    # product_qty (which holds the box's weight in kg, not a box count).
+    # by ProductionReportWizard._get_production_domain(). A draft MO's own
+    # top-level product is a generic pack (e.g. "Salmon Fish Pack") - the
+    # actual box-type product to count (e.g. "0.5 kg Cod Fillets Boned")
+    # lives on its BOM/raw-material component lines (move_raw_ids), so the
+    # report groups those component lines, not mo.product_id. "Quantity" is
+    # the sum of each component line's product_uom_qty (the planned box
+    # count for that component on that MO), not mo.product_qty.
     # ------------------------------------------------------------------
     def generate_pdf(self, wizard, productions):
         """Returns the finished PDF (bytes) for the Production Report, or
@@ -219,8 +221,16 @@ class ReportProductionReport(models.AbstractModel):
         if not productions:
             return None
 
+        moves = productions.mapped('move_raw_ids')
+        if wizard.category_ids:
+            allowed_categ_ids = set(wizard.category_ids.ids)
+            moves = moves.filtered(lambda m: m.product_id.categ_id.id in allowed_categ_ids)
+        if not moves:
+            return None
+
         depots_map = {}
-        for mo in productions:
+        for move in moves:
+            mo = move.raw_material_production_id
             depot = mo.depot_id
             depot_name = depot.name or _('Grimsby')
             depot_key = depot.id or 0
@@ -236,8 +246,8 @@ class ReportProductionReport(models.AbstractModel):
             if mo.batch_delivery_date:
                 d_map['dates'].add(mo.batch_delivery_date)
 
-            product = mo.product_id
-            categ = mo.product_categ_id or product.categ_id
+            product = move.product_id
+            categ = product.categ_id
             categ_name = (categ.name or _('Other')).strip().upper()
             categ_key = categ.id or 0
             if categ_key not in d_map['categories_map']:
@@ -249,10 +259,10 @@ class ReportProductionReport(models.AbstractModel):
                 c_prods[pid] = {
                     'product_id': pid,
                     'product_name': product.name,
-                    'qty': 0,
+                    'qty': 0.0,
                     'sort_num': self._extract_sort_number(product),
                 }
-            c_prods[pid]['qty'] += 1
+            c_prods[pid]['qty'] += move.product_uom_qty or 0.0
 
         if not depots_map:
             return None
@@ -268,6 +278,8 @@ class ReportProductionReport(models.AbstractModel):
                 key=lambda item: self._get_category_sort_key(item[1]['categ_name'])
             ):
                 sorted_prods = sorted(c_val['products'].values(), key=self._get_sort_key)
+                for p in sorted_prods:
+                    p['qty_display'] = int(round(p['qty'])) if float(p['qty']).is_integer() else p['qty']
                 if sorted_prods:
                     category_list.append({'categ_name': c_val['categ_name'], 'products': sorted_prods})
             if not category_list:
@@ -357,7 +369,7 @@ class ReportProductionReport(models.AbstractModel):
 
                     rows = [
                         [
-                            Paragraph(str(p['qty']), cell_qty_style),
+                            Paragraph(str(p['qty_display']), cell_qty_style),
                             Paragraph(xml_escape(p['product_name'] or ''), cell_prod_style),
                         ]
                         for p in cat['products']
