@@ -22,6 +22,7 @@
         'sale',
         'stock',
         'purchase',
+        'mrp',
         'round_management',
         'tl_contact_utm',
     ],

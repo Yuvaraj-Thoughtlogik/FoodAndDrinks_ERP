@@ -46,6 +46,8 @@
                             class="btn-primary" icon="fa-print" data-hotkey="p"/>
                     <button name="action_print_label" string="Print Label" type="object"
                             class="btn-primary" icon="fa-tag" data-hotkey="l"/>
+                    <button name="action_view_lines" string="View Lines" type="object"
+                            class="btn-secondary" icon="fa-list" data-hotkey="v"/>
                     <button string="Cancel" class="btn-secondary" special="cancel" data-hotkey="x"/>
                 </footer>
             </form>
@@ -59,5 +61,44 @@
         <field name="view_mode">form</field>
         <field name="target">new</field>
         <field name="view_id" ref="view_production_report_wizard_form"/>
+    </record>
+
+    <!-- Manufacturing Order List View for Production Report "View Lines" -->
+    <record id="view_mrp_production_production_report_list" model="ir.ui.view">
+        <field name="name">mrp.production.production.report.list</field>
+        <field name="model">mrp.production</field>
+        <field name="arch" type="xml">
+            <list string="Production Report Lines" create="0" delete="0" edit="0" expand="1">
+                <field name="batch_delivery_date" string="Delivery Date"/>
+                <field name="depot_id"/>
+                <field name="product_categ_id" string="Category"/>
+                <field name="product_id" string="Product / Box Contents"/>
+                <field name="product_qty" string="Box Weight (Kg)" optional="show"/>
+                <field name="name" string="Manufacturing Order" optional="hide"/>
+                <field name="origin" optional="hide"/>
+                <field name="is_late_order" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Manufacturing Order Search View for Production Report "View Lines" -->
+    <record id="view_mrp_production_production_report_search" model="ir.ui.view">
+        <field name="name">mrp.production.production.report.search</field>
+        <field name="model">mrp.production</field>
+        <field name="arch" type="xml">
+            <search string="Search Production Report Lines">
+                <field name="product_id" string="Product / Box Contents"/>
+                <field name="product_categ_id" string="Category"/>
+                <field name="depot_id"/>
+                <field name="batch_delivery_date" string="Delivery Date"/>
+                <separator/>
+                <group>
+                    <filter string="Depot" name="group_by_depot" context="{'group_by': 'depot_id'}"/>
+                    <filter string="Category" name="group_by_category" context="{'group_by': 'product_categ_id'}"/>
+                    <filter string="Product" name="group_by_product" context="{'group_by': 'product_id'}"/>
+                    <filter string="Delivery Date" name="group_by_delivery_date" context="{'group_by': 'batch_delivery_date'}"/>
+                </group>
+            </search>
+        </field>
     </record>
 </odoo>
