@@ -805,7 +805,7 @@ class ReportPredictionCourier(models.AbstractModel):
             def _draw_footer(self, total_pages):
                 self.saveState()
                 self.setFont('Helvetica-Oblique', 9)
-                self.setFillColor(colors.black)
+                self.setFillColor(navy)
                 self.drawString(margin, 8 * mm, footer_date_str or '')
                 self.setFont('Helvetica-BoldOblique', 9)
                 self.setFillColor(navy)
