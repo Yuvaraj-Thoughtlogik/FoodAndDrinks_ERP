@@ -48,31 +48,6 @@ class ListFilterWizard(models.TransientModel):
                     defaults[field.name] = today
         return defaults
 
-    @api.model
-    def _date_range_mapping(self, config_id):
-        """Map each date range's "From" field name to its "To" field name."""
-        config = self.env['list.filter.configuration'].browse(config_id).exists()
-        if not config:
-            return {}
-        mapping = {}
-        for line in config.field_line_ids:
-            if (line.field_family == 'date' and line.wizard_field_id
-                    and line.wizard_field_to_id):
-                mapping[line.wizard_field_id.name] = line.wizard_field_to_id.name
-        return mapping
-
-    def onchange(self, values, field_names, fields_spec):
-        result = super().onchange(values, field_names, fields_spec)
-        config_id = values.get('config_id') or self.env.context.get('default_config_id')
-        if config_id:
-            mapping = self._date_range_mapping(config_id)
-            for fname in field_names:
-                to_name = mapping.get(fname)
-                if to_name and to_name in fields_spec:
-                    # Start Date changed -> End Date follows it by default.
-                    result.setdefault('value', {})[to_name] = values.get(fname)
-        return result
-
     # ------------------------------------------------------------------
     def _build_domain(self):
         self.ensure_one()
