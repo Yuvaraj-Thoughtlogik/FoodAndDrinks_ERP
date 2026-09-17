@@ -165,6 +165,7 @@
         <field name="arch" type="xml">
 
             <xpath expr="//field[@name='partner_id']" position="after">
+                <field name="customer_code" string="Customer Code" optional="show"/>
                 <field name="round_id" optional="show"/>
                 <field name="round_code" optional="show"/>
                 <field name="batch_id" optional="show"/>

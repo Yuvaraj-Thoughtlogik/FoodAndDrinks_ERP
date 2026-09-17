@@ -29,6 +29,13 @@ class SaleOrder(models.Model):
     )
     round_code = fields.Char(related='round_id.code', string='Round Code', store=True)
 
+    customer_code = fields.Char(
+        related='partner_id.customer_code',
+        string='Customer Code',
+        store=True,
+        readonly=True,
+    )
+
     is_late_order = fields.Boolean(
         string="Late Order",
         compute='_compute_is_late_order',
