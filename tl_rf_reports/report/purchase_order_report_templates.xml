@@ -96,31 +96,31 @@
                     <div style="clear:both;"/>
                     <div style="margin-bottom: 10px; overflow:hidden;">
                         <div style="float:left; width:16%; box-sizing:border-box; padding-right:6px; font-size:11px;">
-                            <span t-if="doc.partner_ref" t-field="doc.partner_ref"/>
+                            <span t-if="doc.partner_ref" t-field="doc.partner_ref"/>&#160;
                         </div>
                         <!-- TODO: confirm source field for "Account" once user confirms -->
                         <div style="float:left; width:14%; box-sizing:border-box; padding-right:6px; font-size:11px;">
-                            <span t-if="doc.partner_ref" t-field="doc.partner_ref"/>
+                            <span t-if="doc.partner_id.ref" t-field="doc.partner_id.ref"/>&#160;
                         </div>
                         <!-- TODO: confirm source field for "Our Ref" once user confirms -->
                         <div style="float:left; width:14%; box-sizing:border-box; padding-right:6px; font-size:11px;">
-                            <span t-if="doc.partner_ref" t-field="doc.partner_ref"/>
+                            <span t-field="doc.name"/>&#160;
                         </div>
                         <!-- TODO: confirm source field for "Delivery" once user confirms -->
                         <div style="float:left; width:11%; box-sizing:border-box; padding-right:6px; font-size:11px;">
-                            <span t-if="doc.partner_ref" t-field="doc.partner_ref"/>
+                            <span t-if="doc.incoterm_id" t-field="doc.incoterm_id.name"/>&#160;
                         </div>
                         <!-- TODO: confirm source field for "Type" once user confirms -->
                         <div style="float:left; width:11%; box-sizing:border-box; padding-right:6px; font-size:11px;">
-                            <span t-if="doc.partner_ref" t-field="doc.partner_ref"/>
+                            <span t-if="doc.partner_ref" t-field="doc.partner_ref"/>&#160;
                         </div>
                         <div style="float:left; width:17%; box-sizing:border-box; padding-right:6px; font-size:11px;">
                             <span t-if="doc.date_approve" t-field="doc.date_approve"
-                                  t-options='{"widget": "date", "format": "dd/MM/yyyy"}'/>
+                                  t-options='{"widget": "date", "format": "dd/MM/yyyy"}'/>&#160;
                         </div>
                         <div style="float:left; width:17%; box-sizing:border-box; font-size:11px;">
                             <span t-if="doc.date_planned" t-field="doc.date_planned"
-                                  t-options='{"widget": "date", "format": "dd/MM/yyyy"}'/>
+                                  t-options='{"widget": "date", "format": "dd/MM/yyyy"}'/>&#160;
                         </div>
                     </div>
                     <div style="clear:both;"/>
