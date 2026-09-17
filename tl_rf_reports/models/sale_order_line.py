@@ -2,7 +2,6 @@
 import logging
 import math
 from odoo import api, fields, models
-from odoo.tools import float_is_zero
 
 _logger = logging.getLogger(__name__)
 
@@ -53,57 +52,67 @@ class SaleOrderLine(models.Model):
         string="Confirmed Qty",
         default=0.0,
         copy=False,
+        compute="_compute_confirmed_qty",
+        store=True,
         digits='Product Unit of Measure',
         help="Snapshot of the ordered quantity taken when the sale order was confirmed. "
              "Used to detect quantity changes made after confirmation.",
-    )
-    late_created = fields.Boolean(
-        string="Late Created",
-        default=False,
-        copy=False,
-        readonly=True,
-        help="True when this line was added to the order after the order was already confirmed.",
     )
     late_qty_delta = fields.Float(
         string="Late Qty Delta",
         compute='_compute_late_order',
         store=True,
+        copy=False,
         digits='Product Unit of Measure',
         help="Current quantity minus the quantity confirmed at order confirmation. "
-             "Positive when increased after confirmation, negative when reduced.",
+             "Only populated while the order is late (confirmed and its batch is Printed).",
     )
     late_order = fields.Boolean(
         string="Late Order",
-        compute='_compute_late_order',
         store=True,
-        help="True when the sale order itself is late, this line was added after the "
-             "order was confirmed, or its quantity was changed after confirmation.",
+        compute='_compute_late_order',
+        copy=False,
+        help="True when the order is confirmed and its batch is in Printed status.",
     )
-
-    @api.depends('product_uom_qty', 'confirmed_qty', 'late_created', 'order_id.state', 'order_id.is_late_order')
-    def _compute_late_order(self):
-        for line in self:
-            line.late_qty_delta = line.product_uom_qty - line.confirmed_qty
-            qty_changed_after_confirm = (
-                line.order_id.state in ('sale', 'done')
-                and not float_is_zero(line.late_qty_delta, precision_digits=4)
-            )
-            line.late_order = (
-                bool(line.order_id.is_late_order)
-                or line.late_created
-                or qty_changed_after_confirm
-            )
+    batch_id = fields.Many2one(
+        comodel_name='round.management.batch',
+        related='order_id.batch_id',
+        store=True,
+    )
+    lock_line = fields.Boolean()
 
     @api.model_create_multi
     def create(self, vals_list):
-        order_ids = {vals['order_id'] for vals in vals_list if vals.get('order_id')}
-        late_order_ids = set(
-            self.env['sale.order'].browse(order_ids).filtered(lambda o: o.state in ('sale', 'done')).ids
-        )
-        for vals in vals_list:
-            if vals.get('order_id') in late_order_ids and 'late_created' not in vals:
-                vals['late_created'] = True
+
+        for val in vals_list:
+            order_id = self.env['sale.order'].browse(val['order_id'])
+            val['lock_line'] = (order_id.state == 'sale' and order_id.batch_id.state == 'prt') or order_id.is_late_order
+
         return super().create(vals_list)
+
+    @api.depends('product_uom_qty','confirmed_qty')
+    def _compute_late_order(self):
+        for line in self:
+            if line.lock_line:
+                line.late_order = True
+                line.late_qty_delta = line.product_uom_qty
+
+            elif line.batch_id.state == 'prt' and line.order_id.state == 'sale' and line.product_uom_qty != line.confirmed_qty:
+                line.late_order = True
+                line.late_qty_delta = line.product_uom_qty - line.confirmed_qty
+            else:
+                line.late_qty_delta = 0.0
+                line.late_order = False
+
+
+    @api.depends('order_id.state','batch_id.state')
+    def _compute_confirmed_qty(self):
+        for rec in self:
+            if rec.batch_id.state == 'prt' and rec.order_id.state == 'sale':
+                rec.confirmed_qty = rec.product_uom_qty
+            else:
+                rec.confirmed_qty = 0.0
+
 
     def _get_product_unit_weight_in_kg(self):
         """Extracts unit weight in kg directly from the product."""
