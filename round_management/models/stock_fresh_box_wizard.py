@@ -32,10 +32,10 @@ class StockFreshBoxHistoryLine(models.Model):
     history_id = fields.Many2one('stock.fresh.box.history', string="History Record", ondelete='cascade')
     sale_order_id = fields.Many2one('sale.order', string="Sales Order", store=True)
     sale_line_id = fields.Many2one('sale.order.line', string="Sales Order Line", store=True)
-    
+
     # Updated: Replaced special_requirements_notes with Many2one field
     special_requirements_notes_id = fields.Many2one('sale.order.special.note', string="Special Notes", store=True)
-    
+
     order_number = fields.Char(string="Order Number", store=True)
     customer_code = fields.Char(string="Customer Code", store=True)
     round_batch_id = fields.Many2one('round.management.batch', string="Round Batch", store=True)
@@ -79,29 +79,30 @@ class StockFreshBoxWizard(models.TransientModel):
     def _is_weight_uom(self, uom):
         if not uom:
             return False
-        
+
         category = getattr(uom, 'category_id', False) or getattr(uom, 'uom_category_id', False)
         if category:
             category_name = (getattr(category, 'name', '') or '').lower()
             measure_type = getattr(category, 'measure_type', '') or getattr(category, 'uom_type', '')
             if 'weight' in category_name or measure_type == 'weight':
                 return True
-        
+
         uom_name = (getattr(uom, 'name', '') or '').strip().lower()
         uom_symbol = (getattr(uom, 'symbol', '') or '').strip().lower()
-        
-        weight_keywords = {'kg', 'kgs', 'kg(s)', 'kilo', 'kilogram', 'kilograms', 'g', 'gram', 'grams', 'lb', 'lbs', 'pound', 'pounds'}
-    
+
+        weight_keywords = {'kg', 'kgs', 'kg(s)', 'kilo', 'kilogram', 'kilograms', 'g', 'gram', 'grams', 'lb', 'lbs',
+                           'pound', 'pounds'}
+
         return uom_name in weight_keywords or uom_symbol in weight_keywords
 
     def _get_line_effective_weight(self, line):
         product = line.product_id
         ordered_qty = line.product_uom_qty
-        
+
         match_pack_kg = re.search(r'(\d+(?:\.\d+)?)\s*(?:KG|Kilo)', product.name or '', re.IGNORECASE)
         if match_pack_kg:
             return ordered_qty * float(match_pack_kg.group(1))
-        
+
         note_rel = getattr(line, 'special_requirements_notes_id', False)
         note_text_val = note_rel.display_name or note_rel.name if note_rel else ''
 
@@ -159,7 +160,8 @@ class StockFreshBoxWizard(models.TransientModel):
             batch_state = batch.state
 
             state_field = batch._fields.get('state')
-            state_label = dict(state_field.selection).get(batch_state, batch_state) if hasattr(state_field, 'selection') else batch_state
+            state_label = dict(state_field.selection).get(batch_state, batch_state) if hasattr(state_field,
+                                                                                               'selection') else batch_state
 
             if not is_late and batch_state != 'prt':
                 invalid_batches_info.append(
@@ -204,11 +206,11 @@ class StockFreshBoxWizard(models.TransientModel):
             box_id = getattr(line, 'box_id', False) or getattr(order, 'box_id', False)
 
             raw_assembly = (
-                getattr(product, 'assembly_type', False) or 
-                getattr(product.product_tmpl_id, 'assembly_type', False) or 
-                getattr(line, 'is_assembly', False) or 
-                getattr(line, 'assembly_type', False) or 
-                ''
+                    getattr(product, 'assembly_type', False) or
+                    getattr(product.product_tmpl_id, 'assembly_type', False) or
+                    getattr(line, 'is_assembly', False) or
+                    getattr(line, 'assembly_type', False) or
+                    ''
             )
             raw_assembly = str(raw_assembly).strip().upper()
             assembly_val = raw_assembly if raw_assembly in ['A', 'B', 'C'] else ''
@@ -355,7 +357,8 @@ class StockFreshBoxWizard(models.TransientModel):
                 'round_id': line.round_id.id if line.round_id else False,
                 'delivery_date': line.delivery_date or self.start_date,
                 'delivery_channel': self.delivery_channel,
-                'depot': line.depot or (line.sale_order_id.warehouse_id.name if line.sale_order_id and line.sale_order_id.warehouse_id else ''),
+                'depot': line.depot or (
+                    line.sale_order_id.warehouse_id.name if line.sale_order_id and line.sale_order_id.warehouse_id else ''),
                 'is_late_order': line.is_late_order,
                 'late_status': line.late_status,
 
@@ -398,7 +401,7 @@ class StockFreshBoxWizardLine(models.TransientModel):
     wizard_id = fields.Many2one('stock.fresh.box.wizard', string="Wizard Reference", ondelete='cascade')
     sale_order_id = fields.Many2one('sale.order', string="Sales Order")
     sale_line_id = fields.Many2one('sale.order.line', string="Order Line")
-    
+
     # Updated: Replaced special_requirements_notes with Many2one field
     special_requirements_notes_id = fields.Many2one('sale.order.special.note', string="Special Notes")
 
@@ -417,9 +420,9 @@ class StockFreshBoxWizardLine(models.TransientModel):
     product_code = fields.Char(string="Product Code")
     product_name = fields.Char(string="Product Name")
     product_desc = fields.Char(string="Description")
-    
+
     is_assembly = fields.Char(string="Assembly / Component (A/C)")
-    
+
     uom_id = fields.Many2one('uom.uom', string="UOM")
     box_id = fields.Char(string="Box ID")
     category_id = fields.Many2one('product.category', string="Category")

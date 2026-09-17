@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
-from odoo import fields, models
+import re
+
+from odoo import api, fields, models
 
 
 class MrpProduction(models.Model):
@@ -26,3 +28,26 @@ class MrpProduction(models.Model):
         store=True,
         readonly=True,
     )
+
+    # Same "origin" string also carries the exact sale.order.line that this
+    # box came from (the "(Line 456)" part) - used by the Production Report
+    # (report/production_report.py) to attach each customer's special
+    # requirements note to its own consolidated row, without merging it into
+    # other customers' boxes of the same product/quantity.
+    # sale_line_id = fields.Many2one(
+    #     'sale.order.line',
+    #     string='Sale Order Line',
+    #     compute='_compute_sale_line_id',
+    #     store=True,
+    #     readonly=True,
+    # )
+    #
+    # @api.depends('origin')
+    # def _compute_sale_line_id(self):
+    #     for mo in self:
+    #         line = False
+    #         if mo.origin:
+    #             match = re.search(r'\(Line\s+(\d+)\)', mo.origin)
+    #             if match:
+    #                 line = self.env['sale.order.line'].browse(int(match.group(1))).exists()
+    #         mo.sale_line_id = line.id if line else False

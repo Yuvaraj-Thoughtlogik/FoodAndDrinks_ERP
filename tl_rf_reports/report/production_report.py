@@ -14,6 +14,15 @@ from reportlab.platypus import (
 from odoo import api, fields, models, _
 
 
+def _format_qty(val):
+    if not val:
+        return '0'
+    formatted = f"{val:.3f}"
+    if '.' in formatted:
+        formatted = formatted.rstrip('0').rstrip('.')
+    return formatted or '0'
+
+
 class _ProductionReportHeaderMarker(Flowable):
     """Zero-size flowable that stamps the current depot page's header data
     onto the canvas as soon as ReportLab draws it - same two-pass technique
@@ -118,12 +127,17 @@ class ReportProductionReport(models.AbstractModel):
     # then FRESH, then everything else alphabetically.
     # ------------------------------------------------------------------
     @api.model
-    def _get_sort_key(self, product_item):
-        sort_num = product_item.get('sort_num')
-        product_name = (product_item.get('product_name') or '').strip().lower()
+    def _get_sort_key(self, line_item):
+        """Same product/name ordering as _extract_sort_number's callers
+        elsewhere in this module, with the per-line "To Consume" quantity as
+        a secondary key so a product's box-size variants (e.g. 0.5kg before
+        1kg) stay grouped together and in ascending order."""
+        sort_num = line_item.get('sort_num')
+        product_name = (line_item.get('product_name') or '').strip().lower()
+        qty_per_line = line_item.get('qty_per_line') or 0.0
         if not sort_num or sort_num <= 0:
-            return (0, 0, product_name)
-        return (1, sort_num, product_name)
+            return (0, 0, product_name, qty_per_line)
+        return (1, sort_num, product_name, qty_per_line)
 
     @api.model
     def _extract_sort_number(self, product):
@@ -211,9 +225,17 @@ class ReportProductionReport(models.AbstractModel):
     # top-level product is a generic pack (e.g. "Salmon Fish Pack") - the
     # actual box-type product to count (e.g. "0.5 kg Cod Fillets Boned")
     # lives on its BOM/raw-material component lines (move_raw_ids), so the
-    # report groups those component lines, not mo.product_id. "Quantity" is
-    # the sum of each component line's product_uom_qty (the planned box
-    # count for that component on that MO), not mo.product_qty.
+    # report groups those component lines, not mo.product_id.
+    #
+    # Consolidation: each component line (move_raw_ids entry) is one box.
+    # Lines for the same product AND the same "To Consume" quantity
+    # (product_uom_qty) consolidate into a single row: "Quantity" is the
+    # COUNT of such lines, and the row's product text is prefixed with that
+    # shared quantity (e.g. "1kg Cod Fillets Boned"). A line carrying a
+    # customer special note (sale_line_id.special_requirements_notes_id)
+    # only consolidates with other lines from that SAME sale order line, so
+    # its note stays attached to its own row instead of bleeding into
+    # another customer's boxes of the same product/quantity.
     # ------------------------------------------------------------------
     def generate_pdf(self, wizard, productions):
         """Returns the finished PDF (bytes) for the Production Report, or
@@ -251,18 +273,26 @@ class ReportProductionReport(models.AbstractModel):
             categ_name = (categ.name or _('Other')).strip().upper()
             categ_key = categ.id or 0
             if categ_key not in d_map['categories_map']:
-                d_map['categories_map'][categ_key] = {'categ_name': categ_name, 'products': {}}
+                d_map['categories_map'][categ_key] = {'categ_name': categ_name, 'lines': {}}
 
-            c_prods = d_map['categories_map'][categ_key]['products']
-            pid = product.id
-            if pid not in c_prods:
-                c_prods[pid] = {
-                    'product_id': pid,
+            qty_per_line = move.product_uom_qty or 0.0
+            special_note = (move.special_requirements_notes or '').strip()
+            # Notes-less lines consolidate across any sale order line; a
+            # noted line only consolidates within its own sale_line_id.
+            notes_scope = move.sale_line_id.id if special_note else 0
+            line_key = (product.id, qty_per_line, notes_scope)
+
+            c_lines = d_map['categories_map'][categ_key]['lines']
+            if line_key not in c_lines:
+                c_lines[line_key] = {
+                    'product_id': product.id,
                     'product_name': product.name,
-                    'qty': 0.0,
+                    'qty_per_line': qty_per_line,
+                    'count': 0,
+                    'special_notes': special_note,
                     'sort_num': self._extract_sort_number(product),
                 }
-            c_prods[pid]['qty'] += move.product_uom_qty or 0.0
+            c_lines[line_key]['count'] += 1
 
         if not depots_map:
             return None
@@ -277,11 +307,11 @@ class ReportProductionReport(models.AbstractModel):
                 d_val['categories_map'].items(),
                 key=lambda item: self._get_category_sort_key(item[1]['categ_name'])
             ):
-                sorted_prods = sorted(c_val['products'].values(), key=self._get_sort_key)
-                for p in sorted_prods:
-                    p['qty_display'] = int(round(p['qty'])) if float(p['qty']).is_integer() else p['qty']
-                if sorted_prods:
-                    category_list.append({'categ_name': c_val['categ_name'], 'products': sorted_prods})
+                sorted_lines = sorted(c_val['lines'].values(), key=self._get_sort_key)
+                for item in sorted_lines:
+                    item['product_display'] = f"{_format_qty(item['qty_per_line'])}kg {item['product_name'] or ''}"
+                if sorted_lines:
+                    category_list.append({'categ_name': c_val['categ_name'], 'products': sorted_lines})
             if not category_list:
                 continue
 
@@ -324,14 +354,22 @@ class ReportProductionReport(models.AbstractModel):
         col_header_prod_style = ParagraphStyle(
             'PRColProd', fontName='Helvetica-BoldOblique', fontSize=10.5, leading=13, alignment=0, textColor=colors.black
         )
+        col_header_notes_style = ParagraphStyle(
+            'PRColNotes', fontName='Helvetica-BoldOblique', fontSize=10.5, leading=13, alignment=0, textColor=colors.black
+        )
         cell_qty_style = ParagraphStyle(
             'PRCellQty', fontName='Helvetica-Bold', fontSize=11.25, leading=15, alignment=1, textColor=colors.black
         )
         cell_prod_style = ParagraphStyle(
             'PRCellProd', fontName='Helvetica', fontSize=11.25, leading=15, alignment=0, textColor=colors.black
         )
+        cell_notes_style = ParagraphStyle(
+            'PRCellNotes', fontName='Helvetica-Oblique', fontSize=9.5, leading=12, alignment=0, textColor=colors.black
+        )
 
-        col_widths = [25 * mm, width - 25 * mm]
+        qty_col_width = 20 * mm
+        remaining_width = width - qty_col_width
+        col_widths = [qty_col_width, remaining_width * 0.55, remaining_width * 0.45]
 
         story = []
         first_page = True
@@ -353,13 +391,14 @@ class ReportProductionReport(models.AbstractModel):
                         [[
                             Paragraph("Quantity", col_header_qty_style),
                             Paragraph("Product / Box Contents", col_header_prod_style),
+                            Paragraph("Special Notes", col_header_notes_style),
                         ]],
                         colWidths=col_widths,
                     )
                     header_row.setStyle(TableStyle([
                         ('VALIGN', (0, 0), (-1, -1), 'BOTTOM'),
                         ('LEFTPADDING', (0, 0), (0, -1), 0),
-                        ('LEFTPADDING', (1, 0), (1, -1), 7.5),
+                        ('LEFTPADDING', (1, 0), (2, -1), 7.5),
                         ('RIGHTPADDING', (0, 0), (-1, -1), 0),
                         ('TOPPADDING', (0, 0), (-1, -1), 1),
                         ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
@@ -369,8 +408,9 @@ class ReportProductionReport(models.AbstractModel):
 
                     rows = [
                         [
-                            Paragraph(str(p['qty_display']), cell_qty_style),
-                            Paragraph(xml_escape(p['product_name'] or ''), cell_prod_style),
+                            Paragraph(str(p['count']), cell_qty_style),
+                            Paragraph(xml_escape(p['product_display'] or ''), cell_prod_style),
+                            Paragraph(xml_escape(p['special_notes'] or ''), cell_notes_style),
                         ]
                         for p in cat['products']
                     ]
@@ -378,7 +418,7 @@ class ReportProductionReport(models.AbstractModel):
                     table.setStyle(TableStyle([
                         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
                         ('LEFTPADDING', (0, 0), (0, -1), 0),
-                        ('LEFTPADDING', (1, 0), (1, -1), 7.5),
+                        ('LEFTPADDING', (1, 0), (2, -1), 7.5),
                         ('RIGHTPADDING', (0, 0), (-1, -1), 0),
                         ('TOPPADDING', (0, 0), (-1, -1), 3),
                         ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
