@@ -305,13 +305,12 @@ class SaleOrder(models.Model):
 
         return "%02d:%02d" % (hours, minutes)
 
-    @api.depends('batch_id')
+    @api.depends('state', 'batch_id')
     def _compute_is_late_order(self):
         for rec in self:
-            if rec.batch_id and rec.batch_id.state == 'prt':
-                rec.is_late_order = True
-            else:
-                rec.is_late_order = False
+            rec.is_late_order = bool(
+                rec.state in ('sale', 'done') and rec.batch_id and rec.batch_id.state == 'prt'
+            )
 
     @api.depends('delivery_date', 'commitment_date')
     def _compute_delivery_day_name(self):
