@@ -86,6 +86,7 @@ class ProductionReportWizard(models.TransientModel):
         help="Select Fresh, Chilled, or both product categories to include in the report."
     )
 
+
     @api.onchange('delivery_date_from')
     def _onchange_delivery_date_from(self):
         if self.delivery_date_from:
@@ -159,7 +160,7 @@ class ProductionReportWizard(models.TransientModel):
         "Salmon Fish Pack"), not the box-type product to report on - that
         lives on its raw-material component lines (move_raw_ids, see
         report/production_report.py and report/courier_production_report.py)
-        - so this domain does NOT filter by category; category_ids is
+        - so this domain does NOT filter by category; category_id is
         applied to the component lines instead (see
         _get_component_move_domain() below and generate_pdf()).
 
@@ -211,8 +212,8 @@ class ProductionReportWizard(models.TransientModel):
         ]
         if self.depot_ids:
             domain.append(('raw_material_production_id.depot_id', 'in', self.depot_ids.ids))
-        if self.category_ids:
-            domain.append(('product_id.categ_id', 'in', self.category_ids.ids))
+        if self.category_id:
+            domain.append(('product_id.categ_id', '=', self.category_id.id))
         return domain
 
     def action_print_report(self):
@@ -311,105 +312,3 @@ class ProductionReportWizard(models.TransientModel):
                 'search_default_group_by_category': 1,
             },
         }
-
-    def action_print_label(self):
-        """Triggers the channel-specific Production Label report.
-
-        Built directly with ReportLab (generate_pdf() on the report model,
-        see production_label_report.py) instead of QWeb+wkhtmltopdf, and
-        returned as a synchronous download - one physical label per PDF
-        page at a fixed 100mm x 130mm size. The QWeb templates/actions in
-        production_label_report_views.xml are left registered for parity
-        but are no longer invoked here."""
-        self.ensure_one()
-        label_lines = self._get_label_data()
-        if not label_lines:
-            raise UserError(_("No matching records found to generate labels for the selected criteria."))
-
-        if self.delivery_channel == 'courier':
-            report_model = self.env['report.tl_rf_reports.report_production_label_document_courier']
-            filename_suffix = 'Courier'
-        else:
-            report_model = self.env['report.tl_rf_reports.report_production_label_document_regal_van']
-            filename_suffix = 'Regal_Van'
-
-        pdf_content = report_model.generate_pdf(self)
-        if not pdf_content:
-            raise UserError(_("No matching records found to generate labels for the selected criteria."))
-
-        attachment = self.env['ir.attachment'].create({
-            'name': f'Production_Label_{filename_suffix}_{self.delivery_date_from.strftime("%Y%m%d")}.pdf',
-            'type': 'binary',
-            'datas': base64.b64encode(pdf_content),
-            'mimetype': 'application/pdf',
-            'res_model': self._name,
-            'res_id': self.id,
-        })
-        return {
-            'type': 'ir.actions.act_url',
-            'url': f'/web/content/{attachment.id}?download=true',
-            'target': 'self',
-        }
-
-    def _get_label_data(self):
-        """Returns a list of dicts, one per label to print, based on the current wizard filters."""
-        self.ensure_one()
-        label_lines = []
-        orders = self._get_matching_orders()
-        category_ids = self.category_ids.ids
-
-        for order in orders:
-            batch = order.batch_id
-            warehouse = batch.depot_id if batch else False
-
-            for line in order.order_line:
-                product = line.product_id
-
-                if not product or not product.categ_id:
-                    continue
-
-                if category_ids and product.categ_id.id not in category_ids:
-                    continue
-
-                # Calculate Fresh Use By date
-                # Delivery Date + Product Expiration Time (days)
-                use_by_date = False
-
-                if order.delivery_date and product.expiration_time:
-                    use_by_date = order.delivery_date + timedelta(
-                        days=product.expiration_time
-                    )
-
-                label_lines.append({
-                    'customer_name': order.partner_id.name or '',
-                    'customer_code': order.partner_id.customer_code or '',
-                    'round_name': order.round_id.name if order.round_id else '',
-
-                    'delivery_date_display': (
-                        order.delivery_date.strftime('%a, %d %B %Y')
-                        if order.delivery_date else ''
-                    ),
-
-                    'delivery_day_display': (
-                        order.delivery_date.strftime('%A')
-                        if order.delivery_date else ''
-                    ),
-
-                    'batch_code': batch.code if batch else '',
-                    'category_name': product.categ_id.name or '',
-                    'warehouse_name': warehouse.name if warehouse else '',
-                    'product_name': product.name or '',
-                    'origin_country': product.origin_country or '',
-                    'product_barcode': product.barcode or '',
-                    'product_default_code': product.default_code or '',
-
-                    # Fresh Use By:
-                    # Delivery Date + Product Expiration Time
-                    'use_by_display': (
-                        use_by_date.strftime('%d %B %Y')
-                        if use_by_date else ''
-                    ),
-                })
-
-        return label_lines
- 

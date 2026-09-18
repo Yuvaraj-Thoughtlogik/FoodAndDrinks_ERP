@@ -37,7 +37,7 @@
 
                         </group>
 
-                        <group string="Categories" colspan="4">
+                         <group string="Categories" colspan="4">
                             <!--                            <field name="category_ids"-->
                             <!--                                   widget="many2many_checkboxes"-->
                             <!--                                   class="o_horizontal_checkboxes"-->
@@ -51,8 +51,6 @@
                 <footer>
                     <button name="action_print_report" string="Print PDF" type="object"
                             class="btn-primary" icon="fa-print" data-hotkey="p"/>
-                    <button name="action_print_label" string="Print Label" type="object"
-                            class="btn-primary" icon="fa-tag" data-hotkey="l"/>
                     <button name="action_view_lines" string="View Lines" type="object"
                             class="btn-secondary" icon="fa-list" data-hotkey="v"/>
                     <button string="Cancel" class="btn-secondary" special="cancel" data-hotkey="x"/>
