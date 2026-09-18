@@ -19,7 +19,7 @@
     <!-- ============ COURIER ============ -->
     <record id="action_report_production_label_courier" model="ir.actions.report">
         <field name="name">Production Label - Courier</field>
-        <field name="model">production.report.wizard</field>
+        <field name="model">production.label.wizard</field>
         <field name="report_type">qweb-pdf</field>
         <field name="report_name">tl_rf_reports.report_production_label_document_courier</field>
         <field name="report_file">tl_rf_reports.report_production_label_document_courier</field>
@@ -131,7 +131,7 @@
     <!-- ============ REGAL VAN (mirrored, same layout) ============ -->
     <record id="action_report_production_label_regal_van" model="ir.actions.report">
         <field name="name">Production Label - Regal Van</field>
-        <field name="model">production.report.wizard</field>
+        <field name="model">production.label.wizard</field>
         <field name="report_type">qweb-pdf</field>
         <field name="report_name">tl_rf_reports.report_production_label_document_regal_van</field>
         <field name="report_file">tl_rf_reports.report_production_label_document_regal_van</field>
