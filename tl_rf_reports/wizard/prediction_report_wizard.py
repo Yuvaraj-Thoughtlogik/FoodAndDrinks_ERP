@@ -203,7 +203,7 @@ class PredictionReportWizard(models.TransientModel):
                 'wizard_id': self.id,
                 'product_id': prod.id,
                 'required_qty': req_qty,
-                'ordered_qty': req_qty,  # Default ordered_qty to required_qty
+                'ordered_qty': req_qty,
                 'vendor_id': vendor.id if vendor else False,
                 'price_unit': price or 0.0,
             })
@@ -227,6 +227,15 @@ class PredictionReportWizard(models.TransientModel):
             },
             'target': 'current',
         }
+
+    def action_print_report(self):
+        """Generates lines and returns the PDF report action."""
+        self.ensure_one()
+        self._generate_prediction_lines()
+        report_action = self.env.ref('tl_rf_reports.action_report_prediction', raise_if_not_found=False)
+        if not report_action:
+            raise UserError(_("The PDF report action 'tl_rf_reports.action_report_prediction' was not found."))
+        return report_action.report_action(self)
 
 
 class PredictionReportLine(models.TransientModel):
@@ -264,8 +273,7 @@ class PredictionReportLine(models.TransientModel):
         store=True,
         readonly=True
     )
-    
-    # Quantities
+
     required_qty = fields.Float(
         string='Required Qty',
         digits='Product Unit of Measure',
@@ -284,7 +292,6 @@ class PredictionReportLine(models.TransientModel):
         readonly=True
     )
 
-    # Vendor Selection with Domain
     vendor_ids = fields.Many2many(
         'res.partner',
         compute='_compute_vendor_ids',
@@ -302,7 +309,6 @@ class PredictionReportLine(models.TransientModel):
         digits='Product Price'
     )
 
-    # Purchase Order & Status Mapping
     purchase_order_id = fields.Many2one(
         'purchase.order',
         string='Purchase Order',
@@ -325,20 +331,17 @@ class PredictionReportLine(models.TransientModel):
 
     @api.depends('product_id', 'product_id.seller_ids', 'product_id.product_tmpl_id.seller_ids')
     def _compute_vendor_ids(self):
-        """Limit selection options strictly to vendors defined in Product Supplierinfo."""
         for line in self:
             sellers = line.product_id.seller_ids or line.product_id.product_tmpl_id.seller_ids
             line.vendor_ids = sellers.mapped('partner_id')
 
     @api.depends('purchase_order_id', 'purchase_order_id.state')
     def _compute_order_status(self):
-        """Track the linked Purchase Order state."""
         for line in self:
             line.order_status = line.purchase_order_id.state if line.purchase_order_id else False
 
     @api.onchange('vendor_id', 'product_id')
     def _onchange_vendor_id(self):
-        """Automatically fetch the price unit based on selected Vendor's sellerinfo price."""
         if self.product_id and self.vendor_id:
             sellers = (self.product_id.seller_ids or self.product_id.product_tmpl_id.seller_ids).filtered(
                 lambda s: s.partner_id == self.vendor_id
@@ -349,7 +352,6 @@ class PredictionReportLine(models.TransientModel):
                 self.price_unit = self.product_id.standard_price or 0.0
 
     def action_create_rfq(self):
-        """Action to group prediction lines by vendor and create Purchase RFQs."""
         lines = self
         if not lines:
             active_ids = self.env.context.get('active_ids')
@@ -365,7 +367,6 @@ class PredictionReportLine(models.TransientModel):
         if not lines:
             raise UserError(_("No prediction report lines found to create RFQ."))
 
-        # 1. Vendor Validation
         missing_vendor_lines = lines.filtered(lambda l: not l.vendor_id)
         if missing_vendor_lines:
             missing_products = sorted(list({l.product_id.display_name for l in missing_vendor_lines}))
@@ -376,7 +377,6 @@ class PredictionReportLine(models.TransientModel):
             ) % "\n".join(f"• {p}" for p in missing_products)
             raise UserError(msg)
 
-        # 2. Group products by Vendor
         lines_by_vendor = {}
         for line in lines:
             if line.ordered_qty <= 0:
@@ -389,7 +389,6 @@ class PredictionReportLine(models.TransientModel):
         if not lines_by_vendor:
             raise UserError(_("All selected lines have zero ordered quantity. No RFQs to create."))
 
-        # 3. Create one Purchase RFQ per Vendor
         PurchaseOrder = self.env['purchase.order']
         PurchaseOrderLine = self.env['purchase.order.line']
         created_pos = self.env['purchase.order']
@@ -428,7 +427,6 @@ class PredictionReportLine(models.TransientModel):
                 PurchaseOrderLine.create(po_line_vals)
                 l.purchase_order_id = po.id
 
-        # 4. Return action opening the created RFQ(s)
         if len(created_pos) == 1:
             return {
                 'name': _('Purchase RFQ'),
