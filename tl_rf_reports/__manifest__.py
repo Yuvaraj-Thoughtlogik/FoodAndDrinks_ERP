@@ -48,6 +48,8 @@
         # 'report/delivery_note_round_report_views.xml',
         'report/production_label_report_views.xml',
         'report/driver_packing_list_report.xml',
+        'report/purchase_order_report_actions.xml',
+        'report/purchase_order_report_templates.xml',
         'views/sale_order_views.xml',
         'views/mrp_production_views.xml',
         'views/menus.xml',
