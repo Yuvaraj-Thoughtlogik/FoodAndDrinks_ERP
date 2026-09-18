@@ -54,6 +54,13 @@
         action="action_production_report_wizard"
         sequence="40" />
 
+    <!-- Production Label Menu Item under Round Management -> Reporting -->
+    <menuitem id="menu_report_production_label"
+        name="Production Label"
+        parent="menu_round_reporting_root"
+        action="action_production_label_wizard"
+        sequence="41" />
+
     <!-- Round Batch Activity Report Menu Item under Round Management -> Reporting -->
     <menuitem id="menu_report_round_batch_activity"
         name="Round Batch Activity"
