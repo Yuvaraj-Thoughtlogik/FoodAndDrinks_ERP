@@ -13,7 +13,7 @@
         "web.assets_backend": [
             "tl_save_discard_but/static/src/scss/indicator_button.scss",
             "tl_save_discard_but/static/src/xml/template.xml",
-            ('after', 'web/static/src/search/**/*', 'odoox_web_action_bigger_button/static/src/**/*'),
+            ('after', 'web/static/src/search/**/*', 'tl_save_discard_but/static/src/**/*'),
         ],
     },
     "installable": True,
