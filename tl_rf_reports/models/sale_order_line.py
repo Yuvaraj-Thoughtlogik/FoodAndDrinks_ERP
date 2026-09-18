@@ -1,9 +1,23 @@
 # -*- coding: utf-8 -*-
 import logging
 import math
-from odoo import api, fields, models
+from odoo import api, fields, models, _
+from odoo.exceptions import ValidationError
 
 _logger = logging.getLogger(__name__)
+
+
+def _format_report_qty(val):
+    """Trims a float to at most 3 decimals with no trailing zeros, e.g.
+    2.0 -> '2', 2.5 -> '2.5'. Mirrors report/production_report.py's
+    _format_qty so "<qty>kg <product>" reads the same across reports."""
+    if not val:
+        return '0'
+    formatted = f"{val:.3f}"
+    if '.' in formatted:
+        formatted = formatted.rstrip('0').rstrip('.')
+    return formatted or '0'
+
 
 class SaleOrderLine(models.Model):
     _inherit = 'sale.order.line'
@@ -81,6 +95,104 @@ class SaleOrderLine(models.Model):
     )
     lock_line = fields.Boolean()
 
+    report_line_ids = fields.One2many(
+        'sale.order.line.report_lines',
+        'sale_order_line_id',
+        string='Report Lines',
+        compute='_compute_report_line_ids',
+        store=True,
+        help="Packing-list rows for this line. For a product with a BoM, one row "
+             "per raw-material component (move_raw_ids) of its linked Manufacturing "
+             "Order (production_sale_line_id); for a product without a BoM, a single "
+             "row for the line itself. See _compute_report_line_ids.",
+    )
+
+    # confirmed_qty, not product_uom_qty, drives the report line: it's the
+    # frozen snapshot taken when the batch was locked in (see
+    # _compute_confirmed_qty), so a qty edit made afterwards (late_qty_delta)
+    # is deliberately skipped here - the packing list only ever shows what
+    # was already confirmed, never a later change.
+    @api.depends('product_id', 'confirmed_qty', 'special_requirements_notes_id')
+    def _compute_report_line_ids(self):
+        Bom = self.env['mrp.bom']
+        products = self.mapped('product_id')
+        boms_by_product = Bom._bom_find(products=products) if products else {}
+
+        for line in self:
+            line.report_line_ids.unlink()
+            vals_list = line._get_report_line_vals(boms_by_product.get(line.product_id))
+            line.report_line_ids = [(0, 0, vals) for vals in vals_list]
+
+    def _recompute_report_lines(self):
+        """Force-refreshes report_line_ids. The linked Manufacturing Order
+        (and its move_raw_ids) is created/edited on mrp.production, a
+        different model that this field's @api.depends can't reach, so the
+        Packing List report calls this right before reading report_line_ids
+        to guarantee it reflects the current MO state."""
+        self._compute_report_line_ids()
+
+    @staticmethod
+    def _compose_report_name(base_name, notes):
+        """Appends the note to the report line's display name, hashed off on
+        both sides so it stands out on the printed row, e.g.:
+        "0.5 kg Cod Fillets Boned # 2 EQUAL SIZE PTNS 2PPB #"."""
+        base_name = base_name or ''
+        notes = (notes or '').strip()
+        return f"{base_name} # {notes} #" if notes else base_name
+
+    def _plain_report_line_vals(self, qty, notes):
+        """A single non-exploded "<qty> kg <product>" row - used for the
+        confirmed_qty row of a non-BoM product."""
+        return {
+            'name': self._compose_report_name(f"{_format_report_qty(qty)} kg {self.product_id.name or ''}", notes),
+            'product_id': self.product_id.id,
+            'box_content': f"{_format_report_qty(qty)} kg",
+            'notes': notes,
+            'late_order': False,
+        }
+
+    def _get_report_line_vals(self, bom):
+        """Builds the create-vals for this line's report lines (see
+        report_line_ids). `bom` is the product's BoM (or a falsy recordset)
+        as resolved by mrp.bom._bom_find, passed in so callers can look it
+        up once for a whole batch of lines instead of per line.
+
+        Always sourced from confirmed_qty (the frozen snapshot taken when
+        the batch was locked in), never product_uom_qty - any qty change
+        made after that (late_qty_delta) is deliberately skipped, so the
+        packing list only ever shows what was already confirmed."""
+        self.ensure_one()
+        if not self.product_id:
+            return []
+
+        notes = self.special_requirements_notes_id.name or ''
+
+        if bom:
+            # A line can be split across several MOs (one per box, e.g. the
+            # Pack Box wizard's "Box 3/5" origin suffix) that all share this
+            # same production_sale_line_id, so all of them - not just the
+            # first - contribute their raw-material components.
+            productions = self.env['mrp.production'].search(
+                [('production_sale_line_id', '=', self.id)]
+            )
+            vals_list = []
+            for move in productions.mapped('move_raw_ids'):
+                qty = move.product_uom_qty or 0.0
+                component = move.product_id
+                move_notes = move.special_requirements_notes or ''
+                vals_list.append({
+                    'name': self._compose_report_name(f"{_format_report_qty(qty)} kg {component.name or ''}", move_notes),
+                    'product_id': component.id,
+                    'box_content': f"{_format_report_qty(qty)} kg",
+                    'notes': move_notes,
+                    'late_order': False,
+                })
+            return vals_list
+
+        if self.confirmed_qty > 0:
+            return [self._plain_report_line_vals(self.confirmed_qty, notes)]
+        return []
+
     @api.model_create_multi
     def create(self, vals_list):
 
@@ -89,6 +201,25 @@ class SaleOrderLine(models.Model):
             val['lock_line'] = (order_id.state == 'sale' and order_id.batch_id.state == 'prt') or order_id.is_late_order
 
         return super().create(vals_list)
+
+    @api.constrains('product_uom_qty')
+    def _check_qty_not_reduced_after_mo(self):
+        """Once Manufacturing Orders exist for a line, its confirmed_qty
+        boxes are already being produced - reducing the quantity below that
+        would silently invalidate work already in progress. Increasing it
+        is still fine (see _get_report_line_vals' late_qty_delta row)."""
+        for line in self:
+            if line.confirmed_qty and line.product_uom_qty < line.confirmed_qty:
+                if self.env['mrp.production'].search_count(
+                    [('production_sale_line_id', '=', line.id)]
+                ):
+                    raise ValidationError(_(
+                        "Cannot reduce the quantity on '%(product)s' below %(qty)s - Manufacturing "
+                        "Orders have already been generated for this line. You can only increase "
+                        "the quantity, not reduce it.",
+                        product=line.product_id.display_name,
+                        qty=line.confirmed_qty,
+                    ))
 
     @api.depends('product_uom_qty','confirmed_qty')
     def _compute_late_order(self):

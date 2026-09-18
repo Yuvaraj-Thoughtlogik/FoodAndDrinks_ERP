@@ -70,7 +70,11 @@ class PackingListWizard(models.TransientModel):
     include_late_orders = fields.Boolean(
         string='Late Order',
         default=False,
-        help="When unchecked, normal Packing List is generated. When checked, separate Late Order Packing List is generated."
+        help="When unchecked, the normal Packing List is generated (Regal Van: confirmed_qty). "
+             "When checked (Regal Van only), the 'Frozen Factory Packing List Alt Reports' is "
+             "generated instead, showing only each late order's late_qty_delta - the change "
+             "made after confirmed_qty was locked in - as 'Additional X boxes required' or "
+             "'Remove X boxes'."
     )
 
     @api.onchange('driver_packing_list')
@@ -153,11 +157,13 @@ class PackingListWizard(models.TransientModel):
                 ('state', 'in', ['sale', 'done']),
                 ('delivery_date', '>=', self.delivery_date_from),
                 ('delivery_date', '<=', self.delivery_date_to),
+                # Late is line-based (order flagged late, line added after
+                # confirm, or line qty changed after confirm) - matching on
+                # order_line.late_order picks up orders with at least one
+                # qualifying line, not just orders flagged late as a whole
+                # (see round_report_wizard.BatchReportWizard.action_print_report).
+                ('order_line.late_order', '=', bool(self.include_late_orders)),
             ]
-            if not self.include_late_orders:
-                order_domain.append(('is_late_order', '=', False))
-            else:
-                order_domain.append(('is_late_order', '=', True))
 
             if not self.env['sale.order'].search_count(order_domain):
                 order_type_str = _("Late Courier Delivery") if self.include_late_orders else _("Courier Delivery")
@@ -192,10 +198,18 @@ class PackingListWizard(models.TransientModel):
             eligible_orders = batches.mapped('order_ids').filtered(
                 lambda so: so.state in ('sale', 'done') and getattr(so, 'delivery_channel', False) in ('regal_van', False)
             )
-            if not self.include_late_orders:
-                eligible_orders = eligible_orders.filtered(lambda so: not getattr(so, 'is_late_order', False))
-            else:
-                eligible_orders = eligible_orders.filtered(lambda so: getattr(so, 'is_late_order', False))
+            is_late = bool(self.include_late_orders)
+            # Late is line-based (order flagged late, line added after
+            # confirm, or line qty changed after confirm) - keep orders with
+            # at least one qualifying line, not just orders flagged late as
+            # a whole (see round_report_wizard.BatchReportWizard.action_print_report).
+            eligible_orders = eligible_orders.filtered(
+                lambda so: any(
+                    bool(l.late_order) == is_late
+                    for l in so.order_line
+                    if not l.display_type and l.product_id and l.product_uom_qty > 0
+                )
+            )
 
             if not eligible_orders:
                 raise UserError(_("Eligible batches were found, but they do not contain any matching Regal Van Delivery sale orders."))
@@ -205,7 +219,12 @@ class PackingListWizard(models.TransientModel):
         if not pdf_content:
             raise UserError(_("No packing list data was found for the selected criteria."))
 
-        filename_prefix = 'Courier_Packing_List_' if self.delivery_channel == 'courier' else 'Packing_List_'
+        if self.delivery_channel == 'courier':
+            filename_prefix = 'Courier_Packing_List_'
+        elif self.include_late_orders:
+            filename_prefix = 'Late_Packing_List_Alt_'
+        else:
+            filename_prefix = 'Packing_List_'
         return self._download_action(
             pdf_content, f"{filename_prefix}{self.delivery_date_from.strftime('%Y%m%d')}.pdf"
         )

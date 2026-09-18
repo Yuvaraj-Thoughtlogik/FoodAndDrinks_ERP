@@ -68,11 +68,11 @@ class StockFreshBoxWizard(models.TransientModel):
     start_date = fields.Date(string="Delivery Start Date", required=True, default=fields.Date.context_today)
     end_date = fields.Date(string="Delivery End Date", required=True, default=fields.Date.context_today)
     delivery_channel = fields.Selection([
+        ('regal_van', 'Regal Van Delivery'),
         ('courier', 'Courier Delivery'),
-        ('regal_van', 'Regal Van Delivery')
-    ], string="Delivery Channel", required=True, default='courier')
+    ], string="Delivery Channel", required=True, default='regal_van')
 
-    include_late_orders = fields.Boolean(string="Include Late Orders", default=False)
+    include_late_orders = fields.Boolean(string="Late Orders", default=False)
     line_ids = fields.One2many('stock.fresh.box.wizard.line', 'wizard_id', string="Analysis Lines")
 
     def _is_weight_uom(self, uom):
@@ -227,7 +227,6 @@ class StockFreshBoxWizard(models.TransientModel):
                 'round_id': round_obj.id if round_obj else False,
                 'delivery_date': getattr(order, 'delivery_date', False),
                 'depot': depot_val,
-                'is_late_order': getattr(order, 'is_late_order', False),
                 'late_status': getattr(order, 'late_status', ''),
                 'product_id': product.id,
                 'product_code': product.default_code or '',
@@ -242,6 +241,13 @@ class StockFreshBoxWizard(models.TransientModel):
             has_bom = bool(boms_per_product.get(product))
             is_kg_uom = self._is_weight_uom(line_uom)
 
+            # Quantity starts from product_uom_qty (via the box-splitting
+            # below); late_qty_delta then says how much of THAT quantity is
+            # the late addition - e.g. qty=4, late_qty_delta=1 means 3 boxes
+            # stay normal and the last 1 is late, not the whole line as
+            # before (which just mirrored the order's own is_late_order).
+            late_qty_delta = line.late_qty_delta or 0.0
+
             # 1. ONLY KG/Weight UOM items with BoM get split
             if has_bom and is_kg_uom:
                 total_weight = self._get_line_effective_weight(line)
@@ -251,6 +257,11 @@ class StockFreshBoxWizard(models.TransientModel):
                 number_of_boxes = math.ceil(total_weight / max_box_capacity)
                 remaining_weight = total_weight
 
+                # Only an INCREASE needs extra/late boxes - a reduction
+                # needs no late marking (fewer boxes are simply generated).
+                late_box_count = min(number_of_boxes, math.ceil(late_qty_delta)) if late_qty_delta > 0 else 0
+                first_late_box_no = number_of_boxes - late_box_count + 1
+
                 for box_no in range(1, number_of_boxes + 1):
                     box_weight = min(remaining_weight, max_box_capacity)
                     remaining_weight = max(0.0, remaining_weight - box_weight)
@@ -259,6 +270,7 @@ class StockFreshBoxWizard(models.TransientModel):
                     line_dict.update({
                         'box_number': f"Box {box_no}/{number_of_boxes}",
                         'box_weight': round(box_weight, 3),
+                        'is_late_order': box_no >= first_late_box_no,
                     })
                     wizard_line_vals.append(line_dict)
 
@@ -271,6 +283,9 @@ class StockFreshBoxWizard(models.TransientModel):
                 line_dict.update({
                     'box_number': "Full Bulk",
                     'box_weight': round(total_qty, 3),
+                    # Can't be split into a normal/late portion, so flag the
+                    # whole thing late only when it's genuinely an increase.
+                    'is_late_order': late_qty_delta > 0,
                 })
                 wizard_line_vals.append(line_dict)
 
@@ -322,8 +337,14 @@ class StockFreshBoxWizard(models.TransientModel):
 
             if origin_ref in existing_mo_map:
                 existing_mo = existing_mo_map[origin_ref]
+                # Each box-line has its own is_late_order (see
+                # action_analyze_orders' per-box late_qty_delta split), not
+                # the wizard's blanket "Include Late Orders" checkbox - a
+                # sale line's late and normal boxes get different MOs.
+                mo_vals = {'late_order': line.is_late_order}
                 if existing_mo.product_qty != line.box_weight:
-                    existing_mo.write({'product_qty': line.box_weight})
+                    mo_vals['product_qty'] = line.box_weight
+                existing_mo.write(mo_vals)
                 processed_mos |= existing_mo
             else:
                 bom = boms_per_product.get(line.product_id)
@@ -333,6 +354,7 @@ class StockFreshBoxWizard(models.TransientModel):
                     'product_uom_id': line.uom_id.id,
                     'bom_id': bom.id if bom else False,
                     'origin': origin_ref,
+                    'late_order': line.is_late_order,
                 })
                 processed_mos |= new_mo
 
@@ -456,8 +478,8 @@ class MrpProduction(models.Model):
     )
 
     delivery_channel = fields.Selection([
+        ('regal_van', 'Regal Van Delivery'),
         ('courier', 'Courier Delivery'),
-        ('regal_van', 'Regal Van Delivery')
     ], string="Delivery Channel", compute="_compute_delivery_info", store=True, readonly=True)
 
     round_batch_id = fields.Many2one(
@@ -474,6 +496,15 @@ class MrpProduction(models.Model):
         store=True,
         readonly=True
     )
+
+    # Distinct from is_late_order above: that one is recomputed from the
+    # resolved sale order's CURRENT is_late_order whenever origin changes,
+    # so it can drift after the MO/its boxes already exist. late_order is a
+    # plain, wizard-set flag - StockFreshBoxWizard.action_generate_mo simply
+    # writes it to whatever "Include Late Orders" was checked to on that
+    # generation run, so it stays a stable snapshot of how this MO was
+    # generated.
+    late_order = fields.Boolean(string="Late Order (Generated As)")
 
     @api.depends('origin')
     def _compute_delivery_info(self):

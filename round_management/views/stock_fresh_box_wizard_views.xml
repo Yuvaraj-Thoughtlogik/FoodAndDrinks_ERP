@@ -43,6 +43,8 @@
                                     <field name="box_weight" string="Box Qty / Weight (kg)"/>
                                     <field name="uom_id"/>
                                     <field name="is_assembly"/>
+                                    <field name="is_late_order" optional="show"/>
+
                                 </list>
                             </field>
                         </page>
