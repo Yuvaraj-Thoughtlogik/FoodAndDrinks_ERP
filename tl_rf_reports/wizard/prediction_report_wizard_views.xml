@@ -89,11 +89,21 @@
                 <!-- Dynamic Vendor Filter & Editable Price -->
                 <field name="vendor_id" options="{'no_create': True}" domain="[('id', 'in', vendor_ids)]" />
                 
+                
+                <field name="purchase_order_id" readonly="1" optional="show" />
                 <field name="order_status" widget="badge" 
-                       decoration-info="order_status in ('draft', 'sent')" 
-                       decoration-warning="order_status == 'to_approve'" 
-                       decoration-success="order_status in ('purchase', 'done')" 
-                       decoration-danger="order_status == 'cancel'" />
+                   decoration-info="order_status in ('draft', 'sent')" 
+                   decoration-warning="order_status == 'to_approve'" 
+                   decoration-success="order_status in ('purchase', 'done')" 
+                   decoration-danger="order_status == 'cancel'" />
+            
+            
+            <button name="action_view_purchase_order" 
+                    type="object" 
+                    string="View PO" 
+                    icon="fa-external-link" 
+                    class="btn-link" 
+                    invisible="purchase_order_id == False" />
             </list>
         </field>
     </record>
@@ -170,7 +180,7 @@
                         type="object"
                         class="oe_stat_button"
                         icon="fa-credit-card"
-                        invisible="not purchase_order_id">
+                        invisible="purchase_order_id == False">
                         <div class="o_stat_info">
                             <span class="o_stat_text">Purchase Order</span>
                         </div>
@@ -198,3 +208,4 @@
     </field>
 </record>
 </odoo>
+
