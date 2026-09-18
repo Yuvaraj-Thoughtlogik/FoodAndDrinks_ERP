@@ -102,11 +102,19 @@ class ProductionLabelReport(models.AbstractModel):
             bc = code128.Code128(
                 str(barcode_value), barHeight=11 * mm, barWidth=0.32 * mm, humanReadable=True,
             )
-            width = min(bc.width, PRINTABLE_WIDTH)
-            drawing = Drawing(width, bc.height + 4 * mm)
-            drawing.add(bc, 0, 3 * mm)
-            drawing.hAlign = 'CENTER'
-            return drawing
+            # NOTE: In the installed ReportLab version, Code128 is already a
+            # Platypus Flowable (not a graphics Shape/Widget), so it can be
+            # placed directly into the story. Wrapping it in a
+            # graphics.shapes.Drawing via Drawing.add(bc, x, y) - as this used
+            # to do - raises "Group.add() takes from 2 to 3 positional
+            # arguments but 4 were given" (Drawing.add() only accepts a node
+            # and an optional name, not x/y coordinates), and since that call
+            # was inside this method's try/except, the error was silently
+            # swallowed and the barcode was always dropped. Returning the
+            # Code128 flowable directly avoids that broken wrapping and
+            # renders the barcode again.
+            bc.hAlign = 'CENTER'
+            return bc
         except Exception:  # noqa: BLE001 - a bad/invalid barcode value must not break the print
             return None
 

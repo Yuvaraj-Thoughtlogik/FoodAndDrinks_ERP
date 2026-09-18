@@ -64,6 +64,12 @@ class ProductionReportWizard(models.TransientModel):
         default=False,
         help="When unchecked, normal Production Report is generated. When checked, separate Late Order Production Report is generated."
     )
+    box_count = fields.Boolean(
+        string='Box Count',
+        default=False,
+        help="When checked, 'Print PDF' generates the Box Count Report (Sales Order box quantities "
+             "consolidated per Round Batch, grouped Category -> Depot) instead of the Production Report."
+    )
 
     @api.model
     def _default_category_ids(self):
@@ -75,8 +81,8 @@ class ProductionReportWizard(models.TransientModel):
         'wizard_id',
         'category_id',
         string='Categories',
-        domain=[('name', 'in', ['Fresh', 'Chilled'])],
-        default=_default_category_ids,
+        # domain=[('name', 'in', ['Fresh', 'Chilled'])],
+        # default=_default_category_ids,
         help="Select Fresh, Chilled, or both product categories to include in the report."
     )
 
@@ -147,65 +153,164 @@ class ProductionReportWizard(models.TransientModel):
         )
         return eligible_orders
 
-    def action_print_report(self):
-        """Validates eligible batches or courier orders and triggers the Production Report."""
-        self.ensure_one()
+    def _get_production_domain(self):
+        """Domain for the draft Manufacturing Orders backing the Production
+        Report. A draft MO's own top-level product is a generic pack (e.g.
+        "Salmon Fish Pack"), not the box-type product to report on - that
+        lives on its raw-material component lines (move_raw_ids, see
+        report/production_report.py and report/courier_production_report.py)
+        - so this domain does NOT filter by category; category_ids is
+        applied to the component lines instead (see
+        _get_component_move_domain() below and generate_pdf()).
 
+        Regal Van filters through round_batch_id (not the ambiguous
+        delivery_date/batch_id fields also defined on mrp.production by
+        round_management's stock_picking.py - see the note in
+        models/mrp_production.py) so this stays correct regardless of which
+        of those overlapping field definitions the registry resolves.
+        Courier MOs aren't grouped into Round Batches, so they filter
+        directly on the MO's own (regex-derived) delivery_date/
+        delivery_channel/is_late_order fields instead - the same fields
+        used by ProductionReportWizard._get_matching_orders()'s courier
+        branch."""
+        self.ensure_one()
         if self.delivery_channel == 'courier':
-            order_domain = [
+            return [
+                ('state', 'in', ('draft', 'confirmed')),
                 ('delivery_channel', '=', 'courier'),
-                ('state', 'in', ['sale', 'done']),
                 ('delivery_date', '>=', self.delivery_date_from),
                 ('delivery_date', '<=', self.delivery_date_to),
+                ('is_late_order', '=', self.include_late_orders),
             ]
-            if not self.include_late_orders:
-                order_domain.append(('is_late_order', '=', False))
-            else:
-                order_domain.append(('is_late_order', '=', True))
-
-            matching_orders = self.env['sale.order'].search(order_domain)
-            if not matching_orders:
-                order_type_str = _("Late Courier Delivery") if self.include_late_orders else _("Courier Delivery")
-                raise UserError(_(
-                    "No confirmed %s orders found with delivery dates between %s and %s."
-                ) % (
-                    order_type_str,
-                    self.delivery_date_from.strftime('%d/%m/%Y'),
-                    self.delivery_date_to.strftime('%d/%m/%Y'),
-                ))
-            return self.env.ref('tl_rf_reports.action_report_production_report').report_action(self)
 
         domain = [
-            ('delivery_date', '>=', self.delivery_date_from),
-            ('delivery_date', '<=', self.delivery_date_to),
+            ('state', '=', 'draft'),
+            ('delivery_channel', '=', 'regal_van'),
+            ('round_batch_id.delivery_date', '>=', self.delivery_date_from),
+            ('round_batch_id.delivery_date', '<=', self.delivery_date_to),
+            ('is_late_order', '=', self.include_late_orders),
         ]
         if self.depot_ids:
             domain.append(('depot_id', 'in', self.depot_ids.ids))
+        return domain
 
-        batches = self.env['round.management.batch'].search(domain)
-        if not batches:
-            depot_names = ", ".join(self.depot_ids.mapped('name')) if self.depot_ids else ""
-            depot_label = f" for depot(s) '{depot_names}'" if depot_names else ""
+    def _get_component_move_domain(self):
+        """Domain for the draft Regal Van Manufacturing Orders' raw material
+        component lines (move_raw_ids) backing the Production Report's "View
+        Lines" screen - the same records report/production_report.py's
+        generate_pdf() groups Depot -> Category -> Product from, filtered/
+        grouped by the *component's* category and product, not the MO's own."""
+        self.ensure_one()
+        domain = [
+            ('raw_material_production_id', '!=', False),
+            ('raw_material_production_id.state', '=', 'draft'),
+            ('raw_material_production_id.delivery_channel', '=', 'regal_van'),
+            ('raw_material_production_id.round_batch_id.delivery_date', '>=', self.delivery_date_from),
+            ('raw_material_production_id.round_batch_id.delivery_date', '<=', self.delivery_date_to),
+            ('raw_material_production_id.is_late_order', '=', self.include_late_orders),
+        ]
+        if self.depot_ids:
+            domain.append(('raw_material_production_id.depot_id', 'in', self.depot_ids.ids))
+        if self.category_ids:
+            domain.append(('product_id.categ_id', 'in', self.category_ids.ids))
+        return domain
+
+    def action_print_report(self):
+        """Builds the Production Report, Box Count Report, or Courier Fresh
+        Production Report PDF directly with ReportLab from the same draft
+        Manufacturing Orders matching the wizard's filters, and returns it
+        as a synchronous download - the same "fast path" as
+        action_print_label() below, no QWeb/wkhtmltopdf, no background job.
+
+        All three reports read the same raw-material component lines
+        (move_raw_ids, see report/production_report.py,
+        report/box_count_report.py and report/courier_production_report.py):
+        the Production Report sums each component's product_uom_qty per
+        product, the Box Count Report counts each component line as exactly
+        one box totalled per Round Batch, and the Courier Fresh Production
+        Report counts each component line as one box, consolidated per
+        product/quantity (and per sale order line when a special note is
+        attached)."""
+        self.ensure_one()
+
+        domain = self._get_production_domain()
+        productions = self.env['mrp.production'].search(domain)
+        if not productions:
             raise UserError(_(
-                "No batches found with delivery dates between %s and %s%s."
+                "No Manufacturing Orders found for %(channel)s Delivery with delivery dates between %(date_from)s and %(date_to)s.",
+                channel=dict(self._fields['delivery_channel'].selection).get(self.delivery_channel, ''),
+                date_from=self.delivery_date_from.strftime('%d/%m/%Y'),
+                date_to=self.delivery_date_to.strftime('%d/%m/%Y'),
+            ))
+
+        if self.delivery_channel == 'courier':
+            report_model = self.env['report.tl_rf_reports.report_courier_production_report']
+            pdf_content = report_model.generate_pdf(self, productions)
+            if not pdf_content:
+                raise UserError(_("No matching records found to generate the Courier Fresh Production Report for the selected criteria."))
+            filename = f'Courier_Fresh_Production_Report_{self.delivery_date_from.strftime("%Y%m%d")}.pdf'
+        elif self.box_count:
+            report_model = self.env['report.tl_rf_reports.report_box_count_report']
+            pdf_content = report_model.generate_pdf(self, productions)
+            if not pdf_content:
+                raise UserError(_("No matching records found to generate the Box Count Report for the selected criteria."))
+            filename = f'Box_Count_Report_{self.delivery_date_from.strftime("%Y%m%d")}.pdf'
+        else:
+            report_model = self.env['report.tl_rf_reports.report_production_report']
+            pdf_content = report_model.generate_pdf(self, productions)
+            if not pdf_content:
+                raise UserError(_("No matching records found to generate the Production Report for the selected criteria."))
+            filename = f'Production_Report_{self.delivery_date_from.strftime("%Y%m%d")}.pdf'
+
+        attachment = self.env['ir.attachment'].create({
+            'name': filename,
+            'type': 'binary',
+            'datas': base64.b64encode(pdf_content),
+            'mimetype': 'application/pdf',
+            'res_model': self._name,
+            'res_id': self.id,
+        })
+        return {
+            'type': 'ir.actions.act_url',
+            'url': f'/web/content/{attachment.id}?download=true',
+            'target': 'self',
+        }
+
+    def action_view_lines(self):
+        """Opens the underlying draft MOs' raw material component lines (one
+        row per box - e.g. "0.5 kg Cod Fillets Boned" - see
+        report/production_report.py) grouped by Depot -> Category, matching
+        the Production Report's filters - same pattern as
+        RequirementReportWizard.action_view_lines()."""
+        self.ensure_one()
+        if self.delivery_channel == 'courier':
+            raise UserError(_("Production Report is only available for Regal Van Delivery."))
+
+        domain = self._get_component_move_domain()
+        if not self.env['stock.move'].search_count(domain):
+            raise UserError(_(
+                "No draft Manufacturing Orders found for Regal Van Delivery with delivery dates between %s and %s."
             ) % (
                 self.delivery_date_from.strftime('%d/%m/%Y'),
                 self.delivery_date_to.strftime('%d/%m/%Y'),
-                depot_label
             ))
 
-        eligible_orders = batches.mapped('order_ids').filtered(
-            lambda so: so.state in ('sale', 'done') and getattr(so, 'delivery_channel', False) in ('regal_van', False)
-        )
-        if not self.include_late_orders:
-            eligible_orders = eligible_orders.filtered(lambda so: not getattr(so, 'is_late_order', False))
-        else:
-            eligible_orders = eligible_orders.filtered(lambda so: getattr(so, 'is_late_order', False))
-
-        if not eligible_orders:
-            raise UserError(_("Eligible batches were found, but they do not contain any matching Regal Van Delivery sale orders."))
-
-        return self.env.ref('tl_rf_reports.action_report_production_report').report_action(self)
+        return {
+            'name': _('Production Report - Manufacturing Order Lines'),
+            'type': 'ir.actions.act_window',
+            'res_model': 'stock.move',
+            'view_mode': 'list,form',
+            'views': [
+                (self.env.ref('tl_rf_reports.view_stock_move_production_report_list').id, 'list'),
+                (False, 'form'),
+            ],
+            'search_view_id': [self.env.ref('tl_rf_reports.view_stock_move_production_report_search').id, 'search'],
+            'domain': domain,
+            'context': {
+                'search_default_group_by_depot': 1,
+                'search_default_group_by_category': 1,
+            },
+        }
 
     def action_print_label(self):
         """Triggers the channel-specific Production Label report.

@@ -163,11 +163,16 @@ class ListFilterConfigField(models.Model):
         self.mapped('config_id')._build_wizard_view()
 
     def unlink(self):
-        generated = self.mapped('wizard_field_id') | self.mapped('wizard_field_to_id')
+        # "to" fields first -- a date range's "to" field can depend (compute)
+        # on its "from" field, and Odoo refuses to drop a field something
+        # else still depends on.
+        to_fields = self.mapped('wizard_field_to_id')
+        from_fields = self.mapped('wizard_field_id')
         configs = self.mapped('config_id')
         configs._blank_wizard_views()
         res = super().unlink()
-        generated.sudo().unlink()
+        to_fields.sudo().unlink()
+        from_fields.sudo().unlink()
         configs._build_wizard_view()
         return res
 
@@ -194,11 +199,16 @@ class ListFilterConfigField(models.Model):
         IrModelFields = self.env['ir.model.fields'].sudo()
         wizard_model = self.env['ir.model']._get(WIZARD_MODEL)
 
-        # start from a clean slate -- the field shape depends on the operator
-        stale = self.mapped('wizard_field_id') | self.mapped('wizard_field_to_id')
-        if stale:
+        # start from a clean slate -- the field shape depends on the operator.
+        # "to" fields first: a date range's "to" field can depend (compute)
+        # on its "from" field, and Odoo refuses to drop a field something
+        # else still depends on.
+        stale_to = self.mapped('wizard_field_to_id')
+        stale_from = self.mapped('wizard_field_id')
+        if stale_to or stale_from:
             self.mapped('config_id')._blank_wizard_views()
-            stale.sudo().unlink()
+            stale_to.sudo().unlink()
+            stale_from.sudo().unlink()
 
         vals_list, owners = [], []
         to_vals_list, to_owners = [], []

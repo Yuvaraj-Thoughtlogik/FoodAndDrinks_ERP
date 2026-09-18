@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Surfaces the Depot / Delivery Date / Category fields used by the
+         Production Report (models/mrp_production.py, report/production_report.py)
+         directly on the standard Manufacturing Orders list and form, so they're
+         visible when browsing Manufacturing > Manufacturing Orders too, not only
+         from the Production Report wizard's "View Lines" screen. -->
+    <record id="mrp_production_tree_view_depot" model="ir.ui.view">
+        <field name="name">mrp.production.list.depot</field>
+        <field name="model">mrp.production</field>
+        <field name="inherit_id" ref="mrp.mrp_production_tree_view"/>
+        <field name="arch" type="xml">
+            <field name="product_id" position="after">
+                <field name="product_categ_id" string="Category" optional="hide"/>
+                <field name="depot_id" optional="show"/>
+                <field name="batch_delivery_date" optional="show"/>
+            </field>
+        </field>
+    </record>
+
+    <record id="mrp_production_form_view_depot" model="ir.ui.view">
+        <field name="name">mrp.production.form.depot</field>
+        <field name="model">mrp.production</field>
+        <field name="inherit_id" ref="mrp.mrp_production_form_view"/>
+        <field name="arch" type="xml">
+            <field name="user_id" position="after">
+                <field name="depot_id"/>
+                <field name="sale_line_id"/>
+                <field name="batch_delivery_date"/>
+            </field>
+        </field>
+    </record>
+
+    <!-- Surfaces the customer's special requirements note (stock.move.
+         special_requirements_notes, see models/stock_move.py) on the
+         Components list of the MO form, hidden by default since it's only
+         populated for component moves tied back to a sale order line. -->
+    <record id="mrp_production_form_view_special_notes" model="ir.ui.view">
+        <field name="name">mrp.production.form.special.notes</field>
+        <field name="model">mrp.production</field>
+        <field name="inherit_id" ref="mrp.mrp_production_form_view"/>
+        <field name="arch" type="xml">
+            <field name="forecast_availability" position="after">
+<!--                <field name="raw_material_production_id" optional="hide"/>-->
+                <field name="special_requirements_notes" optional="hide"/>
+<!--                <field name="sale_line_id" optional="hide"/>-->
+            </field>
+        </field>
+    </record>
+</odoo>

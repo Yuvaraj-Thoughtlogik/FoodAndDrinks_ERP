@@ -9,17 +9,27 @@ class RoundManagementBatch(models.Model):
     _description = 'Round Execution Batch'
     _rec_name = 'code'
     _rec_names_search = ['reference', 'code']
-    
+
     @api.model
     def _default_batch_code(self):
         """Generate 6-digit sequence code immediately on clicking 'Create'."""
         return self.env['ir.sequence'].next_by_code('round.management.batch') or 'New'
-    
+
     code = fields.Char(string='Batch Code', required=True, copy=False, default=_default_batch_code)
-    round_id = fields.Many2one('round.management.round', string='Round', required=True,domain="[('state', '=', 'active')]")
-    round_code = fields.Char(related='round_id.code', string='Round Code', readonly=True,store=True)
+    round_id = fields.Many2one('round.management.round', string='Round', required=True,
+                               domain="[('state', '=', 'active')]")
+    round_code = fields.Char(related='round_id.code', string='Round Code', readonly=True, store=True)
     reference = fields.Char(string='Reference', required=True)
-    depot_id = fields.Many2one('stock.warehouse', string='Depot', required=True)
+    # depot_id = fields.Many2one('stock.warehouse', string='Depot', required=True)
+    depot_id = fields.Many2one(
+        'stock.warehouse',
+        string='Depot',
+        required=True,
+        compute='_compute_depot_id',
+        store=True,
+        readonly=False,
+        precompute=True,
+    )
     delivery_date = fields.Date(string='Delivery Date', default=fields.Date.context_today, required=True)
     delivery_times = fields.Char(string='Delivery Times', compute='_compute_delivery_times', store=True)
     week_number = fields.Char(string='ISO Week No.', compute='_compute_week_number', store=True)
@@ -30,8 +40,8 @@ class RoundManagementBatch(models.Model):
         ('com', 'Completed'),
         ('cancel', 'Cancelled'),
     ], string='Status', default='pln', required=True, tracking=True)
-    
-    #pay_grade = fields.Char(string='Pay Grade', related='round_id.pay_grade', readonly=True)
+
+    # pay_grade = fields.Char(string='Pay Grade', related='round_id.pay_grade', readonly=True)
 
     helper_needed = fields.Boolean(string='Helper Needed')
     knockup_round = fields.Boolean(string='Knockup Round')
@@ -47,7 +57,6 @@ class RoundManagementBatch(models.Model):
         help="Only partners linked to an Employee with 'Driver' job position can be selected."
     )
 
-    
     helper_id = fields.Many2one(
         'res.partner',
         string='Helper',
@@ -65,14 +74,13 @@ class RoundManagementBatch(models.Model):
     duplication_comments = fields.Char(string='Duplication Comments', readonly=True)
     warning_message = fields.Char(string='Warning', compute='_compute_warnings')
 
-   
     order_ids = fields.One2many(
-        'sale.order', 
-        'batch_id', 
+        'sale.order',
+        'batch_id',
         string='Linked Orders',
         domain="[('round_id.state', '=', 'active')]"
     )
-   
+
     drops_count = fields.Integer(string='Drops', compute='_compute_order_metrics', store=True)
     late_orders_count = fields.Integer(string='Late Orders', compute='_compute_order_metrics', store=True)
     total_drops = fields.Integer(string='Total Drops', compute='_compute_order_metrics', store=True)
@@ -84,21 +92,20 @@ class RoundManagementBatch(models.Model):
         string='Transfers / Deliveries'
     )
     is_wave = fields.Boolean(string="Is Wave", default=False)
-   
+
     # order_ids = fields.One2many('sale.order', 'batch_id', string="Linked Orders")
-   
-    #card_reader_count = fields.Selection([
-        #('Y', 'Yes'),
-        #('N', 'No'),
-    #], string='Card Reader', compute='_compute_order_metrics', store=True)
-    
+
+    # card_reader_count = fields.Selection([
+    # ('Y', 'Yes'),
+    # ('N', 'No'),
+    # ], string='Card Reader', compute='_compute_order_metrics', store=True)
+
     pickups_count = fields.Integer(string='Pickups', compute='_compute_order_metrics', store=True)
     extras = fields.Integer(string='Extras', default=0)
     is_b2b_batch = fields.Boolean(string='B2B', compute='_compute_order_metrics', store=True)
 
-   
     vehicle_id = fields.Many2one(
-        'fleet.vehicle', 
+        'fleet.vehicle',
         string='Assigned Vehicle',
         domain="[('state_id.name', '!=', 'In Maintenance')]",
         help="Vehicle allocated specifically for this batch run."
@@ -106,8 +113,7 @@ class RoundManagementBatch(models.Model):
     is_spare_vehicle = fields.Boolean(string='Spare')
     is_off_road = fields.Boolean(string='Off Road')
     driver_on_leave = fields.Boolean(string='Driver Hol/Sick')
-    
-    
+
     start_odometer = fields.Float(string='Start Odometer (km)')
     end_odometer = fields.Float(string='End Odometer (km)')
     distance_run = fields.Float(string='Distance (km)', compute='_compute_distance', store=True)
@@ -132,28 +138,28 @@ class RoundManagementBatch(models.Model):
     )
 
     total_revenue = fields.Monetary(
-        string='Total Revenue', 
-        compute='_compute_order_metrics', 
+        string='Total Revenue',
+        compute='_compute_order_metrics',
         currency_field='company_currency_id',
         store=True
     )
     company_currency_id = fields.Many2one(
-        'res.currency', 
-        string='Currency', 
-        related='company_id.currency_id', 
+        'res.currency',
+        string='Currency',
+        related='company_id.currency_id',
         readonly=True,
         store=True
     )
-    
+
     company_id = fields.Many2one(
-        'res.company', 
-        string='Company', 
+        'res.company',
+        string='Company',
         default=lambda self: self.env.company,
         index=True
     )
 
     user_id = fields.Many2one('res.users', string='Responsible')
-    
+
     delivery_channel = fields.Selection(
         selection=[
             ('regal_van', 'Regal Van Delivery'),
@@ -162,7 +168,13 @@ class RoundManagementBatch(models.Model):
         string='Delivery Channels',
         required=True,
     )
-    
+
+    @api.depends('round_id')
+    def _compute_depot_id(self):
+        for record in self:
+            if record.round_id.depot_id:
+                record.depot_id = record.round_id.depot_id
+
     @api.onchange('round_id')
     def _onchange_round_id_set_reference(self):
         if self.round_id:
@@ -177,7 +189,8 @@ class RoundManagementBatch(models.Model):
 
     def _sanity_check(self):
         return True
-    @api.depends('round_id','round_id.max_alt_drops')
+
+    @api.depends('round_id', 'round_id.max_alt_drops')
     def _compute_max_alt_drops(self):
         for rec in self:
             rec.max_alt_drops = rec.round_id.max_alt_drops
@@ -189,14 +202,12 @@ class RoundManagementBatch(models.Model):
             alt_orders = valid_orders.filtered(lambda o: getattr(o, 'is_alternative_round', False))
             reg_orders = valid_orders - alt_orders
 
-
             batch.current_regular_drops = len(reg_orders)
             batch.current_alt_drops = len(alt_orders)
             batch.balance_alt_drops = batch.max_alt_drops - batch.current_alt_drops
 
             # Flag for Kanban/Tree visual color styling
             batch.is_alt_limit_reached = (batch.max_alt_drops > 0) and (batch.current_alt_drops >= batch.max_alt_drops)
-
 
     round_full_name = fields.Char(compute='_compute_round_full_name', store=True)
 
@@ -213,8 +224,6 @@ class RoundManagementBatch(models.Model):
         "The Round Code must be unique!"
     )
 
-
-
     _DAY_FIELDS = {
         0: ('mon_active', 'mon_from', 'mon_to'),  # Monday
         1: ('tue_active', 'tue_from', 'tue_to'),  # Tuesday
@@ -224,8 +233,6 @@ class RoundManagementBatch(models.Model):
         5: ('sat_active', 'sat_from', 'sat_to'),  # Saturday
         6: ('sun_active', 'sun_from', 'sun_to'),  # Sunday
     }
-
-
 
     @api.depends(
         'delivery_date', 'round_id',
@@ -290,9 +297,6 @@ class RoundManagementBatch(models.Model):
 
         return "%02d:%02d" % (hours, minutes)
 
-
-
-
     @api.depends('code', 'reference', 'delivery_date')
     def _compute_display_name(self):
         """Computes display name using Batch Code, Reference, and Delivery Date."""
@@ -315,7 +319,6 @@ class RoundManagementBatch(models.Model):
             else:
                 batch.display_name = _('New Batch')
 
-
     @api.onchange('vehicle_id')
     def _onchange_vehicle_id_fetch_driver(self):
         """Directly assigns Fleet vehicle driver (res.partner) without conversion errors."""
@@ -328,7 +331,7 @@ class RoundManagementBatch(models.Model):
     def _onchange_round_id_fetch_depot(self):
         for record in self:
             record.depot_id = record.round_id.depot_id.id
-   
+
     @api.constrains('driver_id', 'helper_id')
     def _check_partner_employee_designation(self):
         for record in self:
@@ -359,7 +362,7 @@ class RoundManagementBatch(models.Model):
                     raise ValidationError(_(
                         "Selected Helper contact '%s' is not an employee with 'Helper' job position (Current: %s)."
                     ) % (record.helper_id.name, job_title))
-    
+
     @api.model_create_multi
     def create(self, vals_list):
         batches = super().create(vals_list)
@@ -380,9 +383,7 @@ class RoundManagementBatch(models.Model):
                 batch.vehicle_id.write({
                     'driver_id': batch.driver_id.id,
                 })
-                
-                
-                
+
     def action_complete_batch(self):
         """Executed when batch moves to 'com' (Completed) state"""
         for batch in self:
@@ -394,8 +395,7 @@ class RoundManagementBatch(models.Model):
                     'date': batch.delivery_date or fields.Date.context_today(self),
                 })
             batch.state = 'com'
-    
-    
+
     @api.depends('start_odometer', 'end_odometer')
     def _compute_distance(self):
         for batch in self:
@@ -403,14 +403,13 @@ class RoundManagementBatch(models.Model):
                 batch.distance_run = batch.end_odometer - batch.start_odometer
             else:
                 batch.distance_run = 0.0
-    
+
     @api.onchange('vehicle_id')
     def _onchange_vehicle_id_fetch_driver(self):
         """Auto-populates driver_id when a vehicle is selected."""
         if self.vehicle_id and self.vehicle_id.driver_id:
             self.driver_id = self.vehicle_id.driver_id
-    
-    
+
     def action_start_batch(self):
         """Triggers wizard if active batch exists, otherwise activates the batch."""
         self.ensure_one()
@@ -426,7 +425,7 @@ class RoundManagementBatch(models.Model):
         for batch in self:
             batch.state = 'prt'
         # Trigger report printing action if configured
-        #return self.env.ref('round_management.action_report_round_batch').report_action(self)
+        # return self.env.ref('round_management.action_report_round_batch').report_action(self)
         return True
 
     def action_complete_batch(self):
@@ -435,15 +434,14 @@ class RoundManagementBatch(models.Model):
     def action_reset_to_planned(self):
         self.write({'state': 'pln'})
 
-    
-    #@api.model_create_multi
-    #def create(self, vals_list):
-        #for vals in vals_list:
-            
-            #if vals.get('code', _('New')) in (_('New'), 'New', False, None):
-                #sequence_code = self.env['ir.sequence'].next_by_code('round.management.batch')
-                #vals['code'] = sequence_code or str(int(datetime.now().timestamp()))
-        #return super().create(vals_list)
+    # @api.model_create_multi
+    # def create(self, vals_list):
+    # for vals in vals_list:
+
+    # if vals.get('code', _('New')) in (_('New'), 'New', False, None):
+    # sequence_code = self.env['ir.sequence'].next_by_code('round.management.batch')
+    # vals['code'] = sequence_code or str(int(datetime.now().timestamp()))
+    # return super().create(vals_list)
 
     @api.depends('delivery_date')
     def _compute_week_number(self):
@@ -453,12 +451,12 @@ class RoundManagementBatch(models.Model):
                 record.week_number = f"{iso_year}{str(iso_week).zfill(2)}"
             else:
                 record.week_number = False
-                
-    #@api.model_create_multi
-    #def create(self, vals_list):
-        #records = super().create(vals_list)
-        #records._update_linked_orders_delivery_info()
-        #return records
+
+    # @api.model_create_multi
+    # def create(self, vals_list):
+    # records = super().create(vals_list)
+    # records._update_linked_orders_delivery_info()
+    # return records
 
     def write(self, vals):
         res = super().write(vals)
@@ -475,7 +473,7 @@ class RoundManagementBatch(models.Model):
                     vals_to_write['commitment_date'] = fields.Datetime.to_datetime(batch.delivery_date)
                 if batch.week_number:
                     vals_to_write['week_number'] = batch.week_number
-                
+
                 if vals_to_write:
                     batch.order_ids.write(vals_to_write)
 
@@ -495,19 +493,19 @@ class RoundManagementBatch(models.Model):
                 record.warning_message = ""
 
     @api.depends(
-        'order_ids', 
-        'order_ids.state', 
+        'order_ids',
+        'order_ids.state',
         'order_ids.amount_total',
-        'order_ids.is_late_order', 
+        'order_ids.is_late_order',
         'order_ids.is_b2b',
-        #'order_ids.is_staff_order'
+        # 'order_ids.is_staff_order'
     )
     def _compute_order_metrics(self):
         for record in self:
             active_orders = record.order_ids.filtered(
                 lambda o: o.state not in ('draft', 'cancel')
             ) if record.order_ids else self.env['sale.order']
-            
+
             if active_orders:
                 record.drops_count = len(active_orders)
                 record.late_orders_count = len(active_orders.filtered(lambda o: getattr(o, 'is_late_order', False)))
@@ -522,13 +520,13 @@ class RoundManagementBatch(models.Model):
                 record.total_drops = 0
                 record.total_revenue = 0.0
                 record.is_b2b_batch = False
-    
+
     @api.model
     def _name_search(self, name, domain=None, operator='ilike', limit=100, order=None):
         domain = domain or []
         order = order or 'delivery_date asc, id asc'
         return super()._name_search(name, domain=domain, operator=operator, limit=limit, order=order)
-                
+
     def _check_existing_active_batches(self, round_id, delivery_date):
         """Finds active batches for the same round within 4 weeks before and after the delivery date."""
         if not round_id or not delivery_date:
@@ -544,7 +542,7 @@ class RoundManagementBatch(models.Model):
             ('delivery_date', '>=', start_date),
             ('delivery_date', '<=', end_date),
         ]
-        
+
         batch_id = self._origin.id or self.id
         if batch_id:
             domain.append(('id', '!=', batch_id))
@@ -634,8 +632,7 @@ class RoundManagementBatch(models.Model):
                     'message': msg,
                 }
             }
-            
-            
+
     def unlink(self):
         """Prevent deletion of round batches that have linked sales orders."""
 
@@ -654,8 +651,8 @@ class RoundManagementBatch(models.Model):
                     orders_list_str += _(
                         "\n   • ... and %(count)d more order(s)"
                     ) % {
-                        'count': remaining_count,
-                    }
+                                           'count': remaining_count,
+                                       }
 
                 message = _(
                     "[ WARNING ] BATCH CANNOT BE DELETED\n"
@@ -667,7 +664,7 @@ class RoundManagementBatch(models.Model):
                     "the batch.\n\n"
 
                     "[ BATCH DETAILS ]\n"
-                "--------------------------------------------------\n"
+                    "--------------------------------------------------\n"
                     "• Batch Code: %(batch_code)s\n"
                     "• Batch Description: %(batch_name)s\n"
                     "• Linked Sales Orders: %(count)d\n\n"
@@ -677,7 +674,7 @@ class RoundManagementBatch(models.Model):
                     "%(orders)s\n\n"
 
                     "[ REQUIRED ACTION ]\n"
-                "--------------------------------------------------\n"
+                    "--------------------------------------------------\n"
                     "1. Open the linked Sales Order(s).\n"
                     "2. Clear or change the Round Batch reference.\n"
                     "3. Return to this batch and try deleting it again.\n\n"
@@ -685,16 +682,16 @@ class RoundManagementBatch(models.Model):
                     "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
                     "Deletion is blocked to prevent data inconsistency."
                 ) % {
-                    'batch_code': batch.code or '-',
-                    'batch_name': batch.display_name or '-',
-                    'count': len(batch.order_ids),
-                    'orders': orders_list_str,
-                }
+                              'batch_code': batch.code or '-',
+                              'batch_name': batch.display_name or '-',
+                              'count': len(batch.order_ids),
+                              'orders': orders_list_str,
+                          }
 
                 raise UserError(message)
 
         return super().unlink()
 
-    
 
-  
+
+
