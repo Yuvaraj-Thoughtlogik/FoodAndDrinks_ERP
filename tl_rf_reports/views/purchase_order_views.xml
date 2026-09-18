@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="purchase_order_form_inherit_prediction" model="ir.ui.view">
+        <field name="name">purchase.order.form.inherit.prediction</field>
+        <field name="model">purchase.order</field>
+        <field name="inherit_id" ref="purchase.purchase_order_form" />
+        <field name="arch" type="xml">
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_view_prediction_lines"
+                    type="object"
+                    class="oe_stat_button"
+                    icon="fa-list-alt"
+                    invisible="prediction_line_count == 0">
+                    <field name="prediction_line_count" widget="statinfo" string="Prediction Lines" />
+                </button>
+            </xpath>
+        </field>
+    </record>
+</odoo>

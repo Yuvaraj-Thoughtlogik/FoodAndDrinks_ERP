@@ -445,3 +445,18 @@ class PredictionReportLine(models.TransientModel):
                 'domain': [('id', 'in', created_pos.ids)],
                 'target': 'current',
             }
+            
+    def action_view_purchase_order(self):
+        """Smart button action to view the linked Purchase Order."""
+        self.ensure_one()
+        if not self.purchase_order_id:
+            raise UserError(_("No Purchase Order linked to this line."))
+            
+        return {
+            'name': _('Purchase Order'),
+            'type': 'ir.actions.act_window',
+            'res_model': 'purchase.order',
+            'view_mode': 'form',
+            'res_id': self.purchase_order_id.id,
+            'target': 'current',
+        }
