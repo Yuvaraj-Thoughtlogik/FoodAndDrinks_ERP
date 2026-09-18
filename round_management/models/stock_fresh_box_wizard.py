@@ -321,6 +321,7 @@ class StockFreshBoxWizard(models.TransientModel):
                 bom = boms_per_product.get(line.product_id)
                 new_mo = mrp_production_obj.create({
                     'product_id': line.product_id.id,
+                    'sale_line_id': line.sale_line_id.id,
                     'product_qty': line.box_weight,
                     'product_uom_id': line.uom_id.id,
                     'bom_id': bom.id if bom else False,

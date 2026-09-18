@@ -150,10 +150,11 @@ class ReportCourierProductionReport(models.AbstractModel):
     # (product_uom_qty) consolidate into a single row - "Boxes" is the COUNT
     # of such lines, "Box Qty" is that shared per-box quantity. A line
     # carrying a customer special note (sale_line_id.special_requirements_
-    # notes_id) only consolidates with other lines from that SAME sale
-    # order line, so its note stays attached to its own row instead of
-    # bleeding into another customer's boxes of the same product/quantity -
-    # identical rule to report_production_report.py's generate_pdf().
+    # notes_id) consolidates with any other line carrying that SAME note
+    # record (by id), even across different sale order lines, so
+    # identically-noted boxes of the same product/quantity share one row
+    # while a different note still gets its own - identical rule to
+    # report_production_report.py's generate_pdf().
     # ------------------------------------------------------------------
     def generate_pdf(self, wizard, productions):
         """Returns the finished PDF (bytes) for the Courier Fresh Production
@@ -175,8 +176,10 @@ class ReportCourierProductionReport(models.AbstractModel):
             uom = move.product_uom
             special_note = (move.special_requirements_notes or '').strip()
             # Notes-less lines consolidate across any sale order line; a
-            # noted line only consolidates within its own sale_line_id.
-            notes_scope = move.sale_line_id.id if special_note else 0
+            # noted line consolidates with any other line carrying the SAME
+            # note record (by id), regardless of which sale order line it
+            # came from.
+            notes_scope = move.sale_line_id.special_requirements_notes_id.id if special_note else 0
             group_key = (product.id, qty, uom.id, notes_scope)
 
             group = groups.setdefault(group_key, {

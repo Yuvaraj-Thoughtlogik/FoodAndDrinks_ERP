@@ -233,9 +233,10 @@ class ReportProductionReport(models.AbstractModel):
     # COUNT of such lines, and the row's product text is prefixed with that
     # shared quantity (e.g. "1kg Cod Fillets Boned"). A line carrying a
     # customer special note (sale_line_id.special_requirements_notes_id)
-    # only consolidates with other lines from that SAME sale order line, so
-    # its note stays attached to its own row instead of bleeding into
-    # another customer's boxes of the same product/quantity.
+    # consolidates with any other line carrying that SAME note record (by
+    # id), even across different sale order lines, so identically-noted
+    # boxes of the same product/quantity share one row while a different
+    # note still gets its own.
     # ------------------------------------------------------------------
     def generate_pdf(self, wizard, productions):
         """Returns the finished PDF (bytes) for the Production Report, or
@@ -278,8 +279,10 @@ class ReportProductionReport(models.AbstractModel):
             qty_per_line = move.product_uom_qty or 0.0
             special_note = (move.special_requirements_notes or '').strip()
             # Notes-less lines consolidate across any sale order line; a
-            # noted line only consolidates within its own sale_line_id.
-            notes_scope = move.sale_line_id.id if special_note else 0
+            # noted line consolidates with any other line carrying the SAME
+            # note record (by id), regardless of which sale order line it
+            # came from.
+            notes_scope = move.sale_line_id.special_requirements_notes_id.id if special_note else 0
             line_key = (product.id, qty_per_line, notes_scope)
 
             c_lines = d_map['categories_map'][categ_key]['lines']
