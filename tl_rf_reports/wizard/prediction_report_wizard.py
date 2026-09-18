@@ -408,7 +408,6 @@ class PredictionReportLine(models.TransientModel):
                 'date_order': fields.Datetime.now(),
             }
             po = PurchaseOrder.create(po_vals)
-            created_pos |= po
 
             for l in v_lines:
                 prod = l.product_id
@@ -427,9 +426,13 @@ class PredictionReportLine(models.TransientModel):
                 PurchaseOrderLine.create(po_line_vals)
                 l.purchase_order_id = po.id
 
+            # Confirm Purchase Order to change status state from draft (RFQ) -> purchase (Purchase Order)
+            po.button_confirm()
+            created_pos |= po
+
         if len(created_pos) == 1:
             return {
-                'name': _('Purchase RFQ'),
+                'name': _('Purchase Order'),
                 'type': 'ir.actions.act_window',
                 'res_model': 'purchase.order',
                 'view_mode': 'form',
@@ -438,25 +441,34 @@ class PredictionReportLine(models.TransientModel):
             }
         else:
             return {
-                'name': _('Created Purchase RFQs'),
+                'name': _('Created Purchase Orders'),
                 'type': 'ir.actions.act_window',
                 'res_model': 'purchase.order',
                 'view_mode': 'list,form',
                 'domain': [('id', 'in', created_pos.ids)],
                 'target': 'current',
             }
-            
+
     def action_view_purchase_order(self):
-        """Smart button action to view the linked Purchase Order."""
-        self.ensure_one()
-        if not self.purchase_order_id:
-            raise UserError(_("No Purchase Order linked to this line."))
-            
+        """Opens the linked Purchase Order(s)."""
+        po_ids = self.mapped('purchase_order_id').ids
+        if not po_ids:
+            raise UserError(_("No Purchase Order is linked to the selected line(s)."))
+
+        if len(po_ids) == 1:
+            return {
+                'name': _('Purchase Order'),
+                'type': 'ir.actions.act_window',
+                'res_model': 'purchase.order',
+                'view_mode': 'form',
+                'res_id': po_ids[0],
+                'target': 'current',
+            }
         return {
-            'name': _('Purchase Order'),
+            'name': _('Purchase Orders'),
             'type': 'ir.actions.act_window',
             'res_model': 'purchase.order',
-            'view_mode': 'form',
-            'res_id': self.purchase_order_id.id,
+            'view_mode': 'list,form',
+            'domain': [('id', 'in', po_ids)],
             'target': 'current',
         }

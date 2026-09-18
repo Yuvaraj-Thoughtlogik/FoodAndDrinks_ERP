@@ -25,7 +25,7 @@
         <field name="arch" type="xml">
             <field name="user_id" position="after">
                 <field name="depot_id"/>
-                <field name="sale_line_id"/>
+<!--                <field name="production_sale_line_id"/>-->
                 <field name="batch_delivery_date"/>
             </field>
         </field>
@@ -43,7 +43,7 @@
             <field name="forecast_availability" position="after">
 <!--                <field name="raw_material_production_id" optional="hide"/>-->
                 <field name="special_requirements_notes" optional="hide"/>
-<!--                <field name="sale_line_id" optional="hide"/>-->
+                <field name="production_sale_line_id" optional="hide"/>
             </field>
         </field>
     </record>

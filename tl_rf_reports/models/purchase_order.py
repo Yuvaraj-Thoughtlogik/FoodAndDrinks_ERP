@@ -1,5 +1,4 @@
-from odoo import api, fields, models
-
+from odoo import api, fields, models, _
 
 class PurchaseOrder(models.Model):
     _inherit = 'purchase.order'
@@ -31,3 +30,4 @@ class PurchaseOrder(models.Model):
             'context': {'default_purchase_order_id': self.id},
             'target': 'current',
         }
+

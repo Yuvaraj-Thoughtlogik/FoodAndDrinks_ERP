@@ -232,7 +232,7 @@ class ReportProductionReport(models.AbstractModel):
     # (product_uom_qty) consolidate into a single row: "Quantity" is the
     # COUNT of such lines, and the row's product text is prefixed with that
     # shared quantity (e.g. "1kg Cod Fillets Boned"). A line carrying a
-    # customer special note (sale_line_id.special_requirements_notes_id)
+    # customer special note (production_sale_line_id.special_requirements_notes_id)
     # consolidates with any other line carrying that SAME note record (by
     # id), even across different sale order lines, so identically-noted
     # boxes of the same product/quantity share one row while a different
@@ -282,7 +282,7 @@ class ReportProductionReport(models.AbstractModel):
             # noted line consolidates with any other line carrying the SAME
             # note record (by id), regardless of which sale order line it
             # came from.
-            notes_scope = move.sale_line_id.special_requirements_notes_id.id if special_note else 0
+            notes_scope = move.production_sale_line_id.special_requirements_notes_id.id if special_note else 0
             line_key = (product.id, qty_per_line, notes_scope)
 
             c_lines = d_map['categories_map'][categ_key]['lines']

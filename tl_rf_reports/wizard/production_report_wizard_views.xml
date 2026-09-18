@@ -82,7 +82,7 @@
                 <field name="product_id" string="Product / Box Contents"/>
                 <field name="product_uom_qty" string="To Consume" sum="To Consume"/>
                 <field name="special_requirements_notes" string="Special Notes" optional="show"/>
-                <field name="sale_line_id" optional="hide"/>
+                <field name="production_sale_line_id" optional="hide"/>
                 <field name="raw_material_production_id" string="Manufacturing Order" optional="hide"/>
                 <field name="origin" optional="hide"/>
             </list>
