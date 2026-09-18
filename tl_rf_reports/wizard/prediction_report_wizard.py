@@ -20,29 +20,21 @@ class PredictionReportWizard(models.TransientModel):
         string='Delivery Channel',
         required=True,
         default='regal_van',
-        help="Select delivery channel for the report. 'Both' prints the "
-             "existing Regal Van and Courier reports one after the other, "
-             "combined into a single PDF."
+        help="Select delivery channel for the report."
     )
     delivery_date_from = fields.Date(
         string='Delivery Date From',
         required=True,
         default=fields.Date.context_today,
-        help="Starting delivery date for prediction report."
     )
     delivery_date_to = fields.Date(
         string='Delivery Date To',
         required=True,
         default=fields.Date.context_today,
-        help="Ending delivery date for prediction report."
     )
 
     @api.onchange('delivery_date_from')
     def _onchange_delivery_date_from(self):
-        """Keep 'Delivery Date To' in sync with 'Delivery Date From' whenever
-        the start date changes, so a single-day selection (e.g. both = Sep 14)
-        is the default without extra clicks. If the user later picks a later
-        'To' date manually, that stays untouched until 'From' changes again."""
         if self.delivery_date_from:
             self.delivery_date_to = self.delivery_date_from
 
@@ -57,7 +49,6 @@ class PredictionReportWizard(models.TransientModel):
         'warehouse_id',
         string='Depot',
         default=_default_depot_ids,
-        help="Select one or more depots. Leave unselected to include all depots."
     )
 
     categ_ids = fields.Many2many(
@@ -66,7 +57,6 @@ class PredictionReportWizard(models.TransientModel):
         'wizard_id',
         'category_id',
         string='Product Category',
-        help="Select one or more product categories to filter. Leave empty to include all categories."
     )
 
     line_ids = fields.One2many(
@@ -82,7 +72,6 @@ class PredictionReportWizard(models.TransientModel):
                 raise ValidationError(_("Delivery Date To cannot be earlier than Delivery Date From."))
 
     def _get_line_domain(self):
-        """Helper method to construct search domain for sale order lines."""
         self.ensure_one()
         domain = [
             ('order_id.state', 'in', ['sale', 'done']),
@@ -103,13 +92,7 @@ class PredictionReportWizard(models.TransientModel):
 
         return domain
 
-    # ------------------------------------------------------------------
-    # BOM Helpers for Prediction Lines
-    # ------------------------------------------------------------------
     def _find_bom(self, product):
-        """Return the applicable BOM for a product (variant-specific first,
-        falling back to a template-level BOM), or an empty recordset if the
-        product has no BOM."""
         BomModel = self.env['mrp.bom']
         company_ids = [self.env.company.id, False]
 
@@ -128,7 +111,6 @@ class PredictionReportWizard(models.TransientModel):
         return bom
 
     def _explode_bom(self, product, qty, bom_cache):
-        """Resolve a sold product and its ordered quantity to reporting items."""
         if product.id not in bom_cache:
             bom_cache[product.id] = self._find_bom(product)
         bom = bom_cache[product.id]
@@ -171,7 +153,6 @@ class PredictionReportWizard(models.TransientModel):
         return result
 
     def _generate_prediction_lines(self):
-        """Extract matching lines, explode BOMs, and populate PredictionReportLine records."""
         self.ensure_one()
         self.sudo().line_ids.unlink()
 
@@ -216,11 +197,13 @@ class PredictionReportWizard(models.TransientModel):
             sellers = prod.seller_ids or prod.product_tmpl_id.seller_ids
             vendor = sellers[0].partner_id if sellers else False
             price = sellers[0].price if (sellers and sellers[0].price) else prod.standard_price
+            req_qty = pdata['qty']
 
             vals_list.append({
                 'wizard_id': self.id,
                 'product_id': prod.id,
-                'quantity': pdata['qty'],
+                'required_qty': req_qty,
+                'ordered_qty': req_qty,  # Default ordered_qty to required_qty
                 'vendor_id': vendor.id if vendor else False,
                 'price_unit': price or 0.0,
             })
@@ -228,139 +211,7 @@ class PredictionReportWizard(models.TransientModel):
         if vals_list:
             self.env['prediction.report.line'].sudo().create(vals_list)
 
-    def _download_action(self, pdf_content, filename):
-        attachment = self.env['ir.attachment'].create({
-            'name': filename,
-            'type': 'binary',
-            'datas': base64.b64encode(pdf_content),
-            'mimetype': 'application/pdf',
-            'res_model': self._name,
-            'res_id': self.id,
-        })
-        return {
-            'type': 'ir.actions.act_url',
-            'url': f'/web/content/{attachment.id}?download=true',
-            'target': 'self',
-        }
-
-    def _get_channel_wizard(self, channel):
-        """Returns a throwaway prediction.report.wizard record - a copy of
-        this wizard with delivery_channel forced to a single real channel
-        ('regal_van' or 'courier') - so the existing, unmodified per-channel
-        report logic (_get_line_domain(), generate_pdf()) can be reused as-is
-        for each half of the 'Both' combined report."""
-        self.ensure_one()
-        return self.create({
-            'delivery_channel': channel,
-            'delivery_date_from': self.delivery_date_from,
-            'delivery_date_to': self.delivery_date_to,
-            'depot_ids': [(6, 0, self.depot_ids.ids)],
-            'categ_ids': [(6, 0, self.categ_ids.ids)],
-        })
-
-    def action_print_report(self):
-        """Validates matching orders/lines and triggers the Prediction PDF Report.
-
-        Built directly with ReportLab (generate_pdf() on the report model)
-        instead of QWeb+wkhtmltopdf, same as the other reports in this module -
-        this stays fully synchronous, no background job needed.
-
-        'Both' is handled separately by _action_print_combined_report()."""
-        self.ensure_one()
-
-        if self.delivery_channel == 'both':
-            return self._action_print_combined_report()
-
-        domain = self._get_line_domain()
-        matching_lines = self.env['sale.order.line'].search_count(domain)
-        if not matching_lines:
-            channel_name = dict(self._fields['delivery_channel'].selection).get(self.delivery_channel, '')
-            raise UserError(_(
-                "No confirmed %s order lines found with delivery dates between %s and %s."
-            ) % (
-                channel_name,
-                self.delivery_date_from.strftime('%d/%m/%Y'),
-                self.delivery_date_to.strftime('%d/%m/%Y'),
-            ))
-
-        if self.delivery_channel == 'courier':
-            report_model = self.env['report.tl_rf_reports.report_prediction_courier']
-            filename = f"Courier_Prediction_Report_{self.delivery_date_from.strftime('%Y%m%d')}.pdf"
-        else:
-            report_model = self.env['report.tl_rf_reports.report_prediction']
-            filename = f"Prediction_Report_{self.delivery_date_from.strftime('%Y%m%d')}.pdf"
-
-        pdf_content = report_model.generate_pdf(self)
-        if not pdf_content:
-            channel_name = dict(self._fields['delivery_channel'].selection).get(self.delivery_channel, '')
-            raise UserError(_(
-                "No confirmed %s order lines found with delivery dates between %s and %s."
-            ) % (
-                channel_name,
-                self.delivery_date_from.strftime('%d/%m/%Y'),
-                self.delivery_date_to.strftime('%d/%m/%Y'),
-            ))
-        return self._download_action(pdf_content, filename)
-
-    def _action_print_combined_report(self):
-        """'Both': generates the Regal Van and Courier prediction reports
-        separately, using their existing/unmodified report logic and
-        templates, then concatenates them into a single PDF - Regal Van
-        first, Courier second. Each is a fully independent document, so
-        appending their pages always starts the Courier report on a fresh
-        page, never mid-page.
-
-        Whichever channel has no matching data is silently skipped (rather
-        than failing the whole print), and this only raises when neither
-        channel has anything to print."""
-        self.ensure_one()
-
-        van_wizard = self._get_channel_wizard('regal_van')
-        courier_wizard = self._get_channel_wizard('courier')
-        SaleOrderLine = self.env['sale.order.line']
-
-        try:
-            has_van = bool(SaleOrderLine.search_count(van_wizard._get_line_domain()))
-            has_courier = bool(SaleOrderLine.search_count(courier_wizard._get_line_domain()))
-
-            if not has_van and not has_courier:
-                raise UserError(_(
-                    "No confirmed Regal Van or Courier order lines found with delivery dates between %s and %s."
-                ) % (
-                    self.delivery_date_from.strftime('%d/%m/%Y'),
-                    self.delivery_date_to.strftime('%d/%m/%Y'),
-                ))
-
-            van_pdf = self.env['report.tl_rf_reports.report_prediction'].generate_pdf(van_wizard) if has_van else None
-            courier_pdf = self.env['report.tl_rf_reports.report_prediction_courier'].generate_pdf(courier_wizard) if has_courier else None
-        finally:
-            (van_wizard | courier_wizard).unlink()
-
-        # Order matters: Regal Van always first, Courier always second.
-        pdfs = [pdf for pdf in (van_pdf, courier_pdf) if pdf]
-        if not pdfs:
-            raise UserError(_(
-                "No confirmed Regal Van or Courier order lines with printable data were found with "
-                "delivery dates between %s and %s."
-            ) % (
-                self.delivery_date_from.strftime('%d/%m/%Y'),
-                self.delivery_date_to.strftime('%d/%m/%Y'),
-            ))
-
-        if len(pdfs) == 1:
-            combined_pdf = pdfs[0]
-        else:
-            streams = [io.BytesIO(pdf) for pdf in pdfs]
-            merged_stream = self.env['ir.actions.report']._merge_pdfs(streams)
-            combined_pdf = merged_stream.getvalue()
-            merged_stream.close()
-
-        return self._download_action(
-            combined_pdf, f"Prediction_Report_Combined_{self.delivery_date_from.strftime('%Y%m%d')}.pdf"
-        )
-
     def action_view_lines(self):
-        """Generates the prediction report lines and opens their list view."""
         self.ensure_one()
         self._generate_prediction_lines()
 
@@ -413,7 +264,15 @@ class PredictionReportLine(models.TransientModel):
         store=True,
         readonly=True
     )
-    quantity = fields.Float(
+    
+    # Quantities
+    required_qty = fields.Float(
+        string='Required Qty',
+        digits='Product Unit of Measure',
+        default=0.0,
+        readonly=True
+    )
+    ordered_qty = fields.Float(
         string='Ordered Qty',
         digits='Product Unit of Measure',
         default=0.0
@@ -424,15 +283,70 @@ class PredictionReportLine(models.TransientModel):
         related='product_id.uom_id',
         readonly=True
     )
+
+    # Vendor Selection with Domain
+    vendor_ids = fields.Many2many(
+        'res.partner',
+        compute='_compute_vendor_ids',
+        string='Allowed Vendors'
+    )
     vendor_id = fields.Many2one(
         'res.partner',
         string='Vendor',
-        help="Configured primary vendor for this product."
+        domain="[('id', 'in', vendor_ids)]",
+        help="Mapped vendor based on product seller configurations."
     )
+
     price_unit = fields.Float(
         string='Unit Price',
         digits='Product Price'
     )
+
+    # Purchase Order & Status Mapping
+    purchase_order_id = fields.Many2one(
+        'purchase.order',
+        string='Purchase Order',
+        readonly=True
+    )
+    order_status = fields.Selection(
+        selection=[
+            ('draft', 'RFQ'),
+            ('sent', 'RFQ Sent'),
+            ('to_approve', 'To Approve'),
+            ('purchase', 'Purchase Order'),
+            ('done', 'Locked'),
+            ('cancel', 'Cancelled'),
+        ],
+        string='Order Status',
+        compute='_compute_order_status',
+        store=True,
+        readonly=True
+    )
+
+    @api.depends('product_id', 'product_id.seller_ids', 'product_id.product_tmpl_id.seller_ids')
+    def _compute_vendor_ids(self):
+        """Limit selection options strictly to vendors defined in Product Supplierinfo."""
+        for line in self:
+            sellers = line.product_id.seller_ids or line.product_id.product_tmpl_id.seller_ids
+            line.vendor_ids = sellers.mapped('partner_id')
+
+    @api.depends('purchase_order_id', 'purchase_order_id.state')
+    def _compute_order_status(self):
+        """Track the linked Purchase Order state."""
+        for line in self:
+            line.order_status = line.purchase_order_id.state if line.purchase_order_id else False
+
+    @api.onchange('vendor_id', 'product_id')
+    def _onchange_vendor_id(self):
+        """Automatically fetch the price unit based on selected Vendor's sellerinfo price."""
+        if self.product_id and self.vendor_id:
+            sellers = (self.product_id.seller_ids or self.product_id.product_tmpl_id.seller_ids).filtered(
+                lambda s: s.partner_id == self.vendor_id
+            )
+            if sellers:
+                self.price_unit = sellers[0].price or self.product_id.standard_price or 0.0
+            else:
+                self.price_unit = self.product_id.standard_price or 0.0
 
     def action_create_rfq(self):
         """Action to group prediction lines by vendor and create Purchase RFQs."""
@@ -451,7 +365,7 @@ class PredictionReportLine(models.TransientModel):
         if not lines:
             raise UserError(_("No prediction report lines found to create RFQ."))
 
-        # 1. Vendor Validation: verify all products have a vendor configured
+        # 1. Vendor Validation
         missing_vendor_lines = lines.filtered(lambda l: not l.vendor_id)
         if missing_vendor_lines:
             missing_products = sorted(list({l.product_id.display_name for l in missing_vendor_lines}))
@@ -465,7 +379,7 @@ class PredictionReportLine(models.TransientModel):
         # 2. Group products by Vendor
         lines_by_vendor = {}
         for line in lines:
-            if line.quantity <= 0:
+            if line.ordered_qty <= 0:
                 continue
             vendor = line.vendor_id
             if vendor not in lines_by_vendor:
@@ -473,7 +387,7 @@ class PredictionReportLine(models.TransientModel):
             lines_by_vendor[vendor].append(line)
 
         if not lines_by_vendor:
-            raise UserError(_("All selected lines have zero quantity. No RFQs to create."))
+            raise UserError(_("All selected lines have zero ordered quantity. No RFQs to create."))
 
         # 3. Create one Purchase RFQ per Vendor
         PurchaseOrder = self.env['purchase.order']
@@ -506,12 +420,13 @@ class PredictionReportLine(models.TransientModel):
                     'order_id': po.id,
                     'product_id': prod.id,
                     'name': prod.display_name or prod.name,
-                    'product_qty': l.quantity,
+                    'product_qty': l.ordered_qty,
                     'product_uom_id': uom.id if uom else False,
                     'price_unit': price,
                     'date_planned': fields.Datetime.now(),
                 }
                 PurchaseOrderLine.create(po_line_vals)
+                l.purchase_order_id = po.id
 
         # 4. Return action opening the created RFQ(s)
         if len(created_pos) == 1:

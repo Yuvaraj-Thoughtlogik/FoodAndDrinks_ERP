@@ -33,7 +33,6 @@ class StockFreshBoxHistoryLine(models.Model):
     sale_order_id = fields.Many2one('sale.order', string="Sales Order", store=True)
     sale_line_id = fields.Many2one('sale.order.line', string="Sales Order Line", store=True)
     
-    # Updated: Replaced special_requirements_notes with Many2one field
     special_requirements_notes_id = fields.Many2one('sale.order.special.note', string="Special Notes", store=True)
     
     order_number = fields.Char(string="Order Number", store=True)
@@ -59,7 +58,7 @@ class StockFreshBoxHistoryLine(models.Model):
     category_id = fields.Many2one('product.category', string="Category", store=True)
 
     box_number = fields.Char(string="Box Label", store=True)
-    box_weight = fields.Float(string="Box Weight (kg)", digits=(16, 3), store=True)
+    box_weight = fields.Float(string="Box Weight / Qty", digits=(16, 3), store=True)
 
 
 class StockFreshBoxWizard(models.TransientModel):
@@ -93,6 +92,16 @@ class StockFreshBoxWizard(models.TransientModel):
         weight_keywords = {'kg', 'kgs', 'kg(s)', 'kilo', 'kilogram', 'kilograms', 'g', 'gram', 'grams', 'lb', 'lbs', 'pound', 'pounds'}
     
         return uom_name in weight_keywords or uom_symbol in weight_keywords
+
+    def _is_chilled_or_each(self, product, uom):
+        """Helper to detect discrete unit items (EACH/Units) or products under 'Chilled' category hierarchy."""
+        category_name = (product.categ_id.complete_name or product.categ_id.name or '').lower() if product.categ_id else ''
+        uom_name = (getattr(uom, 'name', '') or '').strip().lower()
+        
+        is_chilled_category = 'chilled' in category_name
+        is_each_uom = uom_name in {'unit', 'units', 'each', 'pc', 'pcs', 'piece', 'pieces'}
+        
+        return is_chilled_category or is_each_uom
 
     def _get_line_effective_weight(self, line):
         product = line.product_id
@@ -189,10 +198,6 @@ class StockFreshBoxWizard(models.TransientModel):
         wizard_line_vals = []
 
         for line in order_lines:
-            total_weight = self._get_line_effective_weight(line)
-            if total_weight <= 0:
-                continue
-
             order = line.order_id
             product = line.product_id
 
@@ -242,8 +247,13 @@ class StockFreshBoxWizard(models.TransientModel):
             has_bom = bool(boms_per_product.get(product))
             line_uom = getattr(line, 'product_uom_id', False) or line.product_id.uom_id
             is_kg_uom = self._is_weight_uom(line_uom)
+            is_chilled_or_each = self._is_chilled_or_each(product, line_uom)
 
+            # 1. Existing KG Weight Splitting (Unchanged)
             if has_bom and is_kg_uom:
+                total_weight = self._get_line_effective_weight(line)
+                if total_weight <= 0:
+                    continue
                 max_box_capacity = 1.0
                 number_of_boxes = math.ceil(total_weight / max_box_capacity)
                 remaining_weight = total_weight
@@ -259,11 +269,26 @@ class StockFreshBoxWizard(models.TransientModel):
                     })
                     wizard_line_vals.append(line_dict)
 
+            # 2. Added: Chilled / EACH Category Unit Splitting for BoM Items
+            elif has_bom and is_chilled_or_each:
+                ordered_units = int(line.product_uom_qty) if line.product_uom_qty > 0 else 1
+                for unit_no in range(1, ordered_units + 1):
+                    line_dict = base_vals.copy()
+                    line_dict.update({
+                        'box_number': f"Unit {unit_no}/{ordered_units}" if ordered_units > 1 else "Single Unit",
+                        'box_weight': 1.0,
+                    })
+                    wizard_line_vals.append(line_dict)
+
+            # 3. Non-BoM / Bulk Products (Unchanged)
             else:
+                total_qty = line.product_uom_qty
+                if total_qty <= 0:
+                    continue
                 line_dict = base_vals.copy()
                 line_dict.update({
                     'box_number': "Full Bulk",
-                    'box_weight': round(total_weight, 3),
+                    'box_weight': round(total_qty, 3),
                 })
                 wizard_line_vals.append(line_dict)
 
@@ -289,12 +314,15 @@ class StockFreshBoxWizard(models.TransientModel):
         unique_products = self.line_ids.mapped('product_id')
         boms_per_product = mrp_bom_obj._bom_find(unique_products)
 
+        # Updated filter: Accepts lines that have a BoM AND (are KG Weight OR are Chilled/EACH UOM)
         lines_to_generate_mo = self.line_ids.filtered(
-            lambda l: boms_per_product.get(l.product_id) and self._is_weight_uom(l.uom_id)
+            lambda l: boms_per_product.get(l.product_id) and (
+                self._is_weight_uom(l.uom_id) or self._is_chilled_or_each(l.product_id, l.uom_id)
+            )
         )
 
         if not lines_to_generate_mo:
-            raise UserError(_("No items with a valid BoM and KG/Weight UoM were found to generate MOs."))
+            raise UserError(_("No items with a valid BoM (KG Weight or Chilled/EACH UOM) were found to generate MOs."))
 
         existing_mos = mrp_production_obj.search([
             ('delivery_date', '>=', self.start_date),
@@ -341,7 +369,7 @@ class StockFreshBoxWizard(models.TransientModel):
             'include_late_orders': self.include_late_orders,
             'total_analyzed_lines': len(self.line_ids),
             'total_fresh_mos_created': len(processed_mos),
-            'note': f"Processed {len(self.line_ids)} lines. Created/Updated {len(processed_mos)} MOs for BoM + KG items. Purged {len(mo_to_purge)} obsolete MOs."
+            'note': f"Processed {len(self.line_ids)} lines. Created/Updated {len(processed_mos)} MOs for BoM (KG & Chilled/EACH) items. Purged {len(mo_to_purge)} obsolete MOs."
         })
 
         history_line_vals = [
@@ -399,7 +427,6 @@ class StockFreshBoxWizardLine(models.TransientModel):
     sale_order_id = fields.Many2one('sale.order', string="Sales Order")
     sale_line_id = fields.Many2one('sale.order.line', string="Order Line")
     
-    # Updated: Replaced special_requirements_notes with Many2one field
     special_requirements_notes_id = fields.Many2one('sale.order.special.note', string="Special Notes")
 
     # Header Info
@@ -425,7 +452,7 @@ class StockFreshBoxWizardLine(models.TransientModel):
     category_id = fields.Many2one('product.category', string="Category")
 
     box_number = fields.Char(string="Box Label")
-    box_weight = fields.Float(string="Box Weight (kg)", digits=(16, 3))
+    box_weight = fields.Float(string="Box Weight / Qty", digits=(16, 3))
 
 
 class MrpProduction(models.Model):

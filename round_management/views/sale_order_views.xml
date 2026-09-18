@@ -288,4 +288,18 @@
         </field>
     </record>
     
+    <record id="view_order_form_inherit_rename_confirm" model="ir.ui.view">
+        <field name="name">sale.order.form.inherit.rename.confirm</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="arch" type="xml">
+
+            <!-- Target the main Confirm button and update its string -->
+            <xpath expr="//button[@name='action_confirm']" position="attributes">
+                <attribute name="string">Save and Confirm</attribute>
+            </xpath>
+
+        </field>
+    </record>
+    
 </odoo>
