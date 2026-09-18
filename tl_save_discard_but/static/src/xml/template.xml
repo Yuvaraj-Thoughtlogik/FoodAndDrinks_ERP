@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+
+<templates id="template" xml:space="preserve">
+    <t
+        t-name="leas_form_status_indicator"
+        t-inherit="web.FormStatusIndicator"
+        t-inherit-mode="extension"
+    >
+        <xpath expr="//button[hasclass('o_form_button_save')]/i" position="after">
+            <span class="save_button">Save</span>
+        </xpath>
+        <xpath expr="//button/i[hasclass('fa-times')]" position="after">
+            <span class="discard_button">Discard</span>
+        </xpath>
+    </t>
+
+</templates>

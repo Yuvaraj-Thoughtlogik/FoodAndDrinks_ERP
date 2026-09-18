@@ -6,3 +6,4 @@ from . import update_status_wizard
 from . import bulk_batch_change_wizard
 from . import sale_order_batch_filter_wizard
 from . import round_batch_warning_wizard
+from . import select_delivery_address_wizard

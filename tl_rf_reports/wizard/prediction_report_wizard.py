@@ -232,6 +232,12 @@ class PredictionReportWizard(models.TransientModel):
         """Generates lines and returns the PDF report action."""
         self.ensure_one()
         self._generate_prediction_lines()
+
+        if self.delivery_channel == 'courier':
+            courier_action = self.env.ref('tl_rf_reports.action_report_prediction_courier', raise_if_not_found=False)
+            if courier_action:
+                return courier_action.report_action(self)
+
         report_action = self.env.ref('tl_rf_reports.action_report_prediction', raise_if_not_found=False)
         if not report_action:
             raise UserError(_("The PDF report action 'tl_rf_reports.action_report_prediction' was not found."))

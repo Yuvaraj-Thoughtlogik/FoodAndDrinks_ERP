@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Frozen Label page size: 100mm x 50mm landscape/standard thermal roll format,
+         matching the client's reference Frozen Label design. -->
+    <record id="paperformat_production_label_frozen" model="report.paperformat">
+        <field name="name">Production Label Frozen 100x50mm</field>
+        <field name="default" eval="False"/>
+        <field name="format">custom</field>
+        <field name="page_height">50</field>
+        <field name="page_width">100</field>
+        <field name="orientation">Portrait</field>
+        <field name="margin_top">0</field>
+        <field name="margin_bottom">0</field>
+        <field name="margin_left">0</field>
+        <field name="margin_right">0</field>
+        <field name="header_line" eval="False"/>
+        <field name="header_spacing">0</field>
+        <field name="dpi">90</field>
+    </record>
+
+    <!-- ============ FROZEN LABEL ACTION ============ -->
+    <record id="action_report_production_label_frozen" model="ir.actions.report">
+        <field name="name">Production Label - Frozen</field>
+        <field name="model">production.label.wizard</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">tl_rf_reports.report_production_label_document_frozen</field>
+        <field name="report_file">tl_rf_reports.report_production_label_document_frozen</field>
+        <field name="paperformat_id" ref="paperformat_production_label_frozen"/>
+        <field name="print_report_name">'Production Label Frozen - %s' % (object.delivery_date_from)</field>
+        <field name="binding_model_id" eval="False"/>
+    </record>
+
+    <!-- ============ FROZEN LABEL QWEB TEMPLATE ============ -->
+    <template id="report_production_label_document_frozen">
+        <t t-call="web.basic_layout">
+            <t t-set="total_labels" t-value="len(label_lines)"/>
+            <t t-foreach="label_lines" t-as="label">
+                <div style="width:100mm; height:50mm; box-sizing:border-box; padding:2mm 2.5mm; page-break-after:always; font-family:Arial, Helvetica, sans-serif; position:relative; overflow:hidden; font-size:7.5px; line-height:1.2; color:#000;">
+
+                    <!-- Top block: Product Name / Scientific Name / Origin / Description / Weight + Oval GB/GG476 -->
+                    <div style="position:relative; width:100%;">
+                        <!-- Oval Health Mark on top-right -->
+                        <div style="position:absolute; top:2.5mm; right:0; width:13mm; height:9.5mm; border:0.8px solid #000; border-radius:50%; display:table;">
+                            <div style="display:table-cell; vertical-align:middle; text-align:center; font-size:6.5px; font-weight:bold; line-height:1.1;">
+                                GB<br/>GG 476
+                            </div>
+                        </div>
+
+                        <!-- Centered Content Column -->
+                        <div style="text-align:center; padding-right:14mm; padding-left:1mm;">
+                            <div style="font-size:11.5px; font-weight:bold; line-height:1.2;">
+                                <span t-esc="label.get('product_name')"/>
+                            </div>
+                            <div t-if="label.get('latin_name')" style="font-size:8px; font-style:italic; line-height:1.1; margin-top:0.3mm;">
+                                (<span t-esc="label.get('latin_name')"/>)
+                            </div>
+                            <div t-if="label.get('origin_display')" style="font-size:7.5px; line-height:1.1; margin-top:0.3mm;">
+                                <span t-esc="label.get('origin_display')"/>
+                            </div>
+                            <div t-if="label.get('label_description')" style="font-size:7.5px; line-height:1.1; margin-top:0.2mm;">
+                                <span t-esc="label.get('label_description')"/>
+                            </div>
+                            <div style="font-size:8.5px; font-weight:bold; line-height:1.2; margin-top:0.4mm;">
+                                <span t-esc="label.get('weight_range')"/>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Middle block: Left side (Storage + Allergens + Advisory) & Right side (Production Date + Use By) -->
+                    <div style="margin-top:1.2mm; width:100%; display:table; table-layout:fixed;">
+                        <!-- Left Column: Storage, Allergens, Advisory notices -->
+                        <div style="display:table-cell; width:58%; vertical-align:top; text-align:left; font-size:7px; line-height:1.18;">
+                            <div>Store at or below 5&#176;C.</div>
+                            <div>Suitable for home freezing. For best results freeze on day of purchase.</div>
+                            <div style="margin-top:0.4mm;">
+                                Allergens: <b><span t-esc="label.get('allergens_display') or 'Fish'"/></b>
+                            </div>
+                            <div>May contain bones.</div>
+                            <div>Remove all outer packaging prior to cooking.</div>
+                        </div>
+
+                        <!-- Right Column: Production Date and Use By -->
+                        <div style="display:table-cell; width:42%; vertical-align:bottom; text-align:right;">
+                            <table style="width:100%; font-size:7.2px; font-weight:bold; line-height:1.25; margin-bottom:0.3mm;">
+                                <tr>
+                                    <td style="text-align:left; white-space:nowrap; padding-left:1mm;">Production Date:</td>
+                                    <td style="text-align:right; white-space:nowrap;"><span t-esc="label.get('production_date_display')"/></td>
+                                </tr>
+                                <tr>
+                                    <td style="text-align:left; white-space:nowrap; padding-left:1mm;">Use by:</td>
+                                    <td style="text-align:right; white-space:nowrap;"><span t-esc="label.get('frozen_use_by_display')"/></td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Footer: Company Address (Full Width, Centered) -->
+                    <div style="position:absolute; bottom:1.2mm; left:0; right:0; text-align:center; font-size:5.8px; line-height:1.1;">
+                        <span t-esc="company.name"/><span t-if="company.street">, <t t-esc="company.street"/></span><span
+                            t-if="company.street2">, <t t-esc="company.street2"/></span><span
+                            t-if="company.city">, <t t-esc="company.city"/></span><span
+                            t-if="company.state_id">, <t t-esc="company.state_id.name"/></span><span
+                            t-if="company.zip">, <t t-esc="company.zip"/></span>.
+                    </div>
+                </div>
+            </t>
+        </t>
+    </template>
+</odoo>

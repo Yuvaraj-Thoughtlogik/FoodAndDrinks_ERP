@@ -26,3 +26,6 @@ access_stock_fresh_box_history_line,access_stock_fresh_box_history_line,model_st
 
 access_sale_order_special_note_user,sale.order.special.note.user,model_sale_order_special_note,sales_team.group_sale_salesman,1,1,1,0
 access_sale_order_special_note_manager,sale.order.special.note.manager,model_sale_order_special_note,sales_team.group_sale_manager,1,1,1,1
+
+access_select_delivery_address_wizard_user,select.delivery.address.wizard.user,model_select_delivery_address_wizard,sales_team.group_sale_salesman,1,1,1,1
+access_select_delivery_address_wizard_manager,select.delivery.address.wizard.manager,model_select_delivery_address_wizard,sales_team.group_sale_manager,1,1,1,1

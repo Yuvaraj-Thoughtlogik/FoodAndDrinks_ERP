@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Plain Frozen Label page size: 100mm x 130mm portrait thermal roll format,
+         matching the client's approved reference Plain Frozen Label design. -->
+    <record id="paperformat_production_label_plain_frozen" model="report.paperformat">
+        <field name="name">Production Label Plain Frozen 100x130mm</field>
+        <field name="default" eval="False"/>
+        <field name="format">custom</field>
+        <field name="page_height">130</field>
+        <field name="page_width">100</field>
+        <field name="orientation">Portrait</field>
+        <field name="margin_top">0</field>
+        <field name="margin_bottom">0</field>
+        <field name="margin_left">0</field>
+        <field name="margin_right">0</field>
+        <field name="header_line" eval="False"/>
+        <field name="header_spacing">0</field>
+        <field name="dpi">90</field>
+    </record>
+
+    <!-- ============ PLAIN FROZEN LABEL ACTION ============ -->
+    <record id="action_report_production_label_plain_frozen" model="ir.actions.report">
+        <field name="name">Production Label - Plain Frozen</field>
+        <field name="model">production.label.wizard</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">tl_rf_reports.production_label_plain_frozen</field>
+        <field name="report_file">tl_rf_reports.production_label_plain_frozen</field>
+        <field name="paperformat_id" ref="paperformat_production_label_plain_frozen"/>
+        <field name="print_report_name">'Production Label Plain Frozen - %s' % (object.delivery_date_from)</field>
+        <field name="binding_model_id" eval="False"/>
+    </record>
+
+    <!-- ============ PLAIN FROZEN LABEL QWEB TEMPLATE ============ -->
+    <template id="production_label_plain_frozen">
+        <t t-call="web.basic_layout">
+            <t t-set="total_labels" t-value="len(label_lines)"/>
+            <t t-foreach="label_lines" t-as="label">
+                <div style="width:100mm; height:130mm; box-sizing:border-box; padding:4mm 4.5mm; page-break-after:always; font-family:Arial, Helvetica, sans-serif; position:relative; overflow:hidden; font-size:10px; line-height:1.3; color:#000;">
+
+                    <!-- 1. Product Name -->
+                    <div style="text-align:center; font-size:16px; font-weight:bold; line-height:1.2; text-transform:uppercase;">
+                        <span t-esc="label.get('product_name')"/>
+                    </div>
+
+                    <!-- 2. Origin / Scientific Latin Name -->
+                    <div t-if="label.get('latin_name') or label.get('origin')" style="text-align:center; font-size:12px; line-height:1.2; margin-top:2mm;">
+                        <t t-if="label.get('latin_name')">
+                            (<span t-esc="label.get('latin_name')"/>)
+                        </t>
+                        <t t-elif="label.get('origin')">
+                            (<span t-esc="label.get('origin')"/>)
+                        </t>
+                    </div>
+
+                    <!-- 3. Ingredients -->
+                    <div style="margin-top:3.5mm; font-size:10.5px; line-height:1.3;">
+                        <t t-if="label.get('ingredients_html')">
+                            <span t-raw="label.get('ingredients_html')"/>
+                        </t>
+                        <t t-elif="label.get('ingredients')">
+                            <span t-raw="label.get('ingredients')"/>
+                        </t>
+                        <t t-else="">
+                            Ingredients: Cod <b>(FISH)</b>, water as protective glaze.
+                        </t>
+                    </div>
+
+                    <!-- 4. Storage Instructions -->
+                    <div style="margin-top:3.5mm; font-size:10.5px; line-height:1.3;">
+                        <span t-esc="label.get('storage_instructions') or 'Store at below -18°C. Once defrosted do not refreeze'"/>
+                    </div>
+
+                    <!-- 5. Catch Area -->
+                    <div style="margin-top:3.5mm; font-size:10.5px; line-height:1.3;">
+                        <span t-esc="label.get('catch_area') or 'Catch Area: Longline caught in the Pacific Ocean, FAO 61.'"/>
+                    </div>
+
+                    <!-- 6. Allergen Notice -->
+                    <div style="margin-top:3.5mm; font-size:10.5px; line-height:1.3;">
+                        For allergens see ingredients in <b>BOLD</b>
+                    </div>
+
+                    <!-- 7. Advisory Notice -->
+                    <div style="margin-top:3.5mm; text-align:center; font-size:10px; font-style:italic; line-height:1.3;">
+                        Although every effort has been taken to remove them, this product may contain bones
+                    </div>
+
+                    <!-- 8. Bottom Section: Freeze date & Best Before on left, GB Oval on right -->
+                    <div style="position:absolute; bottom:12mm; left:4.5mm; right:4.5mm; display:table; width:calc(100% - 9mm);">
+                        <div style="display:table-cell; vertical-align:middle; text-align:left; font-size:10.5px; line-height:1.4;">
+                            <div>Freeze date: <span t-esc="label.get('freeze_date_display')"/></div>
+                            <div>Best Before End: <span t-esc="label.get('best_before_display')"/></div>
+                        </div>
+                        <div style="display:table-cell; vertical-align:middle; text-align:right; width:25mm;">
+                            <div style="display:inline-block; width:22mm; height:14mm; border:1px solid #000; border-radius:50%; text-align:center; vertical-align:middle; line-height:1.15; padding-top:2mm; box-sizing:border-box; font-size:9.5px; font-weight:bold;">
+                                GB<br/>GG476
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 9. Footer: Company Address -->
+                    <div style="position:absolute; bottom:3mm; left:0; right:0; text-align:center; font-size:7.5px; line-height:1.2;">
+                        <span t-esc="label.get('company_address') or (company.name + (', ' + company.street if company.street else '') + (', ' + company.street2 if company.street2 else '') + (', ' + company.city if company.city else '') + (', ' + company.zip if company.zip else ''))"/>
+                    </div>
+                </div>
+            </t>
+        </t>
+    </template>
+</odoo>
