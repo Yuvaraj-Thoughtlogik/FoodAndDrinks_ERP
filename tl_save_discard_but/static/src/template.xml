@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<templates xml:space="preserve">
+
+    <t t-name="tl_save_discard_but.FormStatusIndicator"
+       t-inherit="web.FormStatusIndicator"
+       t-inherit-mode="extension">
+
+        <xpath expr="//div[hasclass('o_form_status_indicator')]" position="attributes">
+            <attribute name="class">
+                o_form_status_indicator d-md-flex align-items-center me-auto
+            </attribute>
+        </xpath>
+
+        <xpath expr="//button[hasclass('o_form_button_save')]" position="attributes">
+            <attribute name="class">
+                o_form_button_save btn btn-light border-0 px-2 py-0 lh-sm fs-2 text-primary
+            </attribute>
+        </xpath>
+
+        <xpath expr="//button[hasclass('o_form_button_cancel')]" position="attributes">
+            <attribute name="class">
+                o_form_button_cancel btn btn-light border-0 px-2 py-0 lh-sm fs-2 text-gray-500
+            </attribute>
+        </xpath>
+
+    </t>
+
+
+    <t t-name="tl_save_discard_but.Breadcrumbs"
+       t-inherit="web.Breadcrumbs"
+       t-inherit-mode="extension">
+
+        <xpath expr="//t[@t-slot='breadcrumb-status-indicator']" position="before">
+            <t t-call="web.Breadcrumb.Actions"/>
+        </xpath>
+
+    </t>
+
+
+    <t t-name="tl_save_discard_but.CogMenu"
+       t-inherit="web.CogMenu"
+       t-inherit-mode="extension">
+
+        <xpath expr="//div[hasclass('o_cp_action_menus')]" position="attributes">
+            <attribute name="t-att-class"></attribute>
+        </xpath>
+
+        <xpath expr="//button[hasclass('d-print-none')]" position="attributes">
+            <attribute name="t-att-class">
+                env.isSmall ? 'btn-secondary' : 'btn-light px-2 py-0 fs-2 lh-sm p-0 border-0'
+            </attribute>
+        </xpath>
+
+    </t>
+
+</templates>

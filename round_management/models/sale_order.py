@@ -160,6 +160,26 @@ class SaleOrder(models.Model):
         readonly=False,
         help="Automatically mapped based on the selected Round Batch."
     )
+    
+    order_history_ids = fields.One2many(
+        'sale.order',
+        compute='_compute_order_history_ids',
+        string='Customer Order History',
+        help="Historical sales orders for the selected customer, excluding the current order."
+    )
+
+    @api.depends('partner_id')
+    def _compute_order_history_ids(self):
+        for order in self:
+            if order.partner_id:
+                # Fetch all orders for the commercial partner excluding this current order
+                domain = [
+                    ('partner_id.commercial_partner_id', '=', order.partner_id.commercial_partner_id.id),
+                    ('id', '!=', order.id if isinstance(order.id, int) else 0)
+                ]
+                order.order_history_ids = self.search(domain, order='date_order desc')
+            else:
+                order.order_history_ids = self.env['sale.order']
 
     @api.depends('batch_id', 'batch_id.delivery_channel')
     def _compute_delivery_channel(self):

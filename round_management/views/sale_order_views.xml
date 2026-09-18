@@ -289,15 +289,38 @@
         </field>
     </record>
     
-    <record id="view_order_form_inherit_rename_confirm" model="ir.ui.view">
-        <field name="name">sale.order.form.inherit.rename.confirm</field>
+    <record id="view_order_form_inherit_order_history" model="ir.ui.view">
+        <field name="name">sale.order.form.inherit.order.history</field>
         <field name="model">sale.order</field>
         <field name="inherit_id" ref="sale.view_order_form"/>
         <field name="arch" type="xml">
-
-            <!-- Target the main Confirm button and update its string -->
-            <xpath expr="//button[@name='action_confirm']" position="attributes">
-                <attribute name="string">Save and Confirm</attribute>
+            
+            <xpath expr="//notebook" position="inside">
+                <page string="Order History" name="order_history_tab">
+                    <field name="order_history_ids" mode="list" readonly="1">
+                        <list create="0" delete="0" edit="0">
+                            <field name="name" string="Order Number"/>
+                            <field name="customer_code" string="Customer Code"/>
+                            <field name="partner_id" string="Customer Name"/>
+                            <field name="date_order" string="Order Date"/>
+                            <field name="delivery_date" string="Delivery Date"/>
+                            <field name="delivery_channel" string="Delivery Channel"/>
+                            <field name="round_id" string="Delivery Round"/>
+                            <field name="batch_id" string="Round Batch"/>
+                            
+                            <!-- Order Flags -->
+                            <field name="is_late_order" string="Late Order" widget="boolean_toggle"/>
+                            <field name="is_staff_order" string="Staff Order" widget="boolean_toggle"/>
+                            <field name="is_b2b" string="B2B" widget="boolean_toggle"/>
+                            
+                            <field name="amount_total" string="Total" widget="monetary"/>
+                            <field name="state" widget="badge" 
+                                   decoration-success="state in ('sale', 'done')" 
+                                   decoration-info="state == 'draft'" 
+                                   decoration-muted="state == 'cancel'"/>
+                        </list>
+                    </field>
+                </page>
             </xpath>
 
         </field>
