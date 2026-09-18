@@ -34,3 +34,23 @@ class StockMove(models.Model):
         store=True,
         readonly=True,
     )
+
+    # The originating sale order line for this box (see
+    # mrp_production.MrpProduction.sale_line_id) and its special
+    # requirements note, surfaced here so the Production Report can
+    # consolidate same product/quantity boxes together while keeping a
+    # customer's special-note box on its own row (see
+    # report/production_report.py generate_pdf()'s consolidation key).
+    # sale_line_id = fields.Many2one(
+    #     'sale.order.line',
+    #     string='Sale Order Line',
+    #     related='raw_material_production_id.sale_line_id',
+    #     store=True,
+    #     readonly=True,
+    # )
+    special_requirements_notes = fields.Char(
+        string='Special Notes',
+        related='sale_line_id.special_requirements_notes_id.name',
+        store=True,
+        readonly=True,
+    )

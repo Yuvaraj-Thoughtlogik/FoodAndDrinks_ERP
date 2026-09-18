@@ -8,7 +8,7 @@
         <field name="priority">100</field>
         <field name="arch" type="xml">
             <xpath expr="//field[@name='order_line']/list/field[@name='product_uom_qty']" position="after">
-                <field name="box_qty" string="Box Qty" readonly="0" optional="show" invisible = '1'/>
+                <field name="box_qty" string="Box Qty"  optional="hide"/>
             </xpath>
         </field>
     </record>

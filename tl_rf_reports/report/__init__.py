@@ -9,5 +9,7 @@ from . import prediction_report
 # from . import delivery_note_round_report
 from . import production_label_report
 from . import production_report
+from . import box_count_report
+from . import courier_production_report
 from . import active_batch_report
 from . import driver_packing_list_report

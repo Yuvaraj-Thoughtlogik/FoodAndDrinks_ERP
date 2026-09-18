@@ -26,6 +26,9 @@
                             <field name="delivery_channel" widget="radio"
                                    options="{'horizontal': true}" required="1"/>
                         </group>
+                        <group colspan="4" invisible="delivery_channel == 'courier'">
+                            <field name="box_count" string="Box Count"/>
+                        </group>
                         <group string="Depot" colspan="4" invisible="delivery_channel == 'courier'">
                             <field name="depot_ids"
                                    widget="many2many_checkboxes"
@@ -79,7 +82,9 @@
                 <field name="depot_id"/>
                 <field name="component_categ_id" string="Category"/>
                 <field name="product_id" string="Product / Box Contents"/>
-                <field name="product_uom_qty" string="Quantity" sum="Quantity"/>
+                <field name="product_uom_qty" string="To Consume" sum="To Consume"/>
+                <field name="special_requirements_notes" string="Special Notes" optional="show"/>
+                <field name="sale_line_id" optional="hide"/>
                 <field name="raw_material_production_id" string="Manufacturing Order" optional="hide"/>
                 <field name="origin" optional="hide"/>
             </list>

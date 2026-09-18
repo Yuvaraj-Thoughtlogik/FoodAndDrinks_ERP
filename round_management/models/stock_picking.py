@@ -5,8 +5,8 @@ class StockPicking(models.Model):
     _inherit = 'stock.picking'
 
     batch_id = fields.Many2one(
-        'round.management.batch', 
-        string='Round Batch', 
+        'round.management.batch',
+        string='Round Batch',
         compute='_compute_batch_id',
         store=True,
         readonly=False,
@@ -68,18 +68,20 @@ class StockPicking(models.Model):
                 picking.delivery_date = picking.sale_id.commitment_date
             elif picking.origin:
                 sale_order = self.env['sale.order'].search([('name', '=', picking.origin)], limit=1)
-                picking.delivery_date = sale_order.commitment_date if sale_order and sale_order.commitment_date else (picking.scheduled_date or fields.Datetime.now())
+                picking.delivery_date = sale_order.commitment_date if sale_order and sale_order.commitment_date else (
+                            picking.scheduled_date or fields.Datetime.now())
             else:
                 picking.delivery_date = picking.scheduled_date or fields.Datetime.now()
-                
+
     def action_validate_batch_deliveries(self):
         """Validates all selected picking / delivery records from the list view."""
         for picking in self:
-            if picking.state not in ('draft','assigned', 'confirmed'):
+            if picking.state not in ('draft', 'assigned', 'confirmed'):
                 continue
-            
+
             picking.button_validate()
         return True
+
 
 class MrpProduction(models.Model):
     _inherit = 'mrp.production'
@@ -109,33 +111,31 @@ class MrpProduction(models.Model):
         for mo in self:
             batch = False
 
-           
             sale_orders = mo.move_dest_ids.mapped('sale_line_id.order_id')
             if sale_orders and sale_orders[0].batch_id:
                 batch = sale_orders[0].batch_id
 
-            
+
             elif mo.origin:
                 so = self.env['sale.order'].search([('name', '=', mo.origin)], limit=1)
                 if so and so.batch_id:
                     batch = so.batch_id
 
             mo.batch_id = batch
-            
-            
+
+
 class StockRule(models.Model):
     _inherit = 'stock.rule'
 
     def _prepare_mo_vals(self, *args, **kwargs):
         res = super()._prepare_mo_vals(*args, **kwargs)
         values = kwargs.get('values')
-        if not values and len(args) >= 8:   
+        if not values and len(args) >= 8:
             values = args[7]
         if values and values.get('sale_line_id'):
             sale_line = self.env['sale.order.line'].browse(values['sale_line_id'])
             if sale_line.order_id and sale_line.order_id.batch_id:
                 res['batch_id'] = sale_line.order_id.batch_id.id
-                
+
         return res
-    
-    
+

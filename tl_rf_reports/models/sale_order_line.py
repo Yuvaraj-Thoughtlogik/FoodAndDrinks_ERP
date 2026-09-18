@@ -132,62 +132,16 @@ class SaleOrderLine(models.Model):
             else:
                 line.weight = round(line.product_uom_qty, 2)
 
-    @api.depends('product_id', 'product_uom_qty', 'product_id.weight','product_uom_id')
+    @api.depends('product_uom_qty')
     def _compute_box_qty(self):
-        """Calculate box qty by splitting total line weight into 1kg boxes.
-
-        Formula:
-            total_weight = product_unit_weight (kg) × line_qty
-            box_qty      = ceil(total_weight / 1.0)
+        """Box qty is simply the order quantity rounded up to the next
+        whole box - 1 box per unit of qty, regardless of weight or UoM.
 
         Examples:
-            Fillet Fish 2kg, qty=1  → 2 × 1 = 2kg  → 2 boxes
-            Fillet Fish 2kg, qty=2  → 2 × 2 = 4kg  → 4 boxes
-            Salmon 500g,     qty=3  → 0.5 × 3 = 1.5kg → 2 boxes
+            qty=1   → 1 box
+            qty=1.5 → 2 boxes
+            qty=2.8 → 3 boxes
         """
         for line in self:
-            uom_name = (line.product_uom_id.name or '').strip().lower() if line.product_uom_id else ''
-            #_logger.info("[_compute_box_qty] Line %s: product=%s, qty=%s, uom=%s", line.id, line.product_id.display_name, line.product_uom_qty, uom_name)
-            if uom_name == 'each':
-                line.box_qty = line.product_uom_qty
-                #_logger.info("[_compute_box_qty] Line %s (UoM 'each') -> box_qty: %s", line.id, line.box_qty)
-                continue
-            elif not line.product_id or line.product_uom_qty <= 0:
-                line.box_qty = 0.0
-                continue
-
-            unit_weight = line._get_product_unit_weight_in_kg()
-            #_logger.info("[_compute_box_qty] Line %s: unit_weight=%s, uom_name=%s", line.id, unit_weight, uom_name)
-
-            if unit_weight <= 0:
-                # Unknown weight — default to 1 box per unit
-                line.box_qty = line.product_uom_qty
-            elif uom_name == 'each':
-                line.box_qty = line.product_uom_qty
-            else:
-                total_weight_kg = unit_weight * line.product_uom_qty
-                line.box_qty = math.ceil(total_weight_kg / 1.0)
-            #_logger.info("[_compute_box_qty] Line %s: final box_qty=%s", line.id, line.box_qty)
-
-    @api.onchange('product_id', 'product_uom_qty', 'product_uom_id')
-    def _onchange_product_compute_box_qty(self):
-        """Immediately auto-fills box_qty and weight on user input in UI before saving."""
-        for line in self:
-            uom_name = (line.product_uom_id.name or '').strip().lower() if line.product_uom_id else ''
-            #_logger.info("[_onchange_box_qty] Line %s: product=%s, qty=%s, uom=%s", line.id, line.product_id.display_name, line.product_uom_qty, uom_name)
-            if uom_name == 'each':
-                line.box_qty = line.product_uom_qty
-                #_logger.info("[_onchange_box_qty] Line %s (UoM 'each') -> box_qty: %s", line.id, line.box_qty)
-                continue
-            elif line.product_id and line.product_uom_qty > 0:
-                unit_weight = line._get_product_unit_weight_in_kg()
-                #_logger.info("[_onchange_box_qty] Line %s: unit_weight=%s", line.id, unit_weight)
-                if unit_weight > 0:
-                    total_weight_kg = unit_weight * line.product_uom_qty
-                    line.box_qty = math.ceil(total_weight_kg / 1.0)
-                    line.weight = round(total_weight_kg, 2)
-                else:
-                    line.box_qty = line.product_uom_qty
-                    line.weight = round(line.product_uom_qty, 2)
-                #_logger.info("[_onchange_box_qty] Line %s: final box_qty=%s, weight=%s", line.id, line.box_qty, line.weight)
+            line.box_qty = math.ceil(line.product_uom_qty) if line.product_uom_qty > 0 else 0.0
 
