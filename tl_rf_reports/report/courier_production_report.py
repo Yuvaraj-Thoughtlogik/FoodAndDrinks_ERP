@@ -149,7 +149,7 @@ class ReportCourierProductionReport(models.AbstractModel):
     # Lines for the same product AND the same "To Consume" quantity
     # (product_uom_qty) consolidate into a single row - "Boxes" is the COUNT
     # of such lines, "Box Qty" is that shared per-box quantity. A line
-    # carrying a customer special note (sale_line_id.special_requirements_
+    # carrying a customer special note (production_sale_line_id.special_requirements_
     # notes_id) consolidates with any other line carrying that SAME note
     # record (by id), even across different sale order lines, so
     # identically-noted boxes of the same product/quantity share one row
@@ -179,7 +179,7 @@ class ReportCourierProductionReport(models.AbstractModel):
             # noted line consolidates with any other line carrying the SAME
             # note record (by id), regardless of which sale order line it
             # came from.
-            notes_scope = move.sale_line_id.special_requirements_notes_id.id if special_note else 0
+            notes_scope = move.production_sale_line_id.special_requirements_notes_id.id if special_note else 0
             group_key = (product.id, qty, uom.id, notes_scope)
 
             group = groups.setdefault(group_key, {
