@@ -1,5 +1,5 @@
 {
-    "name": "Leas Save & Discard Buttons",
+    "name": "TL Save & Discard Buttons",
     "version": "19.0.0.0.0",
     "summary": "Save & Discard Buttons",
     "license": "AGPL-3",
@@ -8,7 +8,7 @@
     'website': "http://www.thoughtlogik.com",
     "depends": ["web"],
     "data": [],
-    # "images": ["static/description/main_screen.png"],
+    
     "assets": {
         "web.assets_backend": [
             "tl_save_discard_but/static/src/scss/indicator_button.scss",
