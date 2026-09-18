@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_select_delivery_address_wizard_form" model="ir.ui.view">
+        <field name="name">select.delivery.address.wizard.form</field>
+        <field name="model">select.delivery.address.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Select Alternative Delivery Address">
+                <sheet>
+                    <group>
+                        <field name="sale_order_id" invisible="1"/>
+                        <field name="partner_id" readonly="1" string="Main Customer"/>
+                        
+                        <label for="delivery_address_id" string="Delivery Address"/>
+                        <div class="o_row">
+                            <field name="delivery_address_id" 
+                                   options="{'no_create': True, 'no_open': True}"
+                                   context="{'show_address': 1}"
+                                   domain="['|', ('id', '=', partner_id), ('parent_id', 'child_of', partner_id)]"/>
+                            <button name="action_create_new_delivery_address" 
+                                    type="object" 
+                                    string="Create Delivery Address" 
+                                    class="btn btn-link btn-sm" 
+                                    icon="fa-plus"/>
+                        </div>
+                    </group>
+                </sheet>
+                <footer>
+                    <button string="Apply Address" name="action_apply_address" type="object" class="btn-primary"/>
+                    <button string="Cancel" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

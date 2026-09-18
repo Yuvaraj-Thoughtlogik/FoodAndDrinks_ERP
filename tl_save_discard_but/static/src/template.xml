@@ -27,7 +27,7 @@
     </t>
 
 
-    <t t-name="tl_save_discard_but.Breadcrumbs"
+   <!-- <t t-name="tl_save_discard_but.Breadcrumbs"
        t-inherit="web.Breadcrumbs"
        t-inherit-mode="extension">
 
@@ -35,7 +35,7 @@
             <t t-call="web.Breadcrumb.Actions"/>
         </xpath>
 
-    </t>
+    </t>-->
 
 
     <t t-name="tl_save_discard_but.CogMenu"

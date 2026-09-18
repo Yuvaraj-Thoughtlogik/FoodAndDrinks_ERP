@@ -326,4 +326,42 @@
         </field>
     </record>
     
+    
+    <record id="view_order_form_inherit_alt_delivery_address" model="ir.ui.view">
+        <field name="name">sale.order.form.inherit.alt.delivery.address</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="arch" type="xml">
+            
+            
+            <xpath expr="//field[@name='partner_id']" position="replace">
+                <label for="partner_id"/>
+                <div class="o_row">
+                    <field name="partner_id" 
+                           widget="res_partner_many2one" 
+                           context="{'res_partner_search_mode': 'customer', 'show_address': 1, 'show_vat': True}" 
+                           options='{"always_reload": True}'/>
+                    <button name="action_open_delivery_address_wizard" 
+                            type="object" 
+                            string="Alt Delivery Address" 
+                            class="btn btn-primary btn-sm" 
+                            icon="fa-map-marker"
+                            invisible="not partner_id"/>
+                </div>
+            </xpath>
+
+            
+            <xpath expr="//field[@name='partner_invoice_id']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+
+            
+            <xpath expr="//field[@name='partner_shipping_id']" position="attributes">
+                <attribute name="readonly">1</attribute>
+                <attribute name="force_save">1</attribute>
+            </xpath>
+
+        </field>
+    </record>
+    
 </odoo>
