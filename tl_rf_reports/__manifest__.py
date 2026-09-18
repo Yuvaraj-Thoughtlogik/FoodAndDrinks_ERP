@@ -51,6 +51,7 @@
         'report/purchase_order_report_actions.xml',
         'report/purchase_order_report_templates.xml',
         'views/sale_order_views.xml',
+        'views/purchase_order_views.xml',
         'views/mrp_production_views.xml',
         'views/menus.xml',
     ],

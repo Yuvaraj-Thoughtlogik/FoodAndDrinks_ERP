@@ -32,10 +32,9 @@ class StockFreshBoxHistoryLine(models.Model):
     history_id = fields.Many2one('stock.fresh.box.history', string="History Record", ondelete='cascade')
     sale_order_id = fields.Many2one('sale.order', string="Sales Order", store=True)
     sale_line_id = fields.Many2one('sale.order.line', string="Sales Order Line", store=True)
-
-    # Updated: Replaced special_requirements_notes with Many2one field
+    
     special_requirements_notes_id = fields.Many2one('sale.order.special.note', string="Special Notes", store=True)
-
+    
     order_number = fields.Char(string="Order Number", store=True)
     customer_code = fields.Char(string="Customer Code", store=True)
     round_batch_id = fields.Many2one('round.management.batch', string="Round Batch", store=True)
@@ -59,7 +58,7 @@ class StockFreshBoxHistoryLine(models.Model):
     category_id = fields.Many2one('product.category', string="Category", store=True)
 
     box_number = fields.Char(string="Box Label", store=True)
-    box_weight = fields.Float(string="Box Weight (kg)", digits=(16, 3), store=True)
+    box_weight = fields.Float(string="Box Weight / Qty", digits=(16, 3), store=True)
 
 
 class StockFreshBoxWizard(models.TransientModel):
@@ -79,30 +78,39 @@ class StockFreshBoxWizard(models.TransientModel):
     def _is_weight_uom(self, uom):
         if not uom:
             return False
-
+        
         category = getattr(uom, 'category_id', False) or getattr(uom, 'uom_category_id', False)
         if category:
             category_name = (getattr(category, 'name', '') or '').lower()
             measure_type = getattr(category, 'measure_type', '') or getattr(category, 'uom_type', '')
             if 'weight' in category_name or measure_type == 'weight':
                 return True
-
+        
         uom_name = (getattr(uom, 'name', '') or '').strip().lower()
         uom_symbol = (getattr(uom, 'symbol', '') or '').strip().lower()
-
-        weight_keywords = {'kg', 'kgs', 'kg(s)', 'kilo', 'kilogram', 'kilograms', 'g', 'gram', 'grams', 'lb', 'lbs',
-                           'pound', 'pounds'}
-
+        
+        weight_keywords = {'kg', 'kgs', 'kg(s)', 'kilo', 'kilogram', 'kilograms', 'g', 'gram', 'grams', 'lb', 'lbs', 'pound', 'pounds'}
+    
         return uom_name in weight_keywords or uom_symbol in weight_keywords
+
+    def _is_chilled_or_each(self, product, uom):
+        """Helper to detect discrete unit items (EACH/Units) or products under 'Chilled' category hierarchy."""
+        category_name = (product.categ_id.complete_name or product.categ_id.name or '').lower() if product.categ_id else ''
+        uom_name = (getattr(uom, 'name', '') or '').strip().lower()
+        
+        is_chilled_category = 'chilled' in category_name
+        is_each_uom = uom_name in {'unit', 'units', 'each', 'pc', 'pcs', 'piece', 'pieces'}
+        
+        return is_chilled_category or is_each_uom
 
     def _get_line_effective_weight(self, line):
         product = line.product_id
         ordered_qty = line.product_uom_qty
-
+        
         match_pack_kg = re.search(r'(\d+(?:\.\d+)?)\s*(?:KG|Kilo)', product.name or '', re.IGNORECASE)
         if match_pack_kg:
             return ordered_qty * float(match_pack_kg.group(1))
-
+        
         note_rel = getattr(line, 'special_requirements_notes_id', False)
         note_text_val = note_rel.display_name or note_rel.name if note_rel else ''
 
@@ -160,8 +168,7 @@ class StockFreshBoxWizard(models.TransientModel):
             batch_state = batch.state
 
             state_field = batch._fields.get('state')
-            state_label = dict(state_field.selection).get(batch_state, batch_state) if hasattr(state_field,
-                                                                                               'selection') else batch_state
+            state_label = dict(state_field.selection).get(batch_state, batch_state) if hasattr(state_field, 'selection') else batch_state
 
             if not is_late and batch_state != 'prt':
                 invalid_batches_info.append(
@@ -191,10 +198,6 @@ class StockFreshBoxWizard(models.TransientModel):
         wizard_line_vals = []
 
         for line in order_lines:
-            total_weight = self._get_line_effective_weight(line)
-            if total_weight <= 0:
-                continue
-
             order = line.order_id
             product = line.product_id
 
@@ -206,11 +209,11 @@ class StockFreshBoxWizard(models.TransientModel):
             box_id = getattr(line, 'box_id', False) or getattr(order, 'box_id', False)
 
             raw_assembly = (
-                    getattr(product, 'assembly_type', False) or
-                    getattr(product.product_tmpl_id, 'assembly_type', False) or
-                    getattr(line, 'is_assembly', False) or
-                    getattr(line, 'assembly_type', False) or
-                    ''
+                getattr(product, 'assembly_type', False) or 
+                getattr(product.product_tmpl_id, 'assembly_type', False) or 
+                getattr(line, 'is_assembly', False) or 
+                getattr(line, 'assembly_type', False) or 
+                ''
             )
             raw_assembly = str(raw_assembly).strip().upper()
             assembly_val = raw_assembly if raw_assembly in ['A', 'B', 'C'] else ''
@@ -244,8 +247,13 @@ class StockFreshBoxWizard(models.TransientModel):
             has_bom = bool(boms_per_product.get(product))
             line_uom = getattr(line, 'product_uom_id', False) or line.product_id.uom_id
             is_kg_uom = self._is_weight_uom(line_uom)
+            is_chilled_or_each = self._is_chilled_or_each(product, line_uom)
 
+            # 1. Existing KG Weight Splitting (Unchanged)
             if has_bom and is_kg_uom:
+                total_weight = self._get_line_effective_weight(line)
+                if total_weight <= 0:
+                    continue
                 max_box_capacity = 1.0
                 number_of_boxes = math.ceil(total_weight / max_box_capacity)
                 remaining_weight = total_weight
@@ -261,11 +269,26 @@ class StockFreshBoxWizard(models.TransientModel):
                     })
                     wizard_line_vals.append(line_dict)
 
+            # 2. Added: Chilled / EACH Category Unit Splitting for BoM Items
+            elif has_bom and is_chilled_or_each:
+                ordered_units = int(line.product_uom_qty) if line.product_uom_qty > 0 else 1
+                for unit_no in range(1, ordered_units + 1):
+                    line_dict = base_vals.copy()
+                    line_dict.update({
+                        'box_number': f"Unit {unit_no}/{ordered_units}" if ordered_units > 1 else "Single Unit",
+                        'box_weight': 1.0,
+                    })
+                    wizard_line_vals.append(line_dict)
+
+            # 3. Non-BoM / Bulk Products (Unchanged)
             else:
+                total_qty = line.product_uom_qty
+                if total_qty <= 0:
+                    continue
                 line_dict = base_vals.copy()
                 line_dict.update({
                     'box_number': "Full Bulk",
-                    'box_weight': round(total_weight, 3),
+                    'box_weight': round(total_qty, 3),
                 })
                 wizard_line_vals.append(line_dict)
 
@@ -291,12 +314,15 @@ class StockFreshBoxWizard(models.TransientModel):
         unique_products = self.line_ids.mapped('product_id')
         boms_per_product = mrp_bom_obj._bom_find(unique_products)
 
+        # Updated filter: Accepts lines that have a BoM AND (are KG Weight OR are Chilled/EACH UOM)
         lines_to_generate_mo = self.line_ids.filtered(
-            lambda l: boms_per_product.get(l.product_id) and self._is_weight_uom(l.uom_id)
+            lambda l: boms_per_product.get(l.product_id) and (
+                self._is_weight_uom(l.uom_id) or self._is_chilled_or_each(l.product_id, l.uom_id)
+            )
         )
 
         if not lines_to_generate_mo:
-            raise UserError(_("No items with a valid BoM and KG/Weight UoM were found to generate MOs."))
+            raise UserError(_("No items with a valid BoM (KG Weight or Chilled/EACH UOM) were found to generate MOs."))
 
         existing_mos = mrp_production_obj.search([
             ('delivery_date', '>=', self.start_date),
@@ -321,7 +347,6 @@ class StockFreshBoxWizard(models.TransientModel):
                 bom = boms_per_product.get(line.product_id)
                 new_mo = mrp_production_obj.create({
                     'product_id': line.product_id.id,
-                    'sale_line_id': line.sale_line_id.id,
                     'product_qty': line.box_weight,
                     'product_uom_id': line.uom_id.id,
                     'bom_id': bom.id if bom else False,
@@ -344,7 +369,7 @@ class StockFreshBoxWizard(models.TransientModel):
             'include_late_orders': self.include_late_orders,
             'total_analyzed_lines': len(self.line_ids),
             'total_fresh_mos_created': len(processed_mos),
-            'note': f"Processed {len(self.line_ids)} lines. Created/Updated {len(processed_mos)} MOs for BoM + KG items. Purged {len(mo_to_purge)} obsolete MOs."
+            'note': f"Processed {len(self.line_ids)} lines. Created/Updated {len(processed_mos)} MOs for BoM (KG & Chilled/EACH) items. Purged {len(mo_to_purge)} obsolete MOs."
         })
 
         history_line_vals = [
@@ -358,8 +383,7 @@ class StockFreshBoxWizard(models.TransientModel):
                 'round_id': line.round_id.id if line.round_id else False,
                 'delivery_date': line.delivery_date or self.start_date,
                 'delivery_channel': self.delivery_channel,
-                'depot': line.depot or (
-                    line.sale_order_id.warehouse_id.name if line.sale_order_id and line.sale_order_id.warehouse_id else ''),
+                'depot': line.depot or (line.sale_order_id.warehouse_id.name if line.sale_order_id and line.sale_order_id.warehouse_id else ''),
                 'is_late_order': line.is_late_order,
                 'late_status': line.late_status,
 
@@ -402,8 +426,7 @@ class StockFreshBoxWizardLine(models.TransientModel):
     wizard_id = fields.Many2one('stock.fresh.box.wizard', string="Wizard Reference", ondelete='cascade')
     sale_order_id = fields.Many2one('sale.order', string="Sales Order")
     sale_line_id = fields.Many2one('sale.order.line', string="Order Line")
-
-    # Updated: Replaced special_requirements_notes with Many2one field
+    
     special_requirements_notes_id = fields.Many2one('sale.order.special.note', string="Special Notes")
 
     # Header Info
@@ -421,15 +444,15 @@ class StockFreshBoxWizardLine(models.TransientModel):
     product_code = fields.Char(string="Product Code")
     product_name = fields.Char(string="Product Name")
     product_desc = fields.Char(string="Description")
-
+    
     is_assembly = fields.Char(string="Assembly / Component (A/C)")
-
+    
     uom_id = fields.Many2one('uom.uom', string="UOM")
     box_id = fields.Char(string="Box ID")
     category_id = fields.Many2one('product.category', string="Category")
 
     box_number = fields.Char(string="Box Label")
-    box_weight = fields.Float(string="Box Weight (kg)", digits=(16, 3))
+    box_weight = fields.Float(string="Box Weight / Qty", digits=(16, 3))
 
 
 class MrpProduction(models.Model):

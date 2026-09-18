@@ -64,7 +64,7 @@
     </record>
 
     <!-- Prediction Report Line List View -->
-    <record id="view_prediction_report_line_tree" model="ir.ui.view">
+   <record id="view_prediction_report_line_tree" model="ir.ui.view">
         <field name="name">prediction.report.line.list</field>
         <field name="model">prediction.report.line</field>
         <field name="arch" type="xml">
@@ -73,13 +73,27 @@
                     <button name="action_create_rfq" string="Create PO" type="object"
                         class="btn-primary" display="always" icon="fa-shopping-cart" />
                 </header>
+                <field name="vendor_ids" column_invisible="True" />
                 <field name="product_id" readonly="1" />
                 <field name="product_code" optional="show" readonly="1" />
                 <field name="categ_id" readonly="1" />
-                <field name="quantity" sum="Total Ordered Qty"  readonly="1" />
-                <field name="uom_id" readonly="1" />
-                <field name="vendor_id" options="{'no_create': True}"  readonly="1" />
-                <field name="price_unit" optional="show"   readonly="1"/>
+                
+                <!-- Required Qty vs Editable Ordered Qty -->
+                <field name="required_qty" sum="Total Required Qty" readonly="1" />
+                <field name="ordered_qty" sum="Total Ordered Qty" />
+                <field name="uom_id" readonly="1" string="Unit of Measure" />
+                <field name="price_unit" optional="show" />
+                <!-- Status Badge -->
+                
+                
+                <!-- Dynamic Vendor Filter & Editable Price -->
+                <field name="vendor_id" options="{'no_create': True}" domain="[('id', 'in', vendor_ids)]" />
+                
+                <field name="order_status" widget="badge" 
+                       decoration-info="order_status in ('draft', 'sent')" 
+                       decoration-warning="order_status == 'to_approve'" 
+                       decoration-success="order_status in ('purchase', 'done')" 
+                       decoration-danger="order_status == 'cancel'" />
             </list>
         </field>
     </record>
@@ -93,18 +107,22 @@
                 <header>
                     <button name="action_create_rfq" string="Create PO" type="object"
                         class="btn-primary" icon="fa-shopping-cart" />
+                    <field name="order_status" widget="statusbar" statusbar_visible="draft,sent,purchase,done" />
                 </header>
                 <sheet>
                     <group>
                         <group>
+                            <field name="vendor_ids" invisible="1" />
                             <field name="product_id" readonly="1" />
                             <field name="product_code" readonly="1" />
                             <field name="categ_id" readonly="1" />
+                            <field name="purchase_order_id" readonly="1" />
                         </group>
                         <group>
-                            <field name="quantity" />
+                            <field name="required_qty" readonly="1" />
+                            <field name="ordered_qty" />
                             <field name="uom_id" readonly="1" />
-                            <field name="vendor_id" options="{'no_create': True}" />
+                            <field name="vendor_id" options="{'no_create': True}" domain="[('id', 'in', vendor_ids)]" />
                             <field name="price_unit" />
                         </group>
                     </group>
@@ -132,4 +150,51 @@
             </search>
         </field>
     </record>
+    
+    
+    <record id="view_prediction_report_line_form" model="ir.ui.view">
+    <field name="name">prediction.report.line.form</field>
+    <field name="model">prediction.report.line</field>
+    <field name="arch" type="xml">
+        <form string="Prediction Report Line" create="0">
+            <header>
+                <button name="action_create_rfq" string="Create PO" type="object"
+                    class="btn-primary" icon="fa-shopping-cart"
+                    invisible="purchase_order_id != False" />
+                <field name="order_status" widget="statusbar" statusbar_visible="draft,sent,purchase,done" />
+            </header>
+            <sheet>
+                <!-- PO Smart Button -->
+                <div class="oe_button_box" name="button_box">
+                    <button name="action_view_purchase_order"
+                        type="object"
+                        class="oe_stat_button"
+                        icon="fa-credit-card"
+                        invisible="not purchase_order_id">
+                        <div class="o_stat_info">
+                            <span class="o_stat_text">Purchase Order</span>
+                        </div>
+                    </button>
+                </div>
+
+                <group>
+                    <group>
+                        <field name="vendor_ids" invisible="1" />
+                        <field name="product_id" readonly="1" />
+                        <field name="product_code" readonly="1" />
+                        <field name="categ_id" readonly="1" />
+                        <field name="purchase_order_id" readonly="1" />
+                    </group>
+                    <group>
+                        <field name="required_qty" readonly="1" />
+                        <field name="ordered_qty" />
+                        <field name="uom_id" readonly="1" />
+                        <field name="vendor_id" options="{'no_create': True}" domain="[('id', 'in', vendor_ids)]" />
+                        <field name="price_unit" />
+                    </group>
+                </group>
+            </sheet>
+        </form>
+    </field>
+</record>
 </odoo>

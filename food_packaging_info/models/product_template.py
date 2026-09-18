@@ -87,6 +87,11 @@ class ProductTemplate(models.Model):
         string='Type',
         help='Product classification type. Add new types directly from this field.',
     )
+    yield_info = fields.Char(
+        string="Yield",
+        help="Yield percentage or details for fish processing/production."
+    )
+    
 
     # Automatically assign Assembly ('A') on write/create if BoMs exist
     @api.model_create_multi
