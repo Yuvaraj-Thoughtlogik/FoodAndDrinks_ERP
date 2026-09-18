@@ -9,6 +9,9 @@
                 <sheet>
                     <group>
                         <field name="report_type" widget="radio" />
+                        <field name="batch_status"
+                            invisible="report_type != 'no_batch_status'"
+                            required="report_type == 'no_batch_status'" />
                     </group>
                 </sheet>
                 <footer>
