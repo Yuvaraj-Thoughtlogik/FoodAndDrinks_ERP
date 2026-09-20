@@ -16,18 +16,18 @@
                             <field name="delivery_date_to" widget="date" required="1"/>
                         </group>
                     </group>
-
-                    <!-- Row 2: Late Order, Delivery Channel & Depot Checkboxes -->
+                    <hr/>
+                    <!-- Row 2: Report Type, Delivery Channel & Depot Checkboxes -->
                     <group>
                         <group colspan="4">
-                            <field name="include_late_orders" string="Late Order"/>
+                            <field name="report_type" widget="radio" options="{'horizontal': true}" required="1"/>
                         </group>
-                        <group>
+                        <field name="all_production_report" invisible="1"/>
+                        <field name="include_late_orders" invisible="1"/>
+                        <field name="box_count" invisible="1"/>
+                        <group invisible="all_production_report">
                             <field name="delivery_channel" widget="radio"
-                                   options="{'horizontal': true}" required="1"/>
-                        </group>
-                        <group colspan="4" invisible="delivery_channel == 'courier'">
-                            <field name="box_count" string="Box Count"/>
+                                   options="{'horizontal': true}" readonly="box_count or include_late_orders" required="1"/>
                         </group>
                         <group string="Depot" colspan="4" invisible="delivery_channel == 'courier'">
                             <field name="depot_ids"

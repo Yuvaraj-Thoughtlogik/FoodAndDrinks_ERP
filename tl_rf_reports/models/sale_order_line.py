@@ -81,7 +81,7 @@ class SaleOrderLine(models.Model):
         help="Current quantity minus the quantity confirmed at order confirmation. "
              "Only populated while the order is late (confirmed and its batch is Printed).",
     )
-    late_order = fields.Boolean(
+    is_late_order = fields.Boolean(
         string="Late Order",
         store=True,
         compute='_compute_late_order',
@@ -107,12 +107,13 @@ class SaleOrderLine(models.Model):
              "row for the line itself. See _compute_report_line_ids.",
     )
 
-    # confirmed_qty, not product_uom_qty, drives the report line: it's the
-    # frozen snapshot taken when the batch was locked in (see
-    # _compute_confirmed_qty), so a qty edit made afterwards (late_qty_delta)
-    # is deliberately skipped here - the packing list only ever shows what
-    # was already confirmed, never a later change.
-    @api.depends('product_id', 'confirmed_qty', 'special_requirements_notes_id')
+    # Regal Van is driven by confirmed_qty/late_qty_delta (the frozen
+    # snapshot plus any change made after it was locked in), Courier by
+    # the live product_uom_qty - see _get_report_line_vals.
+    @api.depends(
+        'product_id', 'product_uom_qty', 'special_requirements_notes_id',
+        'delivery_channel', 'confirmed_qty', 'late_qty_delta',
+    )
     def _compute_report_line_ids(self):
         Bom = self.env['mrp.bom']
         products = self.mapped('product_id')
@@ -140,15 +141,17 @@ class SaleOrderLine(models.Model):
         notes = (notes or '').strip()
         return f"{base_name} # {notes} #" if notes else base_name
 
-    def _plain_report_line_vals(self, qty, notes):
+    def _plain_report_line_vals(self, qty, notes, late=False):
         """A single non-exploded "<qty> kg <product>" row - used for the
-        confirmed_qty row of a non-BoM product."""
+        confirmed_qty/late_qty_delta row of a non-BoM Regal Van line, and
+        for a Courier line's (always non-late) live-quantity row."""
         return {
-            'name': self._compose_report_name(f"{_format_report_qty(qty)} kg {self.product_id.name or ''}", notes),
+            'name': f"{self.product_id.name or ''}",
             'product_id': self.product_id.id,
             'box_content': f"{_format_report_qty(qty)} kg",
+            'qty': qty,
             'notes': notes,
-            'late_order': False,
+            'late_order': late,
         }
 
     def _get_report_line_vals(self, bom):
@@ -157,10 +160,13 @@ class SaleOrderLine(models.Model):
         as resolved by mrp.bom._bom_find, passed in so callers can look it
         up once for a whole batch of lines instead of per line.
 
-        Always sourced from confirmed_qty (the frozen snapshot taken when
-        the batch was locked in), never product_uom_qty - any qty change
-        made after that (late_qty_delta) is deliberately skipped, so the
-        packing list only ever shows what was already confirmed."""
+        Courier has no confirmed_qty/late split (its lines aren't locked in
+        by a batch print), so it always gets a single row built from the
+        live product_uom_qty. Regal Van is sourced from confirmed_qty (the
+        frozen snapshot taken when the batch was locked in) plus, when the
+        qty changed afterwards, a SEPARATE late_qty_delta row - the two are
+        never merged, so a late addition/removal is never silently folded
+        into what was already packed."""
         self.ensure_one()
         if not self.product_id:
             return []
@@ -171,7 +177,10 @@ class SaleOrderLine(models.Model):
             # A line can be split across several MOs (one per box, e.g. the
             # Pack Box wizard's "Box 3/5" origin suffix) that all share this
             # same production_sale_line_id, so all of them - not just the
-            # first - contribute their raw-material components.
+            # first - contribute their raw-material components. Each box's
+            # own is_late_order (round_management.MrpProduction), not the
+            # sale line's overall lateness, decides whether that specific
+            # box's rows are late.
             productions = self.env['mrp.production'].search(
                 [('production_sale_line_id', '=', self.id)]
             )
@@ -184,14 +193,24 @@ class SaleOrderLine(models.Model):
                     'name': self._compose_report_name(f"{_format_report_qty(qty)} kg {component.name or ''}", move_notes),
                     'product_id': component.id,
                     'box_content': f"{_format_report_qty(qty)} kg",
+                    'qty': qty,
                     'notes': move_notes,
-                    'late_order': False,
+                    'late_order': bool(move.raw_material_production_id.is_late_order),
+                    'from_bom': True,
                 })
             return vals_list
 
+        if self.delivery_channel == 'courier':
+            if self.product_uom_qty <= 0:
+                return []
+            return [self._plain_report_line_vals(self.product_uom_qty, notes)]
+
+        vals_list = []
         if self.confirmed_qty > 0:
-            return [self._plain_report_line_vals(self.confirmed_qty, notes)]
-        return []
+            vals_list.append(self._plain_report_line_vals(self.confirmed_qty, notes))
+        if self.late_qty_delta:
+            vals_list.append(self._plain_report_line_vals(self.late_qty_delta, notes, late=True))
+        return vals_list
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -225,15 +244,15 @@ class SaleOrderLine(models.Model):
     def _compute_late_order(self):
         for line in self:
             if line.lock_line:
-                line.late_order = True
+                line.is_late_order = True
                 line.late_qty_delta = line.product_uom_qty
 
             elif line.batch_id.state == 'prt' and line.order_id.state == 'sale' and line.product_uom_qty != line.confirmed_qty:
-                line.late_order = True
+                line.is_late_order = True
                 line.late_qty_delta = line.product_uom_qty - line.confirmed_qty
             else:
                 line.late_qty_delta = 0.0
-                line.late_order = False
+                line.is_late_order = False
 
 
     @api.depends('order_id.state','batch_id.state')

@@ -957,66 +957,103 @@ class ReportPackingList(models.AbstractModel):
         delivery_date_from_str = wizard.delivery_date_from.strftime('%d/%m/%Y') if wizard.delivery_date_from else ''
         delivery_date_to_str = wizard.delivery_date_to.strftime('%d/%m/%Y') if wizard.delivery_date_to else ''
 
-        order_domain = [
-            ('delivery_channel', '=', 'courier'),
-            ('state', 'in', ['sale', 'done']),
-            ('delivery_date', '>=', wizard.delivery_date_from),
-            ('delivery_date', '<=', wizard.delivery_date_to),
-            # Late is line-based, not order-based - see
-            # PackingListWizard.action_print_report.
-            ('order_line.late_order', '=', bool(wizard.include_late_orders)),
+        # Courier has no late/normal split (see SaleOrderLine.
+        # _get_report_line_vals) - every eligible line's report_line_ids
+        # row(s) are shown together, exploded into raw-material components
+        # for a BoM product exactly like the Regal Van report.
+        order_line_domain = [
+            ('order_id.delivery_channel', '=', 'courier'),
+            ('order_id.state', 'in', ['sale', 'done']),
+            ('order_id.delivery_date', '>=', wizard.delivery_date_from),
+            ('order_id.delivery_date', '<=', wizard.delivery_date_to),
+            ('display_type', '=', False),
+            ('product_id', '!=', False),
+            ('product_uom_qty', '>', 0),
         ]
-        orders = self.env['sale.order'].search(order_domain, order='delivery_date asc, name asc')
-        if not orders:
+        order_lines = self.env['sale.order.line'].search(order_line_domain)
+        if not order_lines:
+            return None
+
+        # Force-refresh report_line_ids so a BoM line reflects the current
+        # Manufacturing Order / move_raw_ids state (see
+        # SaleOrderLine._recompute_report_lines).
+        order_lines._recompute_report_lines()
+
+        report_lines = self.env['sale.order.line.report_lines'].search(
+            [('sale_order_line_id', 'in', order_lines.ids)]
+        )
+        if not report_lines:
             return None
 
         orders_map = {}
-        for order in orders:
-            lines = order.order_line.filtered(
-                lambda l: not l.display_type and l.product_id and l.product_uom_qty > 0
-            )
-            if not lines:
+        for report_line in report_lines.sorted(lambda rl: (rl.sale_order_id.delivery_date or datetime.date.min, rl.sale_order_id.name)):
+            order = report_line.sale_order_id
+            product = report_line.product_id
+            if not order or not product:
                 continue
 
-            main_partner = order.partner_id
-            ship_partner = order.partner_shipping_id or main_partner
-            cust_name = self._format_customer_name(main_partner)
-            addr = self._format_address_lines(ship_partner)
+            if order.id not in orders_map:
+                main_partner = order.partner_id
+                ship_partner = order.partner_shipping_id or main_partner
+                addr = self._format_address_lines(ship_partner)
+                orders_map[order.id] = {
+                    'order_name': order.name,
+                    'delivery_date': order.delivery_date.strftime('%d/%m/%Y') if order.delivery_date else '',
+                    'customer_code': getattr(main_partner, 'customer_code', False) or main_partner.ref or order.name or '',
+                    'customer_name': self._format_customer_name(main_partner),
+                    'address_line1': addr['line1'],
+                    'address_line2': addr['line2'],
+                    'categories_map': {},
+                    'total_order_weight_g': 0.0,
+                }
+            o_data = orders_map[order.id]
 
-            o_data = orders_map[order.id] = {
-                'order_name': order.name,
-                'delivery_date': order.delivery_date.strftime('%d/%m/%Y') if order.delivery_date else '',
-                'customer_code': getattr(main_partner, 'customer_code', False) or main_partner.ref or order.name or '',
-                'customer_name': cust_name,
-                'address_line1': addr['line1'],
-                'address_line2': addr['line2'],
-                'categories_map': {},
-                'total_order_weight_g': 0.0,
-            }
+            categ_name = (report_line.categ_id.name or _('Other')).strip().upper()
+            categ_key = (0, categ_name)
+            if categ_key not in o_data['categories_map']:
+                o_data['categories_map'][categ_key] = {'categ_name': categ_name, 'products': {}}
+            c_prods = o_data['categories_map'][categ_key]['products']
 
-            for line in lines:
-                product = line.product_id
-                categ_name = (product.categ_id.name or _('Other')).strip().upper()
-                categ_key = (0, categ_name)
-                if categ_key not in o_data['categories_map']:
-                    o_data['categories_map'][categ_key] = {'categ_name': categ_name, 'products': []}
+            # Same-product rows consolidate into one line, EXCEPT when
+            # their box qty (e.g. a 0.5kg partial box vs a full 1kg box) or
+            # Notes differ - mirrors the Regal Van report's grouping (see
+            # report/production_report.py for the same convention).
+            # BoM rows (physical boxes) stay separate by box qty (0.5kg vs
+            # 1kg); a plain non-BoM row's qty is just the line's own
+            # confirmed_qty/late_qty_delta amount, so those merge/sum
+            # together regardless of value (e.g. a +2 and a -1 combine into
+            # one row on a report that doesn't split by late status).
+            group_key = (product.id, report_line.qty if report_line.from_bom else False, report_line.notes or '')
+            if group_key not in c_prods:
+                c_prods[group_key] = {
+                    'product_id': product.id,
+                    'product_name': report_line.name or product.name,
+                    'qty': 0.0,
+                    'sort_num': self._extract_sort_number(product),
+                }
+            c_prods[group_key]['qty'] += report_line.qty
 
-                qty_val = line.product_uom_qty
-                unit_weight_kg = product.weight or product.product_tmpl_id.weight or 0.0
-                line_weight_g = round(unit_weight_kg * qty_val * 1000)
-                o_data['total_order_weight_g'] += line_weight_g
-
-                sort_num = self._extract_sort_number(product, line)
-                qty_display = int(round(qty_val)) if float(qty_val).is_integer() else qty_val
-                o_data['categories_map'][categ_key]['products'].append({
-                    'qty': qty_display,
-                    'product_name': product.name or line.name or '',
-                    'weight_display': int(round(line_weight_g)),
-                    'sort_num': sort_num,
-                })
+            unit_weight_kg = product.weight or product.product_tmpl_id.weight or 0.0
+            o_data['total_order_weight_g'] += unit_weight_kg * report_line.qty * 1000
 
         if not orders_map:
             return None
+
+        for o_data in orders_map.values():
+            o_data['total_order_weight_g'] = round(o_data['total_order_weight_g'])
+            for c_val in o_data['categories_map'].values():
+                products = []
+                for p in c_val['products'].values():
+                    qty_val = p['qty']
+                    product = self.env['product.product'].browse(p['product_id'])
+                    unit_weight_kg = product.weight or product.product_tmpl_id.weight or 0.0
+                    products.append({
+                        'qty': int(round(qty_val)) if float(qty_val).is_integer() else qty_val,
+                        'product_name': p['product_name'],
+                        'weight_display': int(round(unit_weight_kg * qty_val * 1000)),
+                        'sort_num': p['sort_num'],
+                    })
+                c_val['products'] = products
 
         styles = {
             'doc_title': ParagraphStyle('CourierDocTitle', fontName='Helvetica-Bold', fontSize=22, leading=26, textColor=colors.black),
@@ -1194,77 +1231,90 @@ class ReportPackingList(models.AbstractModel):
 
     def _generate_van_pdf(self, wizard):
         """Generates pixel-perfect Factory Only Packing List (Regal Van) PDF matching reference design."""
-        batch_domain = [
+        line_domain = [
+            ('delivery_channel', 'in', ('regal_van', False)),
+            ('order_id.state', 'in', ('sale', 'done')),
             ('delivery_date', '>=', wizard.delivery_date_from),
             ('delivery_date', '<=', wizard.delivery_date_to),
+            ('display_type', '=', False),
+            ('product_id', '!=', False),
+            ('product_uom_qty', '>', 0),
         ]
         if wizard.depot_ids:
-            batch_domain.append(('depot_id', 'in', wizard.depot_ids.ids))
+            line_domain.append(('depot_id', 'in', wizard.depot_ids.ids))
 
-        batches = self.env['round.management.batch'].search(
-            batch_domain, order='delivery_date asc, code asc, id asc'
-        )
-        if not batches:
+        order_lines = self.env['sale.order.line'].search(line_domain)
+        if not order_lines:
             return None
 
+        # Force-refresh report_line_ids so a BoM line reflects the current
+        # Manufacturing Order / move_raw_ids state (see
+        # SaleOrderLine._recompute_report_lines) before reading them.
+        order_lines._recompute_report_lines()
+
+        # The normal packing list only ever shows confirmed/non-late rows -
+        # a late_qty_delta addition or removal belongs on the Late Order
+        # report instead (_generate_van_late_pdf).
+        report_lines = self.env['sale.order.line.report_lines'].search([
+            ('sale_order_line_id', 'in', order_lines.ids),
+            ('late_order', '=', False),
+        ])
+        if not report_lines:
+            return None
+
+        report_lines = report_lines.sorted(
+            lambda rl: (rl.batch_id.delivery_date or datetime.date.min, rl.batch_id.code or '', rl.batch_id.id)
+        )
+
         batches_map = {}
-        for batch in batches:
-            # Late is line-based, not order-based - see
-            # PackingListWizard.action_print_report.
-            is_late = bool(wizard.include_late_orders)
-            orders = batch.order_ids.filtered(
-                lambda so: so.state in ('sale', 'done')
-                and getattr(so, 'delivery_channel', False) in ('regal_van', False)
-                and any(
-                    bool(l.late_order) == is_late
-                    for l in so.order_line
-                    if not l.display_type and l.product_id and l.product_uom_qty > 0
-                )
-            )
-            if not orders:
+        for report_line in report_lines:
+            batch = report_line.batch_id
+            product = report_line.product_id
+            if not batch or not product:
                 continue
 
-            b_map = batches_map[batch.id] = {'batch': batch, 'categories_map': {}}
-            for order in orders:
-                lines = order.order_line.filtered(
-                    lambda l: not l.display_type and l.product_id and l.product_uom_qty > 0
-                )
-                # Force-refresh report_line_ids so it reflects the current
-                # Manufacturing Order / move_raw_ids state (see
-                # SaleOrderLine._recompute_report_lines).
-                lines._recompute_report_lines()
+            if batch.id not in batches_map:
+                batches_map[batch.id] = {'batch': batch, 'categories_map': {}}
+            b_map = batches_map[batch.id]
 
-                # Each report line (sale.order.line.report_lines) is one box:
-                # a BoM component (move_raw_ids entry) for products with a
-                # BoM, or the sale order line itself otherwise. Rows with the
-                # same Product consolidate into one line, EXCEPT when their
-                # Notes differ (matching Notes are required to merge) or one
-                # is a late_qty_delta addition (see SaleOrderLine.
-                # _get_report_line_vals) and the other isn't - a late box
-                # must never get silently folded into an already-packed one.
-                for line in lines:
-                    for report_line in line.report_line_ids:
-                        product = report_line.product_id
-                        if not product:
-                            continue
+            categ_name = (report_line.categ_id.name or _('Other')).strip().upper()
+            categ_key = report_line.categ_id.id or 0
+            if categ_key not in b_map['categories_map']:
+                b_map['categories_map'][categ_key] = {'categ_name': categ_name, 'products': {}}
 
-                        categ_name = (product.categ_id.name or _('Other')).strip().upper()
-                        categ_key = product.categ_id.id or 0
-                        if categ_key not in b_map['categories_map']:
-                            b_map['categories_map'][categ_key] = {'categ_name': categ_name, 'products': {}}
-
-                        c_prods = b_map['categories_map'][categ_key]['products']
-                        group_key = (product.id, report_line.notes or '', report_line.late_order)
-                        if group_key not in c_prods:
-                            sort_num = self._extract_sort_number(product)
-                            c_prods[group_key] = {
-                                'product_id': product.id,
-                                'product_name': report_line.name or product.name,
-                                'box_qty': 0.0,
-                                'sort_num': sort_num,
-                                'sort_str': str(sort_num) if sort_num else '',
-                            }
-                        c_prods[group_key]['box_qty'] += 1
+            # Each report line (sale.order.line.report_lines) is one box: a
+            # BoM component (move_raw_ids entry) for products with a BoM,
+            # or the sale order line itself otherwise. Rows with the same
+            # Product consolidate into one line, EXCEPT when their box qty
+            # (a 0.5kg partial box vs a full 1kg box) or Notes differ - a
+            # different-sized box must stay its own row, same as
+            # report/production_report.py.
+            c_prods = b_map['categories_map'][categ_key]['products']
+            # BoM rows (physical boxes) stay separate by box qty (0.5kg vs
+            # 1kg); a plain non-BoM row's qty is just the line's own
+            # confirmed_qty/late_qty_delta amount, so those merge/sum
+            # together regardless of value (e.g. a +2 and a -1 combine into
+            # one row on a report that doesn't split by late status).
+            group_key = (product.id, report_line.qty if report_line.from_bom else False, report_line.notes or '')
+            if group_key not in c_prods:
+                sort_num = self._extract_sort_number(product)
+                c_prods[group_key] = {
+                    'product_id': product.id,
+                    'product_name': report_line.name or product.name,
+                    'box_qty': 0.0,
+                    'sort_num': sort_num,
+                    'sort_str': str(sort_num) if sort_num else '',
+                }
+            # A BoM row is one MO's raw-material consumption - one row is
+            # one physical box, so same-product/qty rows are COUNTED. A
+            # plain non-BoM row's qty IS the line's own confirmed_qty (no
+            # box-splitting happens for it), so it's SUMMED instead - e.g.
+            # a non-weight-UoM product's two confirmed rows of 1 unit each
+            # must total 2, not "2 rows".
+            if report_line.from_bom:
+                c_prods[group_key]['box_qty'] += 1
+            else:
+                c_prods[group_key]['box_qty'] += report_line.qty
 
         if not batches_map:
             return None
@@ -1400,71 +1450,89 @@ class ReportPackingList(models.AbstractModel):
 
     # ------------------------------------------------------------------
     # "Late Order" variant: same batch/category/pagination shell as
-    # _generate_van_pdf above, but each row is a line's late_qty_delta (the
-    # change made after confirmed_qty was locked in - see
-    # SaleOrderLine._compute_late_order) rather than its confirmed_qty, with
-    # an "Additional X boxes required" / "Remove X boxes" annotation instead
-    # of the Sort column. Triggered by the existing "Late Order"
-    # (include_late_orders) wizard checkbox - see generate_pdf().
+    # _generate_van_pdf above, but each row is built from report_line_ids
+    # rows flagged late_order=True (the change made after confirmed_qty
+    # was locked in - see SaleOrderLine._get_report_line_vals) rather than
+    # confirmed_qty, with an "Additional X boxes required" / "Remove X
+    # boxes" annotation instead of the Sort column. Triggered by the
+    # existing "Late Order" (include_late_orders) wizard checkbox - see
+    # generate_pdf().
     # ------------------------------------------------------------------
     def _generate_van_late_pdf(self, wizard):
         """Generates the Frozen Factory Packing List Alt Report (Regal Van,
-        late orders): quantities are each line's late_qty_delta, not
-        confirmed_qty."""
-        batch_domain = [
+        late orders): quantities are summed from each line's late-flagged
+        report_line_ids rows, not confirmed_qty."""
+        line_domain = [
+            ('delivery_channel', 'in', ('regal_van', False)),
+            ('order_id.state', 'in', ('sale', 'done')),
             ('delivery_date', '>=', wizard.delivery_date_from),
             ('delivery_date', '<=', wizard.delivery_date_to),
+            ('is_late_order', '=', True),
         ]
         if wizard.depot_ids:
-            batch_domain.append(('depot_id', 'in', wizard.depot_ids.ids))
+            line_domain.append(('depot_id', 'in', wizard.depot_ids.ids))
 
-        batches = self.env['round.management.batch'].search(
-            batch_domain, order='delivery_date asc, code asc, id asc'
-        )
-        if not batches:
+        order_lines = self.env['sale.order.line'].search(line_domain)
+        if not order_lines:
             return None
 
+        # Force-refresh report_line_ids so a BoM line reflects the current
+        # Manufacturing Order / move_raw_ids state (see
+        # SaleOrderLine._recompute_report_lines) before reading them.
+        order_lines._recompute_report_lines()
+
+        report_lines = self.env['sale.order.line.report_lines'].search([
+            ('sale_order_line_id', 'in', order_lines.ids),
+            ('late_order', '=', True),
+        ])
+        if not report_lines:
+            return None
+
+        report_lines = report_lines.sorted(
+            lambda rl: (rl.batch_id.delivery_date or datetime.date.min, rl.batch_id.code or '', rl.batch_id.id)
+        )
+
         batches_map = {}
-        for batch in batches:
-            # Late is line-based, not order-based - see
-            # PackingListWizard.action_print_report.
-            is_late = bool(wizard.include_late_orders)
-            orders = batch.order_ids.filtered(
-                lambda so: so.state in ('sale', 'done')
-                and getattr(so, 'delivery_channel', False) in ('regal_van', False)
-                and any(
-                    bool(l.late_order) == is_late
-                    for l in so.order_line
-                    if not l.display_type and l.product_id and l.product_uom_qty > 0
-                )
-            )
-            if not orders:
+        for report_line in report_lines:
+            batch = report_line.batch_id
+            product = report_line.product_id
+            if not batch or not product:
                 continue
 
-            b_map = batches_map[batch.id] = {'batch': batch, 'categories_map': {}}
-            for order in orders:
-                lines = order.order_line.filtered(
-                    lambda l: not l.display_type and l.product_id and l.late_order and l.late_qty_delta
-                )
-                for line in lines:
-                    product = line.product_id
-                    categ_name = (product.categ_id.name or _('Other')).strip().upper()
-                    categ_key = product.categ_id.id or 0
-                    if categ_key not in b_map['categories_map']:
-                        b_map['categories_map'][categ_key] = {'categ_name': categ_name, 'products': {}}
+            if batch.id not in batches_map:
+                batches_map[batch.id] = {'batch': batch, 'categories_map': {}}
+            b_map = batches_map[batch.id]
 
-                    c_prods = b_map['categories_map'][categ_key]['products']
-                    pid = product.id
-                    if pid not in c_prods:
-                        sort_num = self._extract_sort_number(product, line)
-                        c_prods[pid] = {
-                            'product_id': pid,
-                            'product_name': product.name,
-                            'box_qty': 0.0,
-                            'sort_num': sort_num,
-                            'sort_str': str(sort_num) if sort_num else '',
-                        }
-                    c_prods[pid]['box_qty'] += line.late_qty_delta
+            categ_name = (report_line.categ_id.name or _('Other')).strip().upper()
+            categ_key = report_line.categ_id.id or 0
+            if categ_key not in b_map['categories_map']:
+                b_map['categories_map'][categ_key] = {'categ_name': categ_name, 'products': {}}
+
+            c_prods = b_map['categories_map'][categ_key]['products']
+            # BoM rows (physical boxes) stay separate by box qty (0.5kg vs
+            # 1kg); a plain non-BoM row's qty is just the line's own
+            # confirmed_qty/late_qty_delta amount, so those merge/sum
+            # together regardless of value (e.g. a +2 and a -1 combine into
+            # one row on a report that doesn't split by late status).
+            group_key = (product.id, report_line.qty if report_line.from_bom else False, report_line.notes or '')
+            if group_key not in c_prods:
+                sort_num = self._extract_sort_number(product)
+                c_prods[group_key] = {
+                    'product_id': product.id,
+                    'product_name': report_line.name or product.name,
+                    'box_qty': 0.0,
+                    'sort_num': sort_num,
+                    'sort_str': str(sort_num) if sort_num else '',
+                }
+            # A BoM row is one MO's raw-material consumption - one row is
+            # one physical box, so same-product rows are COUNTED (matching
+            # _generate_van_pdf exactly). A plain non-BoM row's qty IS the
+            # line's own late_qty_delta (can be fractional or negative for
+            # a reduction), so those are SUMMED instead.
+            if report_line.from_bom:
+                c_prods[group_key]['box_qty'] += 1
+            else:
+                c_prods[group_key]['box_qty'] += report_line.qty
 
         if not batches_map:
             return None
@@ -1510,10 +1578,16 @@ class ReportPackingList(models.AbstractModel):
                 ]
                 for p in sorted_prods:
                     delta = p['box_qty']
-                    p['qty_display'] = f"{delta:.2f}"
+                    # A BoM row's box_qty is a count of physical boxes
+                    # (always a whole number) - show it plainly like the
+                    # normal report does, not padded to two decimals; a
+                    # non-BoM row's fractional/negative delta still shows
+                    # its full precision.
+                    delta_str = str(int(round(delta))) if float(delta).is_integer() else f"{delta:.2f}"
+                    p['qty_display'] = delta_str
                     p['action_text'] = (
-                        f"Additional {delta:.2f} boxes required" if delta > 0
-                        else f"Remove {delta:.2f} boxes"
+                        f"Additional {delta_str} boxes required" if delta > 0
+                        else f"Remove {delta_str} boxes"
                     )
                 cat_total = round(sum(p['box_qty'] for p in sorted_prods), 2)
                 batch_total_boxes += cat_total
@@ -1607,7 +1681,12 @@ class ReportPackingList(models.AbstractModel):
 
                     if cat.get('is_complete') and ('FRESH' in cat_name or 'SMOKED' in cat_name):
                         story.append(Spacer(1, 1.5 * mm))
-                        story.append(Paragraph(f"{cat['total_boxes']:.2f} Boxes", styles['boxes_label']))
+                        total_boxes_val = cat['total_boxes']
+                        total_boxes_str = (
+                            str(int(round(total_boxes_val))) if float(total_boxes_val).is_integer()
+                            else f"{total_boxes_val:.2f}"
+                        )
+                        story.append(Paragraph(f"{total_boxes_str} Boxes", styles['boxes_label']))
                         story.append(Spacer(1, 3 * mm))
                     else:
                         story.append(Spacer(1, 4 * mm))

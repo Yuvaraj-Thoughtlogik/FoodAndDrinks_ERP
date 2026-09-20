@@ -354,7 +354,7 @@ class SaleOrder(models.Model):
     def _compute_is_late_order(self):
         for rec in self:
             rec.is_late_order = bool(
-                rec.state in ('sale', 'done') and rec.batch_id and rec.batch_id.state == 'prt'
+               rec.batch_id and rec.batch_id.state == 'prt'
             )
 
     @api.depends('delivery_date', 'commitment_date')

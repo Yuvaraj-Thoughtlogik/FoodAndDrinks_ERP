@@ -27,6 +27,7 @@
                 <field name="depot_id"/>
 <!--                <field name="production_sale_line_id"/>-->
                 <field name="batch_delivery_date"/>
+                <field name="is_late_order" readonly="1"/>
             </field>
         </field>
     </record>

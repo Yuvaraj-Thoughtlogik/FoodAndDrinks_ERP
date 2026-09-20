@@ -178,7 +178,7 @@ class ReportDockWeightBreakdown(models.AbstractModel):
                 for order in orders:
                     lines = order.order_line.filtered(
                         lambda l: not l.display_type and l.product_id and l.product_uom_qty > 0
-                        and bool(l.late_order) == is_late
+                        and bool(l.is_late_order) == is_late
                     )
                     if not lines:
                         continue
@@ -313,7 +313,7 @@ class ReportDockWeightBreakdown(models.AbstractModel):
                 for order in orders:
                     lines = order.order_line.filtered(
                         lambda l: not l.display_type and l.product_id and l.product_uom_qty > 0
-                        and bool(l.late_order) == is_late
+                        and bool(l.is_late_order) == is_late
                     )
                     if not lines:
                         continue
@@ -479,7 +479,7 @@ class ReportDockWeightBreakdown(models.AbstractModel):
         for order in orders:
             lines = order.order_line.filtered(
                 lambda l: not l.display_type and l.product_id and l.product_uom_qty > 0
-                and bool(l.late_order) == is_late
+                and bool(l.is_late_order) == is_late
             )
             for line in lines:
                 product = line.product_id
@@ -712,7 +712,7 @@ class ReportDockWeightBreakdown(models.AbstractModel):
             for order in orders:
                 lines = order.order_line.filtered(
                     lambda l: not l.display_type and l.product_id and l.product_uom_qty > 0
-                    and bool(l.late_order) == is_late
+                    and bool(l.is_late_order) == is_late
                 )
                 for line in lines:
                     product = line.product_id

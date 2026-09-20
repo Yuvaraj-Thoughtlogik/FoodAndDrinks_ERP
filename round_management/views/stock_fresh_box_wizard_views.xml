@@ -11,7 +11,7 @@
                         <group string="Filter Criteria">
                             <field name="start_date"/>
                             <field name="end_date"/>
-                            <field name="include_late_orders"/>
+                            <field name="is_late_order"/>
                         </group>
                         <group string="Channel Selection">
                             <field name="delivery_channel" widget="radio"/>
