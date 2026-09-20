@@ -83,7 +83,7 @@ class ProductionReportWizard(models.TransientModel):
             ('normal', 'Production Report'),
             ('all', 'All Production Report'),
             ('late', 'Late Order'),
-            ('box_count', 'Box Count'),
+            ('box_count', 'Box Count Report'),
         ],
         string='Report Type',
         default='normal',
