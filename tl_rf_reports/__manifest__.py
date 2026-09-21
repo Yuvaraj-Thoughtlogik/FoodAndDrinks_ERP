@@ -53,6 +53,7 @@
         'report/purchase_order_report_templates.xml',
         'report/frozen_label_report_views.xml',
         'report/plain_frozen_label_report_views.xml',
+        'report/plain_label_report_views.xml',
         'views/sale_order_views.xml',
         'views/purchase_order_views.xml',
         'views/mrp_production_views.xml',
