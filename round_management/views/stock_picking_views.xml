@@ -136,44 +136,21 @@
     </record>
     
     
-    
-    
-    <record id="view_picking_tree_inherit_validate_button" model="ir.ui.view">
-        <field name="name">stock.picking.tree.inherit.validate</field>
-        <field name="model">stock.picking</field>
-        <field name="inherit_id" ref="round_management.view_picking_tree_round_management"/>
-        <field name="arch" type="xml">
-            
-            <!-- Use //list instead of //tree for Odoo 17+ / Odoo 19 -->
-            <xpath expr="//list//header" position="inside">
-                    <button name="action_validate_batch_deliveries" 
-                        type="object" 
-                        string=" Validate" 
-                        icon="fa-check-circle"
-                        class="btn-success text-white font-weight-bold px-3 py-1 shadow-sm"
-                        
-                        confirm="Are you sure you want to validate all selected delivery orders?"/>
-            </xpath>
 
-        </field>
-    </record>
-    
     
     <record id="view_picking_tree_inherit_validate_button" model="ir.ui.view">
     <field name="name">stock.picking.tree.inherit.validate</field>
     <field name="model">stock.picking</field>
     <field name="inherit_id" ref="stock.vpicktree"/>
     <field name="arch" type="xml">
-        <xpath expr="//list" position="inside">
-            <header>
-                <button name="action_validate_batch_deliveries" 
+        <xpath expr="//list//header" position="inside">
+                <button name="action_validate_batch_deliveries"
                         type="object" 
                         string=" Validate" 
                         icon="fa-check-circle"
                         class="btn-success text-white font-weight-bold px-3 py-1 shadow-sm"
                         
                         confirm="Are you sure you want to validate all selected delivery orders?"/>
-            </header>
         </xpath>
     </field>
 </record>
