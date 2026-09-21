@@ -1,78 +1,51 @@
 .o_form_status_indicator {
-    height: 100%;
+    display: flex;
+    align-items: center;
 
     .o_form_status_indicator_buttons {
-        margin-left: 10px;
+        display: flex;
         align-items: center;
-
-        .o_form_button_save,
-        .o_form_button_cancel {
-            height: 100%;
-            width: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding-left: 8px !important;
-        }
+        gap: 6px;
+        margin-left: 10px;
 
         // SAVE BUTTON
         .o_form_button_save {
-            background-color: #28a745 !important; // Green
+            background-color: #28a745 !important;
             color: #fff !important;
-        }
+            border-radius: 4px;
 
-        .o_form_button_save:hover {
-            background-color: #218838 !important;
-            filter: none;
+            &:hover {
+                background-color: #218838 !important;
+                filter: none;
+            }
         }
 
         // DISCARD BUTTON
         .o_form_button_cancel {
-            color: #dc3545 !important; // Red
-            margin-left: 5px;
+            color: #dc3545 !important;
+            background-color: transparent !important;
+
+            &:hover {
+                background-color: #f8d7da !important;
+                border-color: #dc3545 !important;
+            }
         }
 
-        .o_form_button_cancel:hover {
-            background-color: #f8d7da !important;
-            border-color: #dc3545 !important;
+        .save_button,
+        .discard_button {
+            font-weight: 600;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            font-family: $o-system-fonts;
+            line-height: 1;
         }
 
         .save_button {
-            width: 100%;
-            font-weight: 500;
             color: #fff !important;
-            display: inline-block;
-            text-align: center;
-            vertical-align: middle;
-            user-select: none;
-            background-color: transparent;
-            border: 1px solid transparent;
-            padding: 0.3rem 2px;
-            font-size: 0.8rem;
-            line-height: 1.5;
-            border-radius: 0;
-            transition: none;
-            text-transform: uppercase;
-            font-family: $o-system-fonts;
         }
 
         .discard_button {
-            width: 100%;
-            font-weight: 500;
             color: #dc3545 !important;
-            display: inline-block;
-            text-align: center;
-            vertical-align: middle;
-            user-select: none;
-            background-color: transparent;
-            padding: 0.3rem 2px;
-            font-size: 0.8rem;
-            line-height: 1.5;
-            border-radius: 0;
-            transition: none;
-            text-transform: uppercase;
-            font-family: $o-system-fonts;
         }
     }
 }
-
