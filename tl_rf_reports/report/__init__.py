@@ -16,4 +16,6 @@ from . import driver_packing_list_report
 from . import frozen_label_report
 from . import plain_frozen_label_report
 from . import plain_label_report
+from . import chilled_front_sleeve_label_report
+
 

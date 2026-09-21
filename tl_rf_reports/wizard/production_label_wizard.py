@@ -234,6 +234,15 @@ class ProductionLabelWizard(models.TransientModel):
                     "The '%s' label format is not implemented yet.",
                     dict(self._fields['frozen_label_type'].selection).get(self.frozen_label_type, self.frozen_label_type),
                 ))
+        elif self.category_name == 'Chilled':
+            if self.chilled_label_type == 'front_sleeve_label':
+                report_model = self.env['report.tl_rf_reports.report_production_label_chilled_front']
+                filename_suffix = 'Chilled_Front_Sleeve'
+            else:
+                raise UserError(_(
+                    "The '%s' label format is not implemented yet.",
+                    dict(self._fields['chilled_label_type'].selection).get(self.chilled_label_type, self.chilled_label_type),
+                ))
         elif self.category_name == 'Fresh':
             if self.fresh_label_type != 'fresh_label':
                 raise UserError(_(
@@ -775,4 +784,98 @@ class ProductionLabelWizard(models.TransientModel):
             'min_weight_display': min_weight_display,
             'nutrition_html': nutrition_html,
             'company_address': company_address,
+        }
+
+    def _get_chilled_front_sleeve_label_data(self):
+        """Fetches label data for Chilled Front Sleeve Labels from matching Manufacturing Orders (MOs).
+        Applies filters: Delivery Date From/To, Product Category, Depot, Late Orders.
+        """
+        self.ensure_one()
+        label_lines = []
+        domain = self._get_production_domain()
+        productions = self.env['mrp.production'].search(domain)
+
+        # Process matching Manufacturing Orders
+        for mo in productions:
+            mo_created_date = (
+                mo.create_date.date() if mo.create_date
+                else (self.packing_date_from or fields.Date.context_today(self))
+            )
+
+            # Check raw material component lines (move_raw_ids) if MO is a composite/generic pack
+            matching_moves = mo.move_raw_ids.filtered(
+                lambda m: not self.category_id or m.product_id.categ_id.id == self.category_id.id
+            ) if mo.move_raw_ids else self.env['stock.move']
+
+            if matching_moves:
+                for move in matching_moves:
+                    label_data = self._build_chilled_front_sleeve_label_dict(move.product_id, mo_created_date, mo)
+                    label_lines.append(label_data)
+            elif mo.product_id and (not self.category_id or mo.product_id.categ_id.id == self.category_id.id or mo.product_category_id.id == self.category_id.id):
+                label_data = self._build_chilled_front_sleeve_label_dict(mo.product_id, mo_created_date, mo)
+                label_lines.append(label_data)
+
+        # Fallback to matching Sales Orders if no MOs found, ensuring preview/print consistency
+        if not label_lines:
+            orders = self._get_matching_orders()
+            for order in orders:
+                mo_date = (
+                    getattr(order, 'packing_date', False)
+                    or (order.delivery_date - timedelta(days=1) if order.delivery_date else False)
+                    or fields.Date.context_today(self)
+                )
+                for line in order.order_line:
+                    product = line.product_id
+                    if not product or not product.categ_id:
+                        continue
+                    if self.category_id and product.categ_id.id != self.category_id.id:
+                        continue
+                    label_data = self._build_chilled_front_sleeve_label_dict(product, mo_date)
+                    label_lines.append(label_data)
+
+        return label_lines
+
+    def _build_chilled_front_sleeve_label_dict(self, product, mo_created_date, mo=None):
+        """Constructs a dictionary of all fields required by the Chilled Front Sleeve Label template."""
+        template = getattr(product, 'product_tmpl_id', product)
+
+        # 1. Product Name
+        product_name = (product.name or '').strip()
+
+        # 2. Cooking Instructions - fetched dynamically from the product's cooking_instructions_html
+        cooking_html = (
+            getattr(product, 'cooking_instructions_html', '')
+            or getattr(template, 'cooking_instructions_html', '')
+            or ''
+        )
+        cooking_instructions = (
+            getattr(product, 'cooking_instructions', '')
+            or getattr(template, 'cooking_instructions', '')
+            or cooking_html
+        )
+
+        # 3. Production Date: MO Created Date (DD MMMM, YYYY e.g. "15 September, 2026")
+        production_date_display = mo_created_date.strftime('%d %B, %Y') if mo_created_date else ''
+
+        # 4. Expiry Date: MO Created Date + Product Expiration Duration (use_fresh_days, expiration_time, expiration_duration)
+        exp_days = (
+            getattr(product, 'use_fresh_days', 0)
+            or getattr(template, 'use_fresh_days', 0)
+            or getattr(product, 'expiration_time', 0)
+            or getattr(template, 'expiration_time', 0)
+            or getattr(product, 'expiration_duration', 0)
+            or getattr(template, 'expiration_duration', 0)
+            or getattr(product, 'use_frozen_days', 0)
+            or getattr(template, 'use_frozen_days', 0)
+            or 3  # Standard 3-day chilled duration if unspecified
+        )
+        use_by_dt = mo_created_date + timedelta(days=exp_days) if (mo_created_date and exp_days) else False
+        use_by_display = use_by_dt.strftime('%d %B, %Y') if use_by_dt else ''
+
+        return {
+            'product_name': product_name,
+            'cooking_instructions': cooking_instructions,
+            'cooking_instructions_html': cooking_html,
+            'production_date_display': production_date_display,
+            'use_by_display': use_by_display,
         }

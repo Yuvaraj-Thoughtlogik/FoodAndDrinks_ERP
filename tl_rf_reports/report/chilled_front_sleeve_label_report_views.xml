@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Chilled Front Sleeve Label page size: 100mm x 60mm Landscape/Thermal Roll format -->
+    <record id="paperformat_production_label_chilled_front_sleeve" model="report.paperformat">
+        <field name="name">Production Label Chilled Front Sleeve 100x60mm</field>
+        <field name="default" eval="False"/>
+        <field name="format">custom</field>
+        <field name="page_height">60</field>
+        <field name="page_width">100</field>
+        <field name="orientation">Portrait</field>
+        <field name="margin_top">0</field>
+        <field name="margin_bottom">0</field>
+        <field name="margin_left">0</field>
+        <field name="margin_right">0</field>
+        <field name="header_line" eval="False"/>
+        <field name="header_spacing">0</field>
+        <field name="dpi">90</field>
+    </record>
+
+    <!-- ============ CHILLED FRONT SLEEVE LABEL ACTION ============ -->
+    <!-- report_name / report_file must match the QWeb template's xmlid below.
+         NOTE: the report's technical name (module.report_production_label_chilled_front)
+         is kept short so that the derived model _name
+         (report.tl_rf_reports.report_production_label_chilled_front) produces a SQL
+         table name of 58 characters, under PostgreSQL's 63-character identifier limit.
+         The original "..._chilled_front_sleeve" name produced a 65-character table
+         name and Odoo refused to install with "Table name '...' is too long". -->
+    <record id="action_report_production_label_chilled_front_sleeve" model="ir.actions.report">
+        <field name="name">Production Label - Chilled Front Sleeve</field>
+        <field name="model">production.label.wizard</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">tl_rf_reports.report_production_label_chilled_front</field>
+        <field name="report_file">tl_rf_reports.report_production_label_chilled_front</field>
+        <field name="paperformat_id" ref="paperformat_production_label_chilled_front_sleeve"/>
+        <field name="print_report_name">'Production Label Chilled Front Sleeve - %s' % (object.delivery_date_from)</field>
+        <field name="binding_model_id" eval="False"/>
+    </record>
+
+    <!-- ============ CHILLED FRONT SLEEVE LABEL QWEB TEMPLATE ============ -->
+    <template id="report_production_label_chilled_front">
+        <t t-call="web.basic_layout">
+            <t t-set="total_labels" t-value="len(label_lines)"/>
+            <t t-foreach="label_lines" t-as="label">
+                <div style="width:100mm; height:60mm; box-sizing:border-box; padding:3mm 3.5mm; page-break-after:always; font-family:Arial, Helvetica, sans-serif; position:relative; overflow:hidden; color:#000;">
+
+                    <!-- 1. Product Name (Centered, Bold, Large, inside a bordered box) -->
+                    <div style="text-align:center; font-size:16px; font-weight:bold; line-height:1.2; margin-top:0.5mm; border:1.2px solid #2E75B6; padding:1mm 2mm;">
+                        <span t-esc="label.get('product_name')"/>
+                    </div>
+
+                    <!-- 2. Cooking Instructions (Centered, Regular) -->
+                    <div style="text-align:center; font-size:9.5px; line-height:1.25; margin-top:2mm; padding:0 2mm;">
+                        <t t-if="label.get('cooking_instructions_html')">
+                            <span t-raw="label.get('cooking_instructions_html')"/>
+                        </t>
+                        <t t-elif="label.get('cooking_instructions')">
+                            <span t-esc="label.get('cooking_instructions')"/>
+                        </t>
+                    </div>
+
+                    <!-- 3. Production Date & Use By Date (Left-aligned Key-Value) -->
+                    <div style="margin-top:2.5mm; padding-left:0.5mm;">
+                        <table style="border-collapse:collapse; font-size:9.5px; line-height:1.35; width:100%;">
+                            <tr>
+                                <td style="padding-right:3mm; white-space:nowrap; width:30mm;">Production Date:</td>
+                                <td style="white-space:nowrap;"><span t-esc="label.get('production_date_display')"/></td>
+                            </tr>
+                            <tr>
+                                <td style="padding-right:3mm; white-space:nowrap; width:30mm;">Use By:</td>
+                                <td style="white-space:nowrap;"><span t-esc="label.get('use_by_display')"/></td>
+                            </tr>
+                        </table>
+                    </div>
+
+                    <!-- 4. Hardcoded Warning & Freezing Notice (Italic, Small) -->
+                    <div style="position:absolute; bottom:2.5mm; left:3.5mm; right:3.5mm; font-size:7.5px; font-style:italic; line-height:1.2;">
+                        <div>Take extra care when opening the film lid as the steam can get very hot!</div>
+                        <div>Suitable for home freezing, freeze on day of purchase.</div>
+                    </div>
+
+                </div>
+            </t>
+        </t>
+    </template>
+</odoo>
