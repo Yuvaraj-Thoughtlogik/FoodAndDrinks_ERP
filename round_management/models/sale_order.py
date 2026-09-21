@@ -354,7 +354,7 @@ class SaleOrder(models.Model):
     def _compute_is_late_order(self):
         for rec in self:
             rec.is_late_order = bool(
-                rec.state in ('sale', 'done') and rec.batch_id and rec.batch_id.state == 'prt'
+               rec.batch_id and rec.batch_id.state == 'prt'
             )
 
     @api.depends('delivery_date', 'commitment_date')
@@ -633,7 +633,20 @@ class SaleOrderLine(models.Model):
         string="Special Notes",
         ondelete='set null',
     )
-    
+
+    # Declared here only so round_management (StockFreshBoxWizard.
+    # action_analyze_orders) doesn't hard-depend on tl_rf_reports, which
+    # defines this field's real compute (SaleOrderLine._compute_late_order:
+    # current qty minus the qty confirmed when the batch was locked in).
+    # The two modules are always installed together in this addon suite, so
+    # tl_rf_reports' compute is what actually runs - this plain field is
+    # just a fallback/placeholder for the dependency direction.
+    late_qty_delta = fields.Float(
+        string="Late Qty Delta",
+        default=0.0,
+        digits='Product Unit of Measure',
+    )
+
 class Pricelist(models.Model):
     _inherit = 'product.pricelist'
 

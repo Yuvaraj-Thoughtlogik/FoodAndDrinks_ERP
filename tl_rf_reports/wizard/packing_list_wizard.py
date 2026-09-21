@@ -70,8 +70,32 @@ class PackingListWizard(models.TransientModel):
     include_late_orders = fields.Boolean(
         string='Late Order',
         default=False,
-        help="When unchecked, normal Packing List is generated. When checked, separate Late Order Packing List is generated."
+        help="When unchecked, the normal Packing List is generated (Regal Van: confirmed_qty). "
+             "When checked (Regal Van only), the 'Frozen Factory Packing List Alt Reports' is "
+             "generated instead, showing only each late order's late_qty_delta - the change "
+             "made after confirmed_qty was locked in - as 'Additional X boxes required' or "
+             "'Remove X boxes'."
     )
+    report_type = fields.Selection(
+        selection=[
+            ('normal', 'Packing List'),
+            ('driver', 'Driver Packing List'),
+            ('late', 'Late Order'),
+        ],
+        string='Report Type',
+        default='normal',
+        required=True,
+        help="Which Packing List variant to print - drives include_late_orders/"
+             "driver_packing_list below (kept as plain booleans for the "
+             "domain-building logic, hidden from the form)."
+    )
+
+    @api.onchange('report_type')
+    def _onchange_report_type(self):
+        self.include_late_orders = self.report_type == 'late'
+        self.driver_packing_list = self.report_type == 'driver'
+        if self.driver_packing_list:
+            self.delivery_channel = 'regal_van'
 
     @api.onchange('driver_packing_list')
     def _onchange_driver_packing_list(self):
@@ -80,6 +104,16 @@ class PackingListWizard(models.TransientModel):
         if self.driver_packing_list:
             self.delivery_channel = 'regal_van'
             self.include_late_orders = False
+
+    @api.onchange('delivery_channel')
+    def _onchange_delivery_channel(self):
+        """Courier has no confirmed_qty/late split (see SaleOrderLine.
+        _get_report_line_vals) - it always prints the live ordered
+        quantity, so Late Order doesn't apply and is hidden for it too."""
+        if self.delivery_channel == 'courier':
+            self.include_late_orders = False
+            if self.report_type == 'late':
+                self.report_type = 'normal'
 
     @api.onchange('delivery_date_from')
     def _onchange_delivery_date_from(self):
@@ -148,23 +182,35 @@ class PackingListWizard(models.TransientModel):
             return self._action_print_driver_packing_list()
 
         if self.delivery_channel == 'courier':
-            order_domain = [
-                ('delivery_channel', '=', 'courier'),
-                ('state', 'in', ['sale', 'done']),
-                ('delivery_date', '>=', self.delivery_date_from),
-                ('delivery_date', '<=', self.delivery_date_to),
+            # Courier has no confirmed_qty/late split (see SaleOrderLine.
+            # _get_report_line_vals) - it always shows every eligible
+            # line's report_line_ids row(s), so validation checks those
+            # rows exist rather than just that a matching sale order does.
+            order_line_domain = [
+                ('order_id.delivery_channel', '=', 'courier'),
+                ('order_id.state', 'in', ['sale', 'done']),
+                ('order_id.delivery_date', '>=', self.delivery_date_from),
+                ('order_id.delivery_date', '<=', self.delivery_date_to),
+                ('display_type', '=', False),
+                ('product_id', '!=', False),
+                ('product_uom_qty', '>', 0),
             ]
-            if not self.include_late_orders:
-                order_domain.append(('is_late_order', '=', False))
-            else:
-                order_domain.append(('is_late_order', '=', True))
-
-            if not self.env['sale.order'].search_count(order_domain):
-                order_type_str = _("Late Courier Delivery") if self.include_late_orders else _("Courier Delivery")
+            order_lines = self.env['sale.order.line'].search(order_line_domain)
+            if not order_lines:
                 raise UserError(_(
-                    "No confirmed %s orders found with delivery dates between %s and %s."
+                    "No confirmed Courier Delivery orders found with delivery dates between %s and %s."
                 ) % (
-                    order_type_str,
+                    self.delivery_date_from.strftime('%d/%m/%Y'),
+                    self.delivery_date_to.strftime('%d/%m/%Y'),
+                ))
+
+            order_lines._recompute_report_lines()
+            if not self.env['sale.order.line.report_lines'].search_count(
+                [('sale_order_line_id', 'in', order_lines.ids)]
+            ):
+                raise UserError(_(
+                    "No packable report lines were found for Courier Delivery orders with delivery dates between %s and %s."
+                ) % (
                     self.delivery_date_from.strftime('%d/%m/%Y'),
                     self.delivery_date_to.strftime('%d/%m/%Y'),
                 ))
@@ -192,12 +238,24 @@ class PackingListWizard(models.TransientModel):
             eligible_orders = batches.mapped('order_ids').filtered(
                 lambda so: so.state in ('sale', 'done') and getattr(so, 'delivery_channel', False) in ('regal_van', False)
             )
-            if not self.include_late_orders:
-                eligible_orders = eligible_orders.filtered(lambda so: not getattr(so, 'is_late_order', False))
-            else:
-                eligible_orders = eligible_orders.filtered(lambda so: getattr(so, 'is_late_order', False))
-
             if not eligible_orders:
+                raise UserError(_("Eligible batches were found, but they do not contain any matching Regal Van Delivery sale orders."))
+
+            # Late is report-line-based, not order-based: confirmed_qty and
+            # late_qty_delta each become their own report_line_ids row (see
+            # SaleOrderLine._get_report_line_vals), so validation checks
+            # those rows directly instead of a per-line is_late_order flag
+            # that only tells you a line changed, not whether it produced a
+            # normal or late row.
+            order_lines = eligible_orders.mapped('order_line').filtered(
+                lambda l: not l.display_type and l.product_id and l.product_uom_qty > 0
+            )
+            order_lines._recompute_report_lines()
+            is_late = bool(self.include_late_orders)
+            if not self.env['sale.order.line.report_lines'].search_count([
+                ('sale_order_line_id', 'in', order_lines.ids),
+                ('late_order', '=', is_late),
+            ]):
                 raise UserError(_("Eligible batches were found, but they do not contain any matching Regal Van Delivery sale orders."))
 
         report_model = self.env['report.tl_rf_reports.report_packing_list']
@@ -205,7 +263,12 @@ class PackingListWizard(models.TransientModel):
         if not pdf_content:
             raise UserError(_("No packing list data was found for the selected criteria."))
 
-        filename_prefix = 'Courier_Packing_List_' if self.delivery_channel == 'courier' else 'Packing_List_'
+        if self.delivery_channel == 'courier':
+            filename_prefix = 'Courier_Packing_List_'
+        elif self.include_late_orders:
+            filename_prefix = 'Late_Packing_List_Alt_'
+        else:
+            filename_prefix = 'Packing_List_'
         return self._download_action(
             pdf_content, f"{filename_prefix}{self.delivery_date_from.strftime('%Y%m%d')}.pdf"
         )

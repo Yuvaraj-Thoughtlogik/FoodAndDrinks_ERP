@@ -52,6 +52,7 @@ class _ProductionReportCanvas(canvas.Canvas):
         self._saved_page_states = []
         self.current_header = None
         self.printed_at_text = ''
+        self.title_text = 'PRODUCTION REPORT'
 
     def showPage(self):
         self._saved_page_states.append(dict(self.__dict__))
@@ -81,7 +82,7 @@ class _ProductionReportCanvas(canvas.Canvas):
                 'PRDepot', fontName='Helvetica-Bold', fontSize=12, leading=15, alignment=2, textColor=colors.black
             )
 
-            left_flow = [Paragraph("PRODUCTION REPORT", title_style)]
+            left_flow = [Paragraph(self.title_text, title_style)]
             right_flow = [Paragraph(f"Delivery On: {xml_escape(h_data.get('delivery_date', ''))}", date_style)]
             if h_data.get('depot_name'):
                 right_flow.append(Paragraph(xml_escape(h_data.get('depot_name', '')), depot_style))
@@ -335,9 +336,15 @@ class ReportProductionReport(models.AbstractModel):
         if not depot_pages:
             return None
 
-        return self._build_production_report_pdf(depot_pages, printed_at_str)
+        if getattr(wizard, 'all_production_report', False):
+            title_text = 'ALL PRODUCTION REPORT'
+        elif wizard.include_late_orders:
+            title_text = 'LATE ONLY PRODUCTION REPORT'
+        else:
+            title_text = 'PRODUCTION REPORT'
+        return self._build_production_report_pdf(depot_pages, printed_at_str, title_text)
 
-    def _build_production_report_pdf(self, depot_pages, printed_at_str):
+    def _build_production_report_pdf(self, depot_pages, printed_at_str, title_text='PRODUCTION REPORT'):
         """Pure layout step - takes already-grouped/sorted depot pages and
         draws them. Split out from generate_pdf() so the layout code can be
         exercised standalone without touching the ORM."""
@@ -433,6 +440,7 @@ class ReportProductionReport(models.AbstractModel):
         def _make_canvas(*args, **kwargs):
             c = _ProductionReportCanvas(*args, **kwargs)
             c.printed_at_text = printed_at_str
+            c.title_text = title_text
             return c
 
         doc.build(story, canvasmaker=_make_canvas)

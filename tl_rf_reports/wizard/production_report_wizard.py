@@ -64,12 +64,43 @@ class ProductionReportWizard(models.TransientModel):
         default=False,
         help="When unchecked, normal Production Report is generated. When checked, separate Late Order Production Report is generated."
     )
+    all_production_report = fields.Boolean(
+        string='All Production Report',
+        default=False,
+        help="When checked, generates a single Production Report combining both normal and "
+             "late Manufacturing Orders (Late Order is not used to filter it). Only applies to "
+             "Regal Van Delivery, so Late Order and Delivery Channel are hidden/locked while "
+             "this is checked."
+    )
     box_count = fields.Boolean(
         string='Box Count',
         default=False,
         help="When checked, 'Print PDF' generates the Box Count Report (Sales Order box quantities "
              "consolidated per Round Batch, grouped Category -> Depot) instead of the Production Report."
     )
+    report_type = fields.Selection(
+        selection=[
+            ('normal', 'Production Report'),
+            ('all', 'All Production Report'),
+            ('late', 'Late Order'),
+            ('box_count', 'Box Count Report'),
+        ],
+        string='Report Type',
+        default='normal',
+        required=True,
+        help="Which Production Report variant to print - drives include_late_orders/"
+             "all_production_report/box_count below (kept as plain booleans for the "
+             "domain-building logic, hidden from the form)."
+    )
+
+    @api.onchange('report_type')
+    def _onchange_report_type(self):
+        self.include_late_orders = self.report_type == 'late'
+        self.all_production_report = self.report_type == 'all'
+        self.box_count = self.report_type == 'box_count'
+        if self.report_type == 'all' or self.include_late_orders:
+            self.delivery_channel = 'regal_van'
+
 
     @api.model
     def _default_category_ids(self):
@@ -86,6 +117,15 @@ class ProductionReportWizard(models.TransientModel):
         help="Select Fresh, Chilled, or both product categories to include in the report."
     )
 
+
+    @api.onchange('all_production_report')
+    def _onchange_all_production_report(self):
+        """All Production Report only ever applies to Regal Van Delivery and
+        combines normal + late Manufacturing Orders, so lock/hide those
+        fields as soon as it's enabled."""
+        if self.all_production_report:
+            self.delivery_channel = 'regal_van'
+            self.include_late_orders = False
 
     @api.onchange('delivery_date_from')
     def _onchange_delivery_date_from(self):
@@ -176,21 +216,27 @@ class ProductionReportWizard(models.TransientModel):
         branch."""
         self.ensure_one()
         if self.delivery_channel == 'courier':
-            return [
+            domain = [
                 ('state', 'in', ('draft', 'confirmed')),
                 ('delivery_channel', '=', 'courier'),
                 ('delivery_date', '>=', self.delivery_date_from),
                 ('delivery_date', '<=', self.delivery_date_to),
-                ('is_late_order', '=', self.include_late_orders),
             ]
+            if not self.all_production_report:
+                domain.append(('is_late_order', '=', self.include_late_orders))
+            return domain
 
         domain = [
             ('state', '=', 'draft'),
             ('delivery_channel', '=', 'regal_van'),
             ('round_batch_id.delivery_date', '>=', self.delivery_date_from),
             ('round_batch_id.delivery_date', '<=', self.delivery_date_to),
-            ('is_late_order', '=', self.include_late_orders),
         ]
+        # All Production Report combines normal + late Manufacturing Orders
+        # into one total (see report/production_report.py) instead of
+        # filtering to just one side.
+        if not self.all_production_report:
+            domain.append(('is_late_order', '=', self.include_late_orders))
         if self.depot_ids:
             domain.append(('depot_id', 'in', self.depot_ids.ids))
         return domain
@@ -208,8 +254,9 @@ class ProductionReportWizard(models.TransientModel):
             ('raw_material_production_id.delivery_channel', '=', 'regal_van'),
             ('raw_material_production_id.round_batch_id.delivery_date', '>=', self.delivery_date_from),
             ('raw_material_production_id.round_batch_id.delivery_date', '<=', self.delivery_date_to),
-            ('raw_material_production_id.is_late_order', '=', self.include_late_orders),
         ]
+        if not self.all_production_report:
+            domain.append(('raw_material_production_id.is_late_order', '=', self.include_late_orders))
         if self.depot_ids:
             domain.append(('raw_material_production_id.depot_id', 'in', self.depot_ids.ids))
         if self.category_id:

@@ -52,3 +52,7 @@ class StockMove(models.Model):
         related='production_sale_line_id.special_requirements_notes_id.name',
         readonly=True,
     )
+    is_late_order = fields.Boolean(
+        string='Late Order',
+        related='production_sale_line_id.is_late_order',
+    )

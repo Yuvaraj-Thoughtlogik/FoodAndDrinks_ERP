@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+import datetime
 import io
 from xml.sax.saxutils import escape as xml_escape
 
@@ -132,107 +133,6 @@ class _DriverPackingListCanvas(canvas.Canvas):
 class ReportDriverPackingList(models.AbstractModel):
     _name = 'report.tl_rf_reports.report_driver_packing_list_document'
     _description = 'Driver Packing List Report Generator'
-
-    # ------------------------------------------------------------------
-    # BOM helpers
-    #
-    # Lookup pattern (variant-specific BOM first, then template-level
-    # fallback) matches report.tl_rf_reports.report_prediction._find_bom.
-    #
-    # Unlike the Prediction report (which explodes ANY BOM it finds),
-    # the Driver Packing List is type-aware per the functional spec:
-    #   - No BOM                          -> product + ordered qty, unchanged.
-    #   - BOM type 'normal'
-    #     ("Manufacture this product")    -> product + ordered qty, unchanged
-    #                                         (NOT exploded).
-    #   - BOM type 'phantom' ("Kit")      -> exploded into components, one
-    #                                         level only, qty scaled to the
-    #                                         ordered qty of the finished
-    #                                         product.
-    # ------------------------------------------------------------------
-    @api.model
-    def _find_bom(self, product):
-        """Return the applicable BOM for a product (variant-specific first,
-        falling back to a template-level BOM), or an empty recordset if the
-        product has no BOM."""
-        BomModel = self.env['mrp.bom']
-        company_ids = [self.env.company.id, False]
-
-        bom = BomModel.search([
-            ('product_id', '=', product.id),
-            ('company_id', 'in', company_ids),
-        ], limit=1, order='sequence, id')
-
-        if not bom:
-            bom = BomModel.search([
-                ('product_tmpl_id', '=', product.product_tmpl_id.id),
-                ('product_id', '=', False),
-                ('company_id', 'in', company_ids),
-            ], limit=1, order='sequence, id')
-
-        return bom
-
-    @api.model
-    def _explode_bom(self, product, qty, bom_cache):
-        """Resolve a sold product + ordered qty to the item(s) that should
-        actually be printed on the Driver Packing List.
-
-        Returns a list of (reporting_product, reporting_qty) tuples:
-        - No BOM, or BOM type 'normal' (Manufacture this product):
-          [(product, qty)] - unchanged, not exploded.
-        - BOM type 'phantom' (Kit): one entry per BOM component, with the
-          component qty scaled to the ordered qty of the finished product
-          (single-level explosion only - a component that itself has a BOM
-          is NOT exploded further):
-              component_qty = (bom_line_qty / bom_produced_qty) * ordered_qty
-        """
-        if product.id not in bom_cache:
-            bom_cache[product.id] = self._find_bom(product)
-        bom = bom_cache[product.id]
-
-        if not bom or bom.type != 'phantom':
-            # No BOM, or a "Manufacture this product" BOM (Case 1 / Case 3):
-            # show the original finished product with the ordered quantity.
-            return [(product, qty)]
-
-        # Kit BOM (Case 2): explode into components.
-        finished_uom = bom.product_uom_id or product.uom_id
-        order_uom = product.uom_id
-        try:
-            qty_in_bom_uom = order_uom._compute_quantity(qty, finished_uom)
-        except Exception:
-            qty_in_bom_uom = qty
-
-        bom_produced_qty = bom.product_qty or 1.0
-
-        result = []
-        for bom_line in bom.bom_line_ids:
-            component = bom_line.product_id
-            if not component:
-                continue
-            # Skip BOM lines that don't apply to this specific variant
-            # (attribute-based BOM lines), when the method is available.
-            if hasattr(bom_line, '_skip_bom_line') and bom_line._skip_bom_line(product):
-                continue
-
-            line_qty = bom_line.product_qty
-            if bom_line.product_uom_id and bom_line.product_uom_id != component.uom_id:
-                try:
-                    line_qty = bom_line.product_uom_id._compute_quantity(line_qty, component.uom_id)
-                except Exception:
-                    line_qty = bom_line.product_qty
-
-            qty_per_unit = (line_qty / bom_produced_qty) if bom_produced_qty else 0.0
-            comp_qty = qty_per_unit * qty_in_bom_uom
-            if comp_qty:
-                result.append((component, comp_qty))
-
-        # Safety net: a Kit BOM with no usable lines should not make the
-        # ordered qty disappear from the report.
-        if not result:
-            return [(product, qty)]
-
-        return result
 
     # ------------------------------------------------------------------
     # Sorting helpers - same conventions as report.tl_rf_reports.report_packing_list:
@@ -657,60 +557,88 @@ class ReportDriverPackingList(models.AbstractModel):
         right, uppercase bold category headers, a Quantity/Product/Sort
         column header row, quantity right-aligned with 2 decimal places,
         no "Boxes" total line, and "Checked By ___" once at the end of
-        each batch. Category/Batch grouping, sorting (Frozen -> Fresh ->
-        alphabetical, then Product Master sort number) and BOM explosion
-        are unchanged from before.
+        each batch. Category/Batch grouping and sorting (Frozen -> Fresh ->
+        alphabetical, then Product Master sort number) are unchanged from
+        before.
 
-        Uses plain ORM search() + recordset iteration rather than raw SQL,
-        reusing this class's own _find_bom/_explode_bom helpers (defined
-        above) for the Kit-BOM explosion instead of a hand-written bulk BOM
-        query - the ORM already knows how each field is actually translated/
-        stored, so there's no risk of the "assumed jsonb, column is actually
-        varchar" class of bug a hand-written query can hit."""
-        batch_domain = [
+        Sourced from sale.order.line.report_lines (same BoM-exploded rows
+        as the Factory Only Packing List - see SaleOrderLine.
+        _get_report_line_vals), but combining BOTH normal and late_order
+        rows into one total per product: unlike the other Packing List
+        variants, the Driver Packing List is an overall total across the
+        whole date range and deliberately does not filter on Late Order
+        status (see PackingListWizard._action_print_driver_packing_list)."""
+        line_domain = [
+            ('delivery_channel', 'in', ('regal_van', False)),
+            ('order_id.state', 'in', ('sale', 'done')),
             ('delivery_date', '>=', wizard.delivery_date_from),
             ('delivery_date', '<=', wizard.delivery_date_to),
+            ('display_type', '=', False),
+            ('product_id', '!=', False),
+            ('product_uom_qty', '>', 0),
         ]
         if wizard.depot_ids:
-            batch_domain.append(('depot_id', 'in', wizard.depot_ids.ids))
+            line_domain.append(('depot_id', 'in', wizard.depot_ids.ids))
 
-        batches = self.env['round.management.batch'].search(
-            batch_domain, order='delivery_date asc, code asc, id asc'
-        )
-        if not batches:
+        order_lines = self.env['sale.order.line'].search(line_domain)
+        if not order_lines:
             return None
 
-        bom_cache = {}
+        # Force-refresh report_line_ids so a BoM line reflects the current
+        # Manufacturing Order / move_raw_ids state (see
+        # SaleOrderLine._recompute_report_lines) before reading them.
+        order_lines._recompute_report_lines()
+
+        report_lines = self.env['sale.order.line.report_lines'].search(
+            [('sale_order_line_id', 'in', order_lines.ids)]
+        )
+        if not report_lines:
+            return None
+
+        report_lines = report_lines.sorted(
+            lambda rl: (rl.batch_id.delivery_date or datetime.date.min, rl.batch_id.code or '', rl.batch_id.id)
+        )
+
         batches_map = {}
-        for batch in batches:
-            orders = batch.order_ids.filtered(
-                lambda so: so.state in ('sale', 'done')
-                and getattr(so, 'delivery_channel', False) in ('regal_van', False)
-            )
-            if not orders:
+        for report_line in report_lines:
+            batch = report_line.batch_id
+            product = report_line.product_id
+            if not batch or not product:
                 continue
 
-            b_map = batches_map[batch.id] = {'batch': batch, 'categories_map': {}}
-            for order in orders:
-                lines = order.order_line.filtered(
-                    lambda l: not l.display_type and l.product_id and l.product_uom_qty > 0
-                )
-                for line in lines:
-                    for item_product, item_qty in self._explode_bom(line.product_id, line.product_uom_qty, bom_cache):
-                        if not item_qty:
-                            continue
-                        categ_name = (item_product.categ_id.name or _('Other')).strip().upper()
-                        categ_key = item_product.categ_id.id or 0
-                        b_map['categories_map'].setdefault(categ_key, {'categ_name': categ_name, 'products': {}})
-                        c_prods = b_map['categories_map'][categ_key]['products']
-                        pid = item_product.id
-                        if pid not in c_prods:
-                            sort_num = self._extract_sort_number(item_product)
-                            c_prods[pid] = {
-                                'product_id': pid, 'product_name': item_product.name, 'box_qty': 0.0,
-                                'sort_num': sort_num, 'sort_str': str(sort_num) if sort_num else '',
-                            }
-                        c_prods[pid]['box_qty'] += item_qty
+            if batch.id not in batches_map:
+                batches_map[batch.id] = {'batch': batch, 'categories_map': {}}
+            b_map = batches_map[batch.id]
+
+            categ_name = (report_line.categ_id.name or _('Other')).strip().upper()
+            categ_key = report_line.categ_id.id or 0
+            b_map['categories_map'].setdefault(categ_key, {'categ_name': categ_name, 'products': {}})
+            c_prods = b_map['categories_map'][categ_key]['products']
+
+            # BoM rows (physical boxes) stay separate by box qty (0.5kg vs
+            # 1kg); a plain non-BoM row's qty is just the line's own
+            # quantity, so those merge/sum together regardless of value -
+            # this report combines normal + late rows into one total, so a
+            # +2 confirmed and a -1 late delta must net to 1, not print as
+            # two separate rows.
+            group_key = (product.id, report_line.qty if report_line.from_bom else False, report_line.notes or '')
+            if group_key not in c_prods:
+                sort_num = self._extract_sort_number(product)
+                c_prods[group_key] = {
+                    'product_id': product.id,
+                    'product_name': report_line.name or product.name,
+                    'box_qty': 0.0,
+                    'sort_num': sort_num,
+                    'sort_str': str(sort_num) if sort_num else '',
+                }
+            # A BoM row is one MO's raw-material consumption - one row is
+            # one physical box, so same-product rows are COUNTED (matching
+            # the Factory Only Packing List). A plain non-BoM row's qty IS
+            # the line's own quantity, so those are SUMMED instead.
+            if report_line.from_bom:
+                c_prods[group_key]['box_qty'] += 1
+            else:
+                c_prods[group_key]['box_qty'] += report_line.qty
 
         if not batches_map:
             return None
@@ -736,7 +664,8 @@ class ReportDriverPackingList(models.AbstractModel):
             ):
                 sorted_prods = sorted(c_val['products'].values(), key=self._get_sort_key)
                 for p in sorted_prods:
-                    p['qty_display'] = f"{p['box_qty']:.2f}"
+                    qty_val = p['box_qty']
+                    p['qty_display'] = str(int(round(qty_val))) if float(qty_val).is_integer() else f"{qty_val:.2f}"
                 if sorted_prods:
                     category_list.append({'categ_name': c_val['categ_name'], 'products': sorted_prods})
             if not category_list:

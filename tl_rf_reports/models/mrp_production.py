@@ -34,20 +34,14 @@ class MrpProduction(models.Model):
     # (report/production_report.py) to attach each customer's special
     # requirements note to its own consolidated row, without merging it into
     # other customers' boxes of the same product/quantity.
-    production_sale_line_id = fields.Many2one(
-        'sale.order.line',
-        string='Sale Order Line',
-        compute='_compute_production_sale_line_id',
-        store=True,
-        readonly=True,
-    )
 
-    @api.depends('origin')
-    def _compute_production_sale_line_id(self):
-        for mo in self:
-            line = False
-            if mo.origin:
-                match = re.search(r'\(Line\s+(\d+)\)', mo.origin)
-                if match:
-                    line = self.env['sale.order.line'].browse(int(match.group(1))).exists()
-            mo.production_sale_line_id = line.id if line else False
+
+    # @api.depends('origin')
+    # def _compute_production_sale_line_id(self):
+    #     for mo in self:
+    #         line = False
+    #         if mo.origin:
+    #             match = re.search(r'\(Line\s+(\d+)\)', mo.origin)
+    #             if match:
+    #                 line = self.env['sale.order.line'].browse(int(match.group(1))).exists()
+    #         mo.production_sale_line_id = line.id if line else False

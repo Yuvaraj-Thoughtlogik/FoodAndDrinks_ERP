@@ -114,9 +114,9 @@ class BatchReportWizard(models.TransientModel):
                 ('delivery_date', '<=', self.delivery_date_to),
                 # Late is line-based (order flagged late, line added after
                 # confirm, or line qty changed after confirm) - matching on
-                # order_line.late_order picks up orders with at least one
+                # order_line.is_late_order picks up orders with at least one
                 # qualifying line, not just orders flagged late as a whole.
-                ('order_line.late_order', '=', bool(self.include_late_orders)),
+                ('order_line.is_late_order', '=', bool(self.include_late_orders)),
             ]
 
             matching_orders = self.env['sale.order'].search(order_domain)
@@ -181,7 +181,7 @@ class BatchReportWizard(models.TransientModel):
         # qualifying line, not just orders flagged late as a whole.
         eligible_orders = eligible_orders.filtered(
             lambda so: any(
-                bool(l.late_order) == is_late
+                bool(l.is_late_order) == is_late
                 for l in so.order_line
                 if not l.display_type and l.product_id and l.product_uom_qty > 0
             )
@@ -223,7 +223,7 @@ class BatchReportWizard(models.TransientModel):
                 ('order_id.delivery_date', '<=', self.delivery_date_to),
                 ('display_type', '=', False),
                 ('product_id', '!=', False),
-                ('late_order', '=', bool(self.include_late_orders)),
+                ('is_late_order', '=', bool(self.include_late_orders)),
             ]
 
             matching_lines = self.env['sale.order.line'].search_count(domain)
@@ -263,7 +263,7 @@ class BatchReportWizard(models.TransientModel):
         ]
         if self.depot_ids:
             domain.append(('depot_id', 'in', self.depot_ids.ids))
-        domain.append(('late_order', '=', bool(self.include_late_orders)))
+        domain.append(('is_late_order', '=', bool(self.include_late_orders)))
 
         matching_lines = self.env['sale.order.line'].search_count(domain)
         if not matching_lines:

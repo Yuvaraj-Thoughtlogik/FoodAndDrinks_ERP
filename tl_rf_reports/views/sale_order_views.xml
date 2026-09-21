@@ -23,13 +23,13 @@
         <field name="arch" type="xml">
             <xpath expr="//field[@name='order_line']/list" position="attributes">
                 <attribute name="decoration-danger">late_qty_delta &lt; 0</attribute>
-                <attribute name="decoration-info">late_order and late_qty_delta &gt;= 0</attribute>
+                <attribute name="decoration-info">is_late_order and late_qty_delta &gt;= 0</attribute>
             </xpath>
             <xpath expr="//field[@name='order_line']/list/field[@name='product_uom_qty']" position="after">
                 <field name="late_qty_delta" string="Qty +/-" optional="show"/>
             </xpath>
             <xpath expr="//field[@name='order_line']/list" position="inside">
-                <field name="late_order" optional="hide"/>
+                <field name="is_late_order" optional="hide"/>
             </xpath>
         </field>
     </record>
@@ -50,7 +50,7 @@
                 <field name="order_partner_id" string="Customer" optional="hide"/>
                 <field name="delivery_date" optional="show"/>
                 <field name="delivery_channel" optional="hide"/>
-                <field name="late_order" optional="hide"/>
+                <field name="is_late_order" optional="hide"/>
             </list>
         </field>
     </record>
@@ -70,8 +70,8 @@
                 <filter string="Courier Delivery" name="courier" domain="[('delivery_channel', '=', 'courier')]"/>
                 <filter string="Regal Van Delivery" name="regal_van" domain="[('delivery_channel', 'in', ['regal_van', False])]"/>
                 <separator/>
-                <filter string="Normal Orders" name="normal_orders" domain="[('late_order', '=', False)]"/>
-                <filter string="Late Orders" name="late_orders" domain="[('late_order', '=', True)]"/>
+                <filter string="Normal Orders" name="normal_orders" domain="[('is_late_order', '=', False)]"/>
+                <filter string="Late Orders" name="late_orders" domain="[('is_late_order', '=', True)]"/>
                 <group>
                     <filter string="Depot" name="group_by_depot" context="{'group_by': 'depot_id'}"/>
                     <filter string="Product Category" name="group_by_category" context="{'group_by': 'categ_id'}"/>
