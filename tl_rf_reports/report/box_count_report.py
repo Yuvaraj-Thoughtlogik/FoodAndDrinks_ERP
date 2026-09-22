@@ -184,14 +184,15 @@ class ReportBoxCountReport(models.AbstractModel):
     # QWeb template, no wkhtmltopdf, no background job (same pattern as
     # report_production_report.py's generate_pdf(), and the same source
     # data: `productions` is the draft mrp.production recordset already
-    # filtered by ProductionReportWizard._get_production_domain(), and the
-    # report groups their raw-material component lines (move_raw_ids), not
-    # mo.product_id - see the note in report_production_report.py.
+    # filtered by ProductionReportWizard._get_production_domain(). Each MO's
+    # own product_id IS the box-type product to report on, so the report
+    # groups the MOs themselves, not their raw-material component lines
+    # (move_raw_ids) - see the note in report_production_report.py.
     #
-    # Unlike the Production Report (which sums each component's
-    # product_uom_qty per product), the Box Count Report counts EVERY
-    # component line as exactly one box, regardless of its quantity, and
-    # totals that count per Round Batch (mo.round_batch_id).
+    # Unlike the Production Report (which sums each MO's product_qty per
+    # product), the Box Count Report counts EVERY MO as exactly one box,
+    # regardless of its quantity, and totals that count per Round Batch
+    # (mo.round_batch_id).
     # ------------------------------------------------------------------
     def generate_pdf(self, wizard, productions):
         """Returns the finished PDF (bytes) for the Box Count Report, or
@@ -201,21 +202,20 @@ class ReportBoxCountReport(models.AbstractModel):
 
         # Matches report_production_report.py's generate_pdf() exactly here:
         # no upfront "has a category" requirement. An earlier version of
-        # this method filtered out any move whose product_id.categ_id
+        # this method filtered out any MO whose product_id.categ_id
         # resolved empty (e.g. blocked by a company-scoped category record
         # rule) before it ever reached the tolerant "Other" fallback below,
         # which could silently empty out the whole report even though
-        # Production Report - reading the exact same moves - still worked.
-        moves = productions.mapped('move_raw_ids').filtered(lambda m: m.product_id)
+        # Production Report - reading the exact same MOs - still worked.
+        productions = productions.filtered(lambda m: m.product_id)
         if wizard.category_ids:
             allowed_categ_ids = set(wizard.category_ids.ids)
-            moves = moves.filtered(lambda m: m.product_id.categ_id.id in allowed_categ_ids)
-        if not moves:
+            productions = productions.filtered(lambda m: m.product_id.categ_id.id in allowed_categ_ids)
+        if not productions:
             return None
 
         categ_map = {}
-        for move in moves:
-            mo = move.raw_material_production_id
+        for mo in productions:
             # mrp.production carries TWO independently-computed links, both
             # labelled "Round Batch" in the UI (which is why the MO can look
             # correctly batch-mapped there even when one of them is empty):
@@ -228,7 +228,7 @@ class ReportBoxCountReport(models.AbstractModel):
             # empty out the whole report.
             batch = mo.round_batch_id or mo.batch_id
 
-            categ = move.product_id.categ_id
+            categ = mo.product_id.categ_id
             categ_key = categ.id or 0
             categ_name = (categ.name or _('Other')).strip().upper()
 

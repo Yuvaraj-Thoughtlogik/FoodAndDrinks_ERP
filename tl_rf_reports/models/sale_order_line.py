@@ -181,29 +181,70 @@ class SaleOrderLine(models.Model):
             # own is_late_order (round_management.MrpProduction), not the
             # sale line's overall lateness, decides whether that specific
             # box's rows are late.
+            # Normal (manufacturing) BoM: the Pack Box wizard
+            # (round_management/models/stock_fresh_box_wizard.py
+            # action_generate_mo) creates one MO per box directly for this
+            # line's product, so its own MOs already ARE the report rows.
             productions = self.env['mrp.production'].search(
                 [('production_sale_line_id', '=', self.id)]
             )
             vals_list = []
-            for move in productions.mapped('move_raw_ids'):
-                qty = move.product_uom_qty or 0.0
-                component = move.product_id
-                move_notes = move.special_requirements_notes or ''
+            for prod in productions:
+                qty = prod.product_qty or 0.0
+                component = prod.product_id
                 vals_list.append({
-                    'name': self._compose_report_name(f"{_format_report_qty(qty)} kg {component.name or ''}", move_notes),
+                    'name': self._compose_report_name(f"{_format_report_qty(qty)} kg {component.name or ''}", notes),
                     'product_id': component.id,
                     'box_content': f"{_format_report_qty(qty)} kg",
                     'qty': qty,
-                    'notes': move_notes,
-                    'late_order': bool(move.raw_material_production_id.is_late_order),
+                    'notes': notes,
+                    'late_order': bool(prod.is_late_order),
                     'from_bom': True,
                 })
+
+            if bom.type == 'phantom':
+                # Kit BoM: the wizard only creates a direct MO (picked up
+                # above) for a kit component that has its OWN manufacturing
+                # BoM - a component with no BoM at all is never manufactured
+                # on its own, so it never appears in `productions`. Add it
+                # here straight from the kit's BoM explosion instead.
+                component_products = bom.bom_line_ids.product_id
+                component_boms = self.env['mrp.bom']._bom_find(component_products) if component_products else {}
+
+                for bom_line in bom.bom_line_ids:
+                    component = bom_line.product_id
+                    if component_boms.get(component):
+                        continue
+
+                    if self.confirmed_qty > 0:
+                        for qty in range(int(self.confirmed_qty)):
+                            vals_list.append({
+                                'name': component.name,
+                                'product_id': component.id,
+                                'box_content': "",
+                                'qty': 1,
+                                'notes': notes,
+                                'late_order': False,
+                                'from_bom': True,
+                            })
+                    if self.late_qty_delta > 0:
+                        for qty in range(int(self.late_qty_delta)):
+                            vals_list.append({
+                                'name': component.name,
+                                'product_id': component.id,
+                                'box_content': "",
+                                'qty': 1,
+                                'notes': notes,
+                                'late_order': True,
+                                'from_bom': True,
+                            })
+
             return vals_list
 
-        if self.delivery_channel == 'courier':
-            if self.product_uom_qty <= 0:
-                return []
-            return [self._plain_report_line_vals(self.product_uom_qty, notes)]
+        # if self.delivery_channel == 'courier':
+        #     if self.product_uom_qty <= 0:
+        #         return []
+        #     return [self._plain_report_line_vals(self.product_uom_qty, notes)]
 
         vals_list = []
         if self.confirmed_qty > 0:

@@ -222,19 +222,20 @@ class ReportProductionReport(models.AbstractModel):
     # QWeb template, no wkhtmltopdf, no background job (see the "Print
     # Label" flow in production_report_wizard.py for the sibling pattern).
     # `productions` is the draft mrp.production recordset already filtered
-    # by ProductionReportWizard._get_production_domain(). A draft MO's own
-    # top-level product is a generic pack (e.g. "Salmon Fish Pack") - the
-    # actual box-type product to count (e.g. "0.5 kg Cod Fillets Boned")
-    # lives on its BOM/raw-material component lines (move_raw_ids), so the
-    # report groups those component lines, not mo.product_id.
+    # by ProductionReportWizard._get_production_domain(). Each MO's own
+    # product_id/product_qty IS the box-type product/qty to count (e.g.
+    # "0.5 kg Cod Fillets Boned") - the Pack Box wizard
+    # (round_management/models/stock_fresh_box_wizard.py action_generate_mo)
+    # creates one MO per box directly for that product, so the report reads
+    # the MOs themselves, not their raw-material component lines
+    # (move_raw_ids).
     #
-    # Consolidation: each component line (move_raw_ids entry) is one box.
-    # Lines for the same product AND the same "To Consume" quantity
-    # (product_uom_qty) consolidate into a single row: "Quantity" is the
-    # COUNT of such lines, and the row's product text is prefixed with that
-    # shared quantity (e.g. "1kg Cod Fillets Boned"). A line carrying a
+    # Consolidation: each MO is one box. MOs for the same product AND the
+    # same quantity (product_qty) consolidate into a single row: "Quantity"
+    # is the COUNT of such MOs, and the row's product text is prefixed with
+    # that shared quantity (e.g. "1kg Cod Fillets Boned"). An MO carrying a
     # customer special note (production_sale_line_id.special_requirements_notes_id)
-    # consolidates with any other line carrying that SAME note record (by
+    # consolidates with any other MO carrying that SAME note record (by
     # id), even across different sale order lines, so identically-noted
     # boxes of the same product/quantity share one row while a different
     # note still gets its own.
@@ -245,16 +246,14 @@ class ReportProductionReport(models.AbstractModel):
         if not productions:
             return None
 
-        moves = productions.mapped('move_raw_ids')
         if wizard.category_ids:
             allowed_categ_ids = set(wizard.category_ids.ids)
-            moves = moves.filtered(lambda m: m.product_id.categ_id.id in allowed_categ_ids)
-        if not moves:
+            productions = productions.filtered(lambda m: m.product_id.categ_id.id in allowed_categ_ids)
+        if not productions:
             return None
 
         depots_map = {}
-        for move in moves:
-            mo = move.raw_material_production_id
+        for mo in productions:
             depot = mo.depot_id
             depot_name = depot.name or _('Grimsby')
             depot_key = depot.id or 0
@@ -270,20 +269,20 @@ class ReportProductionReport(models.AbstractModel):
             if mo.batch_delivery_date:
                 d_map['dates'].add(mo.batch_delivery_date)
 
-            product = move.product_id
+            product = mo.product_id
             categ = product.categ_id
             categ_name = (categ.name or _('Other')).strip().upper()
             categ_key = categ.id or 0
             if categ_key not in d_map['categories_map']:
                 d_map['categories_map'][categ_key] = {'categ_name': categ_name, 'lines': {}}
 
-            qty_per_line = move.product_uom_qty or 0.0
-            special_note = (move.special_requirements_notes or '').strip()
-            # Notes-less lines consolidate across any sale order line; a
-            # noted line consolidates with any other line carrying the SAME
-            # note record (by id), regardless of which sale order line it
-            # came from.
-            notes_scope = move.production_sale_line_id.special_requirements_notes_id.id if special_note else 0
+            qty_per_line = mo.product_qty or 0.0
+            special_note = (mo.production_sale_line_id.special_requirements_notes_id.name or '').strip()
+            # Notes-less MOs consolidate across any sale order line; a noted
+            # MO consolidates with any other MO carrying the SAME note
+            # record (by id), regardless of which sale order line it came
+            # from.
+            notes_scope = mo.production_sale_line_id.special_requirements_notes_id.id if special_note else 0
             line_key = (product.id, qty_per_line, notes_scope)
 
             c_lines = d_map['categories_map'][categ_key]['lines']
