@@ -94,7 +94,7 @@ class PackingListWizard(models.TransientModel):
     def _onchange_report_type(self):
         self.include_late_orders = self.report_type == 'late'
         self.driver_packing_list = self.report_type == 'driver'
-        if self.driver_packing_list:
+        if self.driver_packing_list or self.include_late_orders:
             self.delivery_channel = 'regal_van'
 
     @api.onchange('driver_packing_list')

@@ -154,24 +154,42 @@ class SaleOrderLine(models.Model):
             'late_order': late,
         }
 
+    def _get_report_qty_split(self):
+        """Returns (normal_qty, late_qty) for this line's report rows. Regal
+        Van reads confirmed_qty/late_qty_delta (the frozen batch-print
+        snapshot plus any change made after it). Courier has no batch/
+        confirmed_qty concept: a late Courier order's lines are flagged
+        entirely late via lock_line (see _compute_late_order), so
+        late_qty_delta already holds the FULL live product_uom_qty in that
+        case and normal_qty stays 0; a non-late Courier order instead
+        reports its live product_uom_qty as the normal qty."""
+        self.ensure_one()
+        if self.delivery_channel == 'courier':
+            if self.late_qty_delta:
+                return 0.0, self.late_qty_delta
+            return self.product_uom_qty, 0.0
+        return self.confirmed_qty, self.late_qty_delta
+
     def _get_report_line_vals(self, bom):
         """Builds the create-vals for this line's report lines (see
         report_line_ids). `bom` is the product's BoM (or a falsy recordset)
         as resolved by mrp.bom._bom_find, passed in so callers can look it
         up once for a whole batch of lines instead of per line.
 
-        Courier has no confirmed_qty/late split (its lines aren't locked in
-        by a batch print), so it always gets a single row built from the
-        live product_uom_qty. Regal Van is sourced from confirmed_qty (the
-        frozen snapshot taken when the batch was locked in) plus, when the
-        qty changed afterwards, a SEPARATE late_qty_delta row - the two are
-        never merged, so a late addition/removal is never silently folded
-        into what was already packed."""
+        Normal/late qty is sourced via _get_report_qty_split(): Regal Van
+        from confirmed_qty (the frozen snapshot taken when the batch was
+        locked in) plus, when the qty changed afterwards, a SEPARATE
+        late_qty_delta row - the two are never merged, so a late
+        addition/removal is never silently folded into what was already
+        packed. Courier has no batch/confirmed_qty concept, so it instead
+        gets a single live-product_uom_qty row, entirely late when the
+        order itself is late."""
         self.ensure_one()
         if not self.product_id:
             return []
 
         notes = self.special_requirements_notes_id.name or ''
+        normal_qty, late_qty = self._get_report_qty_split()
 
         if bom:
             # A line can be split across several MOs (one per box, e.g. the
@@ -216,8 +234,8 @@ class SaleOrderLine(models.Model):
                     if component_boms.get(component):
                         continue
 
-                    if self.confirmed_qty > 0:
-                        for qty in range(int(self.confirmed_qty)):
+                    if normal_qty > 0:
+                        for _box_idx in range(int(normal_qty)):
                             vals_list.append({
                                 'name': component.name,
                                 'product_id': component.id,
@@ -227,8 +245,8 @@ class SaleOrderLine(models.Model):
                                 'late_order': False,
                                 'from_bom': True,
                             })
-                    if self.late_qty_delta > 0:
-                        for qty in range(int(self.late_qty_delta)):
+                    if late_qty > 0:
+                        for _box_idx in range(int(late_qty)):
                             vals_list.append({
                                 'name': component.name,
                                 'product_id': component.id,
@@ -241,16 +259,11 @@ class SaleOrderLine(models.Model):
 
             return vals_list
 
-        # if self.delivery_channel == 'courier':
-        #     if self.product_uom_qty <= 0:
-        #         return []
-        #     return [self._plain_report_line_vals(self.product_uom_qty, notes)]
-
         vals_list = []
-        if self.confirmed_qty > 0:
-            vals_list.append(self._plain_report_line_vals(self.confirmed_qty, notes))
-        if self.late_qty_delta:
-            vals_list.append(self._plain_report_line_vals(self.late_qty_delta, notes, late=True))
+        if normal_qty > 0:
+            vals_list.append(self._plain_report_line_vals(normal_qty, notes))
+        if late_qty:
+            vals_list.append(self._plain_report_line_vals(late_qty, notes, late=True))
         return vals_list
 
     @api.model_create_multi

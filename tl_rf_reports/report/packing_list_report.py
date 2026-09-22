@@ -1031,7 +1031,16 @@ class ReportPackingList(models.AbstractModel):
                     'qty': 0.0,
                     'sort_num': self._extract_sort_number(product),
                 }
-            c_prods[group_key]['qty'] += report_line.qty
+            # A BoM row is one MO's raw-material consumption - one row is
+            # one physical box, so same-product/qty rows are COUNTED (a
+            # 0.5kg box must count as 1, not 0.5). A plain non-BoM row's
+            # qty IS the line's own confirmed_qty/late_qty_delta amount (no
+            # box-splitting happens for it), so it's SUMMED instead - same
+            # convention as _generate_van_pdf above.
+            if report_line.from_bom:
+                c_prods[group_key]['qty'] += 1
+            else:
+                c_prods[group_key]['qty'] += report_line.qty
 
             unit_weight_kg = product.weight or product.product_tmpl_id.weight or 0.0
             o_data['total_order_weight_g'] += unit_weight_kg * report_line.qty * 1000
