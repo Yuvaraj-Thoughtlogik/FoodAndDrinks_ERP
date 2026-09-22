@@ -122,6 +122,54 @@ class StockFreshBoxWizard(models.TransientModel):
 
         return ordered_qty
 
+    def _build_wizard_line_vals(self, line, base_vals, uom, normal_qty, late_qty, has_bom):
+        """Builds the wizard line dict(s) for a given qty/uom: 1kg boxes when
+        has_bom and uom is weight-based, otherwise whole "Full Bulk" line(s)."""
+        vals_list = []
+        is_kg_uom = self._is_weight_uom(uom)
+
+        if has_bom and is_kg_uom:
+            total_qty = normal_qty + late_qty
+            total_weight = self._get_line_effective_weight(line, total_qty)
+            if total_weight <= 0:
+                return vals_list
+
+            late_weight = (total_weight * (late_qty / total_qty)) if total_qty > 0 else 0.0
+            normal_weight = total_weight - late_weight
+
+            max_box_capacity = 1.0
+            box_specs = []
+            for portion_weight, is_late in ((normal_weight, False), (late_weight, True)):
+                remaining_weight = portion_weight
+                n_boxes = math.ceil(portion_weight / max_box_capacity) if portion_weight > 0 else 0
+                for _box_idx in range(n_boxes):
+                    box_weight = min(remaining_weight, max_box_capacity)
+                    remaining_weight = max(0.0, remaining_weight - box_weight)
+                    box_specs.append((box_weight, is_late))
+
+            number_of_boxes = len(box_specs)
+            for box_no, (box_weight, is_late) in enumerate(box_specs, start=1):
+                line_dict = base_vals.copy()
+                line_dict.update({
+                    'box_number': f"Box {box_no}/{number_of_boxes}",
+                    'box_weight': round(box_weight, 3),
+                    'is_late_order': is_late,
+                })
+                vals_list.append(line_dict)
+        else:
+            for portion_qty, is_late in ((normal_qty, False), (late_qty, True)):
+                if portion_qty <= 0:
+                    continue
+                line_dict = base_vals.copy()
+                line_dict.update({
+                    'box_number': "Full Bulk",
+                    'box_weight': round(portion_qty, 3),
+                    'is_late_order': is_late,
+                })
+                vals_list.append(line_dict)
+
+        return vals_list
+
     def action_analyze_orders(self):
         self.ensure_one()
         self.line_ids.unlink()
@@ -187,6 +235,16 @@ class StockFreshBoxWizard(models.TransientModel):
         unique_products = order_lines.mapped('product_id')
         boms_per_product = mrp_bom_obj._bom_find(unique_products)
 
+        # Pre-fetch the direct components' own BoMs (1 level deep) for any
+        # Kit (phantom) BoM among the analyzed products.
+        kit_component_products = self.env['product.product']
+        for product, bom in boms_per_product.items():
+            if bom and bom.type == 'phantom':
+                kit_component_products |= bom.bom_line_ids.product_id
+        component_boms_per_product = (
+            mrp_bom_obj._bom_find(kit_component_products) if kit_component_products else {}
+        )
+
         wizard_line_vals = []
 
         for line in order_lines:
@@ -235,8 +293,10 @@ class StockFreshBoxWizard(models.TransientModel):
                 'category_id': product.categ_id.id if product.categ_id else False,
             }
 
-            has_bom = bool(boms_per_product.get(product))
+            bom = boms_per_product.get(product)
+            has_bom = bool(bom)
             is_kg_uom = self._is_weight_uom(line_uom)
+            is_kit_bom = has_bom and bom.type == 'phantom'
 
             # late_qty_delta says how much of product_uom_qty is a late
             # addition made after confirmed_qty was locked in - e.g. qty=4,
@@ -257,51 +317,45 @@ class StockFreshBoxWizard(models.TransientModel):
                 late_qty = late_qty_delta if late_qty_delta > 0 else 0.0
                 normal_qty = max(0.0, line.product_uom_qty - late_qty)
 
-            # 1. ONLY KG/Weight UOM items with BoM get split
-            if has_bom and is_kg_uom:
-                total_qty = normal_qty + late_qty
-                total_weight = self._get_line_effective_weight(line, total_qty)
-                if total_weight <= 0:
+            # 0. Kit (phantom) BoMs: don't box the kit itself. Instead, look
+            # one level down at its direct components - any component whose
+            # OWN BoM is a manufacturing ("normal" type) BoM gets its own
+            # wizard line (exploded via the BoM line's qty ratio); every
+            # other component of the kit is skipped. If none of the kit's
+            # components qualify, the whole kit line is skipped.
+            if is_kit_bom:
+                kit_produced_qty = bom.product_qty or 1.0
+                matched_bom_lines = [
+                    bom_line for bom_line in bom.bom_line_ids
+                    if component_boms_per_product.get(bom_line.product_id)
+                    and component_boms_per_product[bom_line.product_id].type == 'normal'
+                ]
+                if not matched_bom_lines:
                     continue
 
-                # Split the effective weight proportionally between the
-                # normal and late portions, then box each portion on its
-                # own (up to 1kg per box).
-                late_weight = (total_weight * (late_qty / total_qty)) if total_qty > 0 else 0.0
-                normal_weight = total_weight - late_weight
+                for bom_line in matched_bom_lines:
+                    comp_product = bom_line.product_id
+                    ratio = (bom_line.product_qty / kit_produced_qty) if kit_produced_qty else 0.0
+                    comp_uom = bom_line.product_uom_id or comp_product.uom_id
 
-                max_box_capacity = 1.0
-                box_specs = []
-                for portion_weight, is_late in ((normal_weight, False), (late_weight, True)):
-                    remaining_weight = portion_weight
-                    n_boxes = math.ceil(portion_weight / max_box_capacity) if portion_weight > 0 else 0
-                    for _box_idx in range(n_boxes):
-                        box_weight = min(remaining_weight, max_box_capacity)
-                        remaining_weight = max(0.0, remaining_weight - box_weight)
-                        box_specs.append((box_weight, is_late))
-
-                number_of_boxes = len(box_specs)
-                for box_no, (box_weight, is_late) in enumerate(box_specs, start=1):
-                    line_dict = base_vals.copy()
-                    line_dict.update({
-                        'box_number': f"Box {box_no}/{number_of_boxes}",
-                        'box_weight': round(box_weight, 3),
-                        'is_late_order': is_late,
+                    comp_vals = base_vals.copy()
+                    comp_vals.update({
+                        'product_id': comp_product.id,
+                        'product_code': comp_product.default_code or '',
+                        'product_name': comp_product.name,
+                        'uom_id': comp_uom.id,
+                        'category_id': comp_product.categ_id.id if comp_product.categ_id else False,
                     })
-                    wizard_line_vals.append(line_dict)
+                    wizard_line_vals.extend(self._build_wizard_line_vals(
+                        line, comp_vals, comp_uom, normal_qty * ratio, late_qty * ratio, has_bom=True
+                    ))
 
-            # 2. Non-KG UOMs (EACH/Units, etc.) or items without BoM stay whole
+            # 1. ONLY KG/Weight UOM items with BoM get split; non-KG UOMs
+            # (EACH/Units, etc.) or items without BoM stay whole ("Full Bulk")
             else:
-                for portion_qty, is_late in ((normal_qty, False), (late_qty, True)):
-                    if portion_qty <= 0:
-                        continue
-                    line_dict = base_vals.copy()
-                    line_dict.update({
-                        'box_number': "Full Bulk",
-                        'box_weight': round(portion_qty, 3),
-                        'is_late_order': is_late,
-                    })
-                    wizard_line_vals.append(line_dict)
+                wizard_line_vals.extend(self._build_wizard_line_vals(
+                    line, base_vals, line_uom, normal_qty, late_qty, has_bom
+                ))
 
         if wizard_line_vals:
             self.env['stock.fresh.box.wizard.line'].create(wizard_line_vals)
