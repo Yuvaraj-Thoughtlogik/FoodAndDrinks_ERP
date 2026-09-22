@@ -70,9 +70,10 @@ class ProductionLabelWizard(models.TransientModel):
     category_id = fields.Many2one(
         'product.category',
         string='Category',
+        required=True,
         help="Select a single product category to include in the labels and, for "
-             "Frozen/Chilled, to choose the matching label layout below. Leave "
-             "empty to include all categories."
+             "Frozen/Chilled/Fresh, to choose the matching label layout below. "
+             "A category must be selected before labels can be printed."
     )
 
     category_name = fields.Char(
@@ -101,6 +102,15 @@ class ProductionLabelWizard(models.TransientModel):
         help="Label layout to print when Category is 'Chilled'."
     )
 
+    fresh_label_type = fields.Selection(
+        selection=[
+            ('fresh_label', 'Fresh Label'),
+        ],
+        string='Label Format',
+        default='fresh_label',
+        help="Label layout to print when Category is 'Fresh'."
+    )
+
     def _get_selected_label_type(self):
         self.ensure_one()
         category_name = self.category_id.name if self.category_id else False
@@ -108,6 +118,8 @@ class ProductionLabelWizard(models.TransientModel):
             return self.frozen_label_type
         if category_name == 'Chilled':
             return self.chilled_label_type
+        if category_name == 'Fresh':
+            return self.fresh_label_type
         return False
 
     @api.onchange('delivery_date_from')
@@ -204,6 +216,9 @@ class ProductionLabelWizard(models.TransientModel):
         """Generates and downloads the label PDF matching the selected category and format."""
         self.ensure_one()
 
+        if not self.category_id:
+            raise UserError(_("Please select a Category before printing labels."))
+
         if self.category_name == 'Frozen':
             if self.frozen_label_type == 'frozen_label':
                 report_model = self.env['report.tl_rf_reports.report_production_label_document_frozen']
@@ -211,11 +226,35 @@ class ProductionLabelWizard(models.TransientModel):
             elif self.frozen_label_type == 'plain_frozen_label':
                 report_model = self.env['report.tl_rf_reports.report_production_label_plain_frozen']
                 filename_suffix = 'Plain_Frozen'
+            elif self.frozen_label_type == 'plain_label':
+                report_model = self.env['report.tl_rf_reports.report_production_label_plain']
+                filename_suffix = 'Plain_Label'
             else:
                 raise UserError(_(
                     "The '%s' label format is not implemented yet.",
                     dict(self._fields['frozen_label_type'].selection).get(self.frozen_label_type, self.frozen_label_type),
                 ))
+        elif self.category_name == 'Chilled':
+            if self.chilled_label_type == 'front_sleeve_label':
+                report_model = self.env['report.tl_rf_reports.report_production_label_chilled_front']
+                filename_suffix = 'Chilled_Front_Sleeve'
+            else:
+                raise UserError(_(
+                    "The '%s' label format is not implemented yet.",
+                    dict(self._fields['chilled_label_type'].selection).get(self.chilled_label_type, self.chilled_label_type),
+                ))
+        elif self.category_name == 'Fresh':
+            if self.fresh_label_type != 'fresh_label':
+                raise UserError(_(
+                    "The '%s' label format is not implemented yet.",
+                    dict(self._fields['fresh_label_type'].selection).get(self.fresh_label_type, self.fresh_label_type),
+                ))
+            if self.delivery_channel == 'courier':
+                report_model = self.env['report.tl_rf_reports.report_production_label_document_courier']
+                filename_suffix = 'Courier'
+            else:
+                report_model = self.env['report.tl_rf_reports.report_production_label_document_regal_van']
+                filename_suffix = 'Regal_Van'
         elif self.delivery_channel == 'courier':
             report_model = self.env['report.tl_rf_reports.report_production_label_document_courier']
             filename_suffix = 'Courier'
@@ -565,4 +604,278 @@ class ProductionLabelWizard(models.TransientModel):
             'freeze_date_display': freeze_date_display,
             'best_before_display': best_before_display,
             'company_address': company_address,
+        }
+
+    def _get_plain_label_data(self):
+        """Fetches label data for Plain Product Labels (Frozen) from matching Manufacturing Orders (MOs).
+        Applies filters: Delivery Date From/To, Product Category, Depot, Late Orders.
+        """
+        self.ensure_one()
+        label_lines = []
+        domain = self._get_production_domain()
+        productions = self.env['mrp.production'].search(domain)
+
+        # Process matching Manufacturing Orders
+        for mo in productions:
+            mo_created_date = (
+                mo.create_date.date() if mo.create_date
+                else (self.packing_date_from or fields.Date.context_today(self))
+            )
+
+            # Check raw material component lines (move_raw_ids) if MO is a composite/generic pack
+            matching_moves = mo.move_raw_ids.filtered(
+                lambda m: not self.category_id or m.product_id.categ_id.id == self.category_id.id
+            ) if mo.move_raw_ids else self.env['stock.move']
+
+            if matching_moves:
+                for move in matching_moves:
+                    label_data = self._build_plain_label_dict(move.product_id, mo_created_date, mo)
+                    label_lines.append(label_data)
+            elif mo.product_id and (not self.category_id or mo.product_id.categ_id.id == self.category_id.id or mo.product_category_id.id == self.category_id.id):
+                label_data = self._build_plain_label_dict(mo.product_id, mo_created_date, mo)
+                label_lines.append(label_data)
+
+        # Fallback to matching Sales Orders if no MOs found, ensuring preview/print consistency
+        if not label_lines:
+            orders = self._get_matching_orders()
+            for order in orders:
+                mo_date = (
+                    getattr(order, 'packing_date', False)
+                    or (order.delivery_date - timedelta(days=1) if order.delivery_date else False)
+                    or fields.Date.context_today(self)
+                )
+                for line in order.order_line:
+                    product = line.product_id
+                    if not product or not product.categ_id:
+                        continue
+                    if self.category_id and product.categ_id.id != self.category_id.id:
+                        continue
+                    label_data = self._build_plain_label_dict(product, mo_date)
+                    label_lines.append(label_data)
+
+        return label_lines
+
+    def _build_plain_label_dict(self, product, mo_created_date, mo=None):
+        """Constructs a dictionary of all fields required by the Plain Label (Frozen) template."""
+        template = getattr(product, 'product_tmpl_id', product)
+
+        # 1. Product Name (split into main name and subtitle if applicable)
+        raw_name = (product.name or '').strip()
+        product_name_main = raw_name
+        product_name_sub = ''
+
+        if '\n' in raw_name:
+            parts = raw_name.split('\n', 1)
+            product_name_main = parts[0].strip()
+            product_name_sub = parts[1].strip()
+        elif ' with ' in raw_name.lower():
+            idx = raw_name.lower().index(' with ')
+            product_name_main = raw_name[:idx].strip()
+            product_name_sub = raw_name[idx+1:].strip()  # 'with ...'
+        elif ' - ' in raw_name:
+            parts = raw_name.split(' - ', 1)
+            product_name_main = parts[0].strip()
+            product_name_sub = parts[1].strip()
+
+        # 2. Cooking Instructions - fetched straight from the product's (or
+        # template's) cooking_instructions_html field. No hardcoded recipe
+        # text: if the field is empty, the section is left blank.
+        cooking_html = (
+            getattr(product, 'cooking_instructions_html', '')
+            or getattr(template, 'cooking_instructions_html', '')
+            or ''
+        )
+        # cooking_heading = "Oven Bake from chilled:"
+        cooking_instructions = cooking_html
+
+        # 3. Ingredients (with BOLD allergens) - fetched straight from the
+        # product's (or template's) ingredients_html field. No hardcoded
+        # ingredient list: if the field is empty, the section is left blank.
+        ingredients_html = (
+            getattr(product, 'ingredients_html', '')
+            or getattr(template, 'ingredients_html', '')
+            or ''
+        )
+
+        # 4. Hardcoded Notices
+        allergen_notice = "Allergens including Gluten are in <b>Bold</b>"
+        advisory_notice = "Although every effort has been made to remove bones, some may remain."
+
+        # 5. Catch Info - fetched straight from the product's (or template's)
+        # fish_info field. No hardcoded catch-area text: if the field is
+        # empty, the section is left blank.
+        fish_info = getattr(product, 'fish_info', '') or getattr(template, 'fish_info', '') or ''
+        catch_info = fish_info.split('\n')[0].strip() if fish_info else ''
+
+        # 6. Hardcoded Storage & Freezing Notices (Bold)
+        storage_notice = "Store at or below 5°C."
+        freezing_notice = "Use by date shown on label or if freezing we recommend freezing on day of purchase."
+
+        # 7. Production Date: MO Created Date (DD MMMM, YYYY e.g. "15 September, 2026")
+        production_date_display = mo_created_date.strftime('%d %B, %Y') if mo_created_date else ''
+
+        # 8. Use By Date: MO Created Date + Product Expiration Duration (DD MMMM, YYYY e.g. "18 September, 2026")
+        # No fabricated fallback duration - if the product has no
+        # expiration field set, no Use By date is calculated/printed.
+        exp_days = (
+            getattr(product, 'use_frozen_days', 0)
+            or getattr(template, 'use_frozen_days', 0)
+            or getattr(product, 'expiration_time', 0)
+            or getattr(template, 'expiration_time', 0)
+            or getattr(product, 'expiration_duration', 0)
+            or getattr(template, 'expiration_duration', 0)
+            or getattr(product, 'use_fresh_days', 0)
+            or getattr(template, 'use_fresh_days', 0)
+            or 0
+        )
+        use_by_dt = mo_created_date + timedelta(days=exp_days) if (mo_created_date and exp_days) else False
+        use_by_display = use_by_dt.strftime('%d %B, %Y') if use_by_dt else ''
+
+        # 9. Product Weight (e.g. "Min Weight: 1.00 kg") - taken from the
+        # Manufacturing Order's Quantity (product_qty) and its Unit of
+        # Measure (product_uom_id), NOT from the product's own Inventory >
+        # Weight field. If there's no MO (e.g. the Sales Order fallback
+        # path below, which has no MO to read a quantity from), no Min
+        # Weight line is printed rather than falling back to product.weight.
+        if mo and mo.product_qty and mo.product_uom_id:
+            min_weight_display = f"Min Weight: {mo.product_qty:.2f} {mo.product_uom_id.name}"
+        else:
+            min_weight_display = ''
+
+        # 10. Product Nutrition - sourced from the product's (or its template's)
+        # Nutrition field. No hardcoded/fabricated nutrition values: if the
+        # field is empty, the label simply prints nothing for this section
+        # rather than a fake per-100g breakdown.
+        nutrition_html = (
+            getattr(product, 'nutritional_info_html', '')
+            or getattr(template, 'nutritional_info_html', '')
+            or ''
+        )
+
+        # 11. Company Address (Footer) - fetched from the company record,
+        # no hardcoded address text.
+        company = self.env.company
+        address_parts = [
+            company.name,
+            company.street,
+            company.street2,
+            company.city,
+            company.state_id.name if company.state_id else False,
+            company.zip,
+        ]
+        company_address = ', '.join(part for part in address_parts if part)
+
+        return {
+            'product_name': raw_name,
+            'product_name_main': product_name_main,
+            'product_name_sub': product_name_sub,
+            # 'cooking_heading': cooking_heading,
+            'cooking_instructions': cooking_instructions,
+            'cooking_instructions_html': cooking_html,
+            'ingredients': ingredients_html,
+            'ingredients_html': ingredients_html,
+            'allergen_notice': allergen_notice,
+            'advisory_notice': advisory_notice,
+            'catch_info': catch_info,
+            'storage_notice': storage_notice,
+            'freezing_notice': freezing_notice,
+            'production_date_display': production_date_display,
+            'use_by_display': use_by_display,
+            'min_weight_display': min_weight_display,
+            'nutrition_html': nutrition_html,
+            'company_address': company_address,
+        }
+
+    def _get_chilled_front_sleeve_label_data(self):
+        """Fetches label data for Chilled Front Sleeve Labels from matching Manufacturing Orders (MOs).
+        Applies filters: Delivery Date From/To, Product Category, Depot, Late Orders.
+        """
+        self.ensure_one()
+        label_lines = []
+        domain = self._get_production_domain()
+        productions = self.env['mrp.production'].search(domain)
+
+        # Process matching Manufacturing Orders
+        for mo in productions:
+            mo_created_date = (
+                mo.create_date.date() if mo.create_date
+                else (self.packing_date_from or fields.Date.context_today(self))
+            )
+
+            # Check raw material component lines (move_raw_ids) if MO is a composite/generic pack
+            matching_moves = mo.move_raw_ids.filtered(
+                lambda m: not self.category_id or m.product_id.categ_id.id == self.category_id.id
+            ) if mo.move_raw_ids else self.env['stock.move']
+
+            if matching_moves:
+                for move in matching_moves:
+                    label_data = self._build_chilled_front_sleeve_label_dict(move.product_id, mo_created_date, mo)
+                    label_lines.append(label_data)
+            elif mo.product_id and (not self.category_id or mo.product_id.categ_id.id == self.category_id.id or mo.product_category_id.id == self.category_id.id):
+                label_data = self._build_chilled_front_sleeve_label_dict(mo.product_id, mo_created_date, mo)
+                label_lines.append(label_data)
+
+        # Fallback to matching Sales Orders if no MOs found, ensuring preview/print consistency
+        if not label_lines:
+            orders = self._get_matching_orders()
+            for order in orders:
+                mo_date = (
+                    getattr(order, 'packing_date', False)
+                    or (order.delivery_date - timedelta(days=1) if order.delivery_date else False)
+                    or fields.Date.context_today(self)
+                )
+                for line in order.order_line:
+                    product = line.product_id
+                    if not product or not product.categ_id:
+                        continue
+                    if self.category_id and product.categ_id.id != self.category_id.id:
+                        continue
+                    label_data = self._build_chilled_front_sleeve_label_dict(product, mo_date)
+                    label_lines.append(label_data)
+
+        return label_lines
+
+    def _build_chilled_front_sleeve_label_dict(self, product, mo_created_date, mo=None):
+        """Constructs a dictionary of all fields required by the Chilled Front Sleeve Label template."""
+        template = getattr(product, 'product_tmpl_id', product)
+
+        # 1. Product Name
+        product_name = (product.name or '').strip()
+
+        # 2. Cooking Instructions - fetched dynamically from the product's cooking_instructions_html
+        cooking_html = (
+            getattr(product, 'cooking_instructions_html', '')
+            or getattr(template, 'cooking_instructions_html', '')
+            or ''
+        )
+        cooking_instructions = (
+            getattr(product, 'cooking_instructions', '')
+            or getattr(template, 'cooking_instructions', '')
+            or cooking_html
+        )
+
+        # 3. Production Date: MO Created Date (DD MMMM, YYYY e.g. "15 September, 2026")
+        production_date_display = mo_created_date.strftime('%d %B, %Y') if mo_created_date else ''
+
+        # 4. Expiry Date: MO Created Date + Product Expiration Duration (use_fresh_days, expiration_time, expiration_duration)
+        exp_days = (
+            getattr(product, 'use_fresh_days', 0)
+            or getattr(template, 'use_fresh_days', 0)
+            or getattr(product, 'expiration_time', 0)
+            or getattr(template, 'expiration_time', 0)
+            or getattr(product, 'expiration_duration', 0)
+            or getattr(template, 'expiration_duration', 0)
+            or getattr(product, 'use_frozen_days', 0)
+            or getattr(template, 'use_frozen_days', 0)
+            or 3  # Standard 3-day chilled duration if unspecified
+        )
+        use_by_dt = mo_created_date + timedelta(days=exp_days) if (mo_created_date and exp_days) else False
+        use_by_display = use_by_dt.strftime('%d %B, %Y') if use_by_dt else ''
+
+        return {
+            'product_name': product_name,
+            'cooking_instructions': cooking_instructions,
+            'cooking_instructions_html': cooking_html,
+            'production_date_display': production_date_display,
+            'use_by_display': use_by_display,
         }

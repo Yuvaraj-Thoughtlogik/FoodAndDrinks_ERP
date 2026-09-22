@@ -34,7 +34,7 @@
                         </group>
 
                         <group string="Categories" colspan="4">
-                            <field name="category_id" placeholder="All Categories"/>
+                            <field name="category_id" required="1"/>
                             <field name="category_name" invisible="1"/>
                         </group>
 
@@ -49,6 +49,14 @@
                         <group string="Chilled Label Type" colspan="4"
                                invisible="category_name != 'Chilled'">
                             <field name="chilled_label_type"
+                                   widget="radio"
+                                   options="{'horizontal': true}"
+                                   nolabel="1"/>
+                        </group>
+
+                        <group string="Label Format" colspan="4"
+                               invisible="category_name != 'Fresh'">
+                            <field name="fresh_label_type"
                                    widget="radio"
                                    options="{'horizontal': true}"
                                    nolabel="1"/>
