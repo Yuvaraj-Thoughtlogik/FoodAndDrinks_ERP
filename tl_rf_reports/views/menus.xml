@@ -68,6 +68,14 @@
         action="action_round_batch_activity_wizard"
         sequence="45" />
 
+    <!-- Order Lines Menu Item under Round Management -> Order Management,
+         placed right after Orders -->
+<!--    <menuitem id="menu_sale_order_line_report_lines"-->
+<!--        name="Order Lines"-->
+<!--        parent="round_management.menu_round_management_order_management_root"-->
+<!--        action="action_sale_order_line_report_lines"-->
+<!--        sequence="12" />-->
+
     <record id="action_bulk_confirm_orders" model='ir.actions.server'>
         <field name="name">Bulk Confirm Orders</field>
         <field name="model_id" ref="sale.model_sale_order" />
