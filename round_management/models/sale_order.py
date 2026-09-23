@@ -173,6 +173,13 @@ class SaleOrder(models.Model):
         ('Yes', 'Yes'),
         ('No', 'No')
     ], string="Alt Addr", compute="_compute_has_alt_address", store=True)
+    
+    # Computed string field to combine/represent the selected payment mode
+    pay_type = fields.Char(
+        string="Pay Type",
+        compute="_compute_pay_type",
+        store=True
+    )
 
     @api.depends('partner_id', 'partner_shipping_id')
     def _compute_has_alt_address(self):
