@@ -46,7 +46,7 @@
                                    nolabel="1"/>
                         </group>
 
-                        <group string="Chilled Label Type" colspan="4"
+                        <group string="Label Template" colspan="4"
                                invisible="category_name != 'Chilled'">
                             <field name="chilled_label_type"
                                    widget="radio"
