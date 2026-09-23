@@ -25,7 +25,8 @@
                     <button name="action_analyze_orders" 
                             string="Analyze Orders &amp; Calculate Boxes" 
                             type="object" 
-                            class="btn-secondary mb-3"/>
+                            class="btn btn-success rounded-pill shadow-sm text-uppercase fw-semibold px-3 py-1 mb-3"
+                            icon="fa-calculator"/>
 
                     <notebook>
                         <page string="Box Breakdown Table (All Categories)">
