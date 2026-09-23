@@ -75,6 +75,12 @@ class StockFreshBoxWizard(models.TransientModel):
     is_late_order = fields.Boolean(string="Late Order", default=False)
     line_ids = fields.One2many('stock.fresh.box.wizard.line', 'wizard_id', string="Analysis Lines")
 
+    @api.onchange('start_date')
+    def _onchange_start_date(self):
+        """ Automatically update end_date to match start_date when start_date changes """
+        if self.start_date:
+            self.end_date = self.start_date
+
     def _is_weight_uom(self, uom):
         if not uom:
             return False
@@ -210,14 +216,6 @@ class StockFreshBoxWizard(models.TransientModel):
                 invalid_batches_info.append(
                     f"• Batch '{batch.display_name}' (Order: {order.name}) is in '{state_label}' state. Required: Printed."
                 )
-            # if not is_late and batch_state != 'prt':
-            #     invalid_batches_info.append(
-            #         f"• Batch '{batch.display_name}' (Order: {order.name}) is in '{state_label}' state. Required: Printed."
-            #     )
-            # elif is_late and batch_state not in ['com', 'done', 'completed']:
-            #     invalid_batches_info.append(
-            #         f"• Batch '{batch.display_name}' [Late Order: {order.name}] is in '{state_label}' state. Required: Completed."
-            #     )
 
             validated_batches.add(batch.id)
 
@@ -235,8 +233,7 @@ class StockFreshBoxWizard(models.TransientModel):
         unique_products = order_lines.mapped('product_id')
         boms_per_product = mrp_bom_obj._bom_find(unique_products)
 
-        # Pre-fetch the direct components' own BoMs (1 level deep) for any
-        # Kit (phantom) BoM among the analyzed products.
+        # Pre-fetch direct components' own BoMs for Kit (phantom) BoMs
         kit_component_products = self.env['product.product']
         for product, bom in boms_per_product.items():
             if bom and bom.type == 'phantom':
@@ -295,48 +292,32 @@ class StockFreshBoxWizard(models.TransientModel):
 
             bom = boms_per_product.get(product)
             has_bom = bool(bom)
-            is_kg_uom = self._is_weight_uom(line_uom)
             is_kit_bom = has_bom and bom.type == 'phantom'
 
-            # late_qty_delta says how much of product_uom_qty is a late
-            # addition made after confirmed_qty was locked in - e.g. qty=4,
-            # late_qty_delta=1.5 means 2.5 is the normal (already-confirmed)
-            # portion and 1.5 is the late one. The two portions are boxed
-            # SEPARATELY below so a fractional boundary (2.5 -> 1/1/0.5)
-            # doesn't get swallowed into uniform 1kg/1-unit boxes cut from
-            # the combined total.
             late_qty_delta = line.late_qty_delta or 0.0
 
             if self.is_late_order:
-                # Wizard is filtering Late Orders only - the normal portion
-                # was already boxed in an earlier (non-late) run, so only
-                # the added/late quantity itself should be packed here.
                 normal_qty = 0.0
                 late_qty = late_qty_delta
             else:
                 late_qty = late_qty_delta if late_qty_delta > 0 else 0.0
                 normal_qty = max(0.0, line.product_uom_qty - late_qty)
 
-            # 0. Kit (phantom) BoMs: don't box the kit itself. Instead, look
-            # one level down at its direct components - any component whose
-            # OWN BoM is a manufacturing ("normal" type) BoM gets its own
-            # wizard line (exploded via the BoM line's qty ratio); every
-            # other component of the kit is skipped. If none of the kit's
-            # components qualify, the whole kit line is skipped.
+            # 0. Kit (phantom) BoMs: don't box the kit parent itself. Instead, explode all
+            # components (including purchased products).
             if is_kit_bom:
                 kit_produced_qty = bom.product_qty or 1.0
-                matched_bom_lines = [
-                    bom_line for bom_line in bom.bom_line_ids
-                    if component_boms_per_product.get(bom_line.product_id)
-                    and component_boms_per_product[bom_line.product_id].type == 'normal'
-                ]
-                if not matched_bom_lines:
+                if not bom.bom_line_ids:
                     continue
 
-                for bom_line in matched_bom_lines:
+                for bom_line in bom.bom_line_ids:
                     comp_product = bom_line.product_id
                     ratio = (bom_line.product_qty / kit_produced_qty) if kit_produced_qty else 0.0
                     comp_uom = bom_line.product_uom_id or comp_product.uom_id
+
+                    # Check if the individual kit component has its own manufacturing BoM
+                    comp_bom = component_boms_per_product.get(comp_product)
+                    comp_has_bom = bool(comp_bom and comp_bom.type == 'normal')
 
                     comp_vals = base_vals.copy()
                     comp_vals.update({
@@ -347,11 +328,10 @@ class StockFreshBoxWizard(models.TransientModel):
                         'category_id': comp_product.categ_id.id if comp_product.categ_id else False,
                     })
                     wizard_line_vals.extend(self._build_wizard_line_vals(
-                        line, comp_vals, comp_uom, normal_qty * ratio, late_qty * ratio, has_bom=True
+                        line, comp_vals, comp_uom, normal_qty * ratio, late_qty * ratio, has_bom=comp_has_bom
                     ))
 
-            # 1. ONLY KG/Weight UOM items with BoM get split; non-KG UOMs
-            # (EACH/Units, etc.) or items without BoM stay whole ("Full Bulk")
+            # 1. Non-Kit lines
             else:
                 wizard_line_vals.extend(self._build_wizard_line_vals(
                     line, base_vals, line_uom, normal_qty, late_qty, has_bom
@@ -394,22 +374,10 @@ class StockFreshBoxWizard(models.TransientModel):
             ('delivery_date', '<=', self.end_date),
             ('delivery_channel', '=', self.delivery_channel),
             ('state', 'in', ['draft', 'confirmed']),
-            # Scoped to the sale lines this run is actually processing, not
-            # is_late_order - a Late-Order-only run only recomputes a
-            # line's late boxes, but every MO of that SAME line (its
-            # pre-existing normal ones included) shares one running
-            # "Box N/M" total, so all of them need to be seen and kept in
-            # sync below. Restricting to these lines (rather than fetching
-            # every MO in the date/channel/state range) keeps unrelated
-            # lines' MOs - which this run never touches - out of the purge
-            # step further down.
             ('production_sale_line_id', 'in', lines_to_generate_mo.mapped('sale_line_id').ids),
         ]
         existing_mos = mrp_production_obj.search(domain)
 
-        # Grouped by the sale order line they were generated for -
-        # production_sale_line_id is a stable relation, unlike matching the
-        # "Box N/M" text in origin (which is what changes across runs).
         existing_mos_by_line = {}
         for mo in existing_mos:
             if mo.production_sale_line_id:
@@ -424,10 +392,6 @@ class StockFreshBoxWizard(models.TransientModel):
         processed_mos = self.env['mrp.production']
 
         def _reconcile(wiz_subset, pool):
-            """Reuses/updates as many of `pool`'s MOs as `wiz_subset` has
-            lines (oldest first), creating extras when there are more
-            lines than MOs. Origin is set/refreshed by the caller once the
-            line's full (normal + late) box order is known."""
             result = []
             for line in wiz_subset:
                 if pool:
@@ -461,10 +425,6 @@ class StockFreshBoxWizard(models.TransientModel):
             wiz_normal = wiz_lines.filtered(lambda l: not l.is_late_order)
             wiz_late = wiz_lines.filtered(lambda l: l.is_late_order)
 
-            # A category this run didn't touch (e.g. the normal boxes
-            # during a Late-Order-only run) keeps its existing MOs as-is,
-            # aside from the origin renumbering below - they must NOT be
-            # left out of processed_mos or they'd be purged as "obsolete".
             final_normal = _reconcile(wiz_normal, normal_pool) if wiz_normal else normal_pool
             final_late = _reconcile(wiz_late, late_pool) if wiz_late else late_pool
 
@@ -542,6 +502,8 @@ class StockFreshBoxWizard(models.TransientModel):
                 'search_default_groupby_delivery_date': 1,
                 'search_default_groupby_product_category': 1,
                 'search_default_groupby_delivery_channel': 1,
+                'default_start_date': fields.Date.context_today(self),
+                'default_end_date': fields.Date.context_today(self),
             },
             'target': 'current',
         }
@@ -616,27 +578,16 @@ class MrpProduction(models.Model):
 
     is_late_order = fields.Boolean(
         string="Late Order",
-        # compute="_compute_delivery_info",
         store=True,
         readonly=True
     )
     production_sale_line_id = fields.Many2one(
         'sale.order.line',
         string='Sale Order Line',
-        # compute='_compute_production_sale_line_id',
         store=True,
         readonly=True,
     )
 
-    # Distinct from is_late_order above: that one is recomputed from the
-    # resolved sale order's CURRENT is_late_order whenever origin changes,
-    # so it can drift after the MO/its boxes already exist. late_order is a
-    # plain, wizard-set flag - StockFreshBoxWizard.action_generate_mo simply
-    # writes it to whatever "Include Late Orders" was checked to on that
-    # generation run, so it stays a stable snapshot of how this MO was
-    # generated.
-    # late_order = fields.Boolean(string="Late Order (Generated As)")
-    #
     @api.depends('origin')
     def _compute_delivery_info(self):
         for mo in self:
@@ -651,9 +602,7 @@ class MrpProduction(models.Model):
                 mo.delivery_date = getattr(so, 'delivery_date', False)
                 mo.delivery_channel = getattr(so, 'delivery_channel', False)
                 mo.round_batch_id = getattr(so, 'batch_id', False) or getattr(so, 'round_batch_id', False)
-                # mo.is_late_order = getattr(so, 'is_late_order', False)
             else:
                 mo.delivery_date = False
                 mo.delivery_channel = False
                 mo.round_batch_id = False
-                # mo.is_late_order = False
