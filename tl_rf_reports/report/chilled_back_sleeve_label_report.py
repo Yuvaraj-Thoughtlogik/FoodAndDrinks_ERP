@@ -327,6 +327,7 @@ class ProductionLabelReportChilledBackSleeve(models.AbstractModel):
         story.append(bottom_table)
 
         return story
+        
 
     def _measure_story_height(self, story, avail_width):
         """Measures total height needed by story flowables."""
