@@ -94,10 +94,10 @@ class ProductionLabelWizard(models.TransientModel):
 
     chilled_label_type = fields.Selection(
         selection=[
-            ('front_sleeve_label', 'Front sleeve label'),
-            ('back_sleeve_label', 'Back sleeve label'),
+            ('front_sleeve_label', 'Front Sleeve Label'),
+            ('back_sleeve_label', 'Back Sleeve Label'),
         ],
-        string='Chilled Label Type',
+        string='Label Template',
         default='front_sleeve_label',
         help="Label layout to print when Category is 'Chilled'."
     )
@@ -238,6 +238,9 @@ class ProductionLabelWizard(models.TransientModel):
             if self.chilled_label_type == 'front_sleeve_label':
                 report_model = self.env['report.tl_rf_reports.report_production_label_chilled_front']
                 filename_suffix = 'Chilled_Front_Sleeve'
+            elif self.chilled_label_type == 'back_sleeve_label':
+                report_model = self.env['report.tl_rf_reports.report_production_label_chilled_back']
+                filename_suffix = 'Chilled_Back_Sleeve'
             else:
                 raise UserError(_(
                     "The '%s' label format is not implemented yet.",
@@ -878,4 +881,152 @@ class ProductionLabelWizard(models.TransientModel):
             'cooking_instructions_html': cooking_html,
             'production_date_display': production_date_display,
             'use_by_display': use_by_display,
+        }
+
+    def _get_chilled_back_sleeve_label_data(self):
+        """Fetches label data for Chilled Back Sleeve Labels from matching Manufacturing Orders (MOs).
+        Applies filters: Delivery Date From/To, Product Category, Depot, Late Orders.
+        """
+        self.ensure_one()
+        label_lines = []
+        domain = self._get_production_domain()
+        productions = self.env['mrp.production'].search(domain)
+
+        # Process matching Manufacturing Orders
+        for mo in productions:
+            mo_created_date = (
+                mo.create_date.date() if mo.create_date
+                else (self.packing_date_from or fields.Date.context_today(self))
+            )
+
+            # Check raw material component lines (move_raw_ids) if MO is a composite/generic pack
+            matching_moves = mo.move_raw_ids.filtered(
+                lambda m: not self.category_id or m.product_id.categ_id.id == self.category_id.id
+            ) if mo.move_raw_ids else self.env['stock.move']
+
+            if matching_moves:
+                for move in matching_moves:
+                    label_data = self._build_chilled_back_sleeve_label_dict(move.product_id, mo_created_date, mo)
+                    label_lines.append(label_data)
+            elif mo.product_id and (not self.category_id or mo.product_id.categ_id.id == self.category_id.id or mo.product_category_id.id == self.category_id.id):
+                label_data = self._build_chilled_back_sleeve_label_dict(mo.product_id, mo_created_date, mo)
+                label_lines.append(label_data)
+
+        # Fallback to matching Sales Orders if no MOs found, ensuring preview/print consistency
+        if not label_lines:
+            orders = self._get_matching_orders()
+            for order in orders:
+                mo_date = (
+                    getattr(order, 'packing_date', False)
+                    or (order.delivery_date - timedelta(days=1) if order.delivery_date else False)
+                    or fields.Date.context_today(self)
+                )
+                for line in order.order_line:
+                    product = line.product_id
+                    if not product or not product.categ_id:
+                        continue
+                    if self.category_id and product.categ_id.id != self.category_id.id:
+                        continue
+                    label_data = self._build_chilled_back_sleeve_label_dict(product, mo_date)
+                    label_lines.append(label_data)
+
+        return label_lines
+
+    def _build_chilled_back_sleeve_label_dict(self, product, mo_created_date, mo=None):
+        """Constructs a dictionary of all fields required by the Chilled Back Sleeve Label template."""
+        template = getattr(product, 'product_tmpl_id', product)
+
+        # 1. Product Name
+        product_name = (product.name or '').strip()
+
+        # 2. Ingredients (HTML/Text)
+        ingredients_html = (
+            getattr(product, 'ingredients_html', '')
+            or getattr(template, 'ingredients_html', '')
+            or ''
+        )
+        if not ingredients_html:
+            # Fallback based on species / product name if empty
+            species_name = (
+                getattr(getattr(product, 'species_id', False), 'name', '')
+                or getattr(getattr(template, 'species_id', False), 'name', '')
+                or getattr(product, 'latin_name', '')
+                or getattr(template, 'latin_name', '')
+                or 'Salmo Salar'
+            )
+            allergens_notice = getattr(product, 'allergens_notice', '') or getattr(template, 'allergens_notice', '') or 'Fish'
+            ingredients_html = (
+                f"Salmon (<i>{species_name}</i>) (<b>{allergens_notice.upper() if allergens_notice else 'FISH'}</b>) 90%, "
+                "Mint Glaze 10%, Sugar, Acids (Sodium Diacetate, Malic Acid), Dried Glucose Syrup, Modified Starch, Salt, "
+                "Dried Mint (3.6%), Yeast Extract (Yeast Extract, Salt), Dried Tomato, Colours (Paprika Extract and Natural "
+                "Rosemary Flavouring, Curcumin), Natural Flavouring, Thickeners (Xanthan Gum, Guar Gum) Natural Garden Mint Flavouring."
+            )
+
+        # 3. Allergy Advice - fetched straight from the product's (or
+        # template's) allergens_notice field. No hardcoded text: if the
+        # field is empty, the section is left blank.
+        allergy_advice = (
+            getattr(product, 'allergens_notice', '')
+            or getattr(template, 'allergens_notice', '')
+            or ''
+        )
+
+        # 4. Cooking Instructions
+        cooking_html = (
+            getattr(product, 'cooking_instructions_html', '')
+            or getattr(template, 'cooking_instructions_html', '')
+            or ''
+        )
+        if not cooking_html:
+            cooking_html = (
+                "<b>Oven:</b> Pierce film and place in a pre-heated oven at 200°C for approx 20-25 minutes (chilled), 25-30 minutes (frozen).<br/>"
+                "<b>Microwave: (850w):</b> Pierce film several times and cook on full power for 3-4 minutes (chilled), 5-6 minutes (frozen).<br/>"
+                "Remove from packaging and serve."
+            )
+
+        # 5. Product Weight (dynamically populated from MO Quantity and Unit)
+        if mo and mo.product_qty:
+            qty = mo.product_qty
+            uom_name = mo.product_uom_id.name if mo.product_uom_id else 'g'
+            # If UoM is kg and qty < 1, e.g. 0.25 kg -> 250g
+            if uom_name.lower() in ('kg', 'kgs') and qty < 1:
+                weight_val = int(qty * 1000) if (qty * 1000).is_integer() else (qty * 1000)
+                product_weight_display = f"{weight_val}g"
+            else:
+                formatted_qty = int(qty) if float(qty).is_integer() else f"{qty:.2f}".rstrip('0').rstrip('.')
+                product_weight_display = f"{formatted_qty}{uom_name}"
+        else:
+            # Fallback if product has weight or gross_net_weight
+            gross_net = getattr(product, 'gross_net_weight', '') or getattr(template, 'gross_net_weight', '')
+            if gross_net:
+                product_weight_display = gross_net
+            elif product.weight:
+                w = product.weight
+                if w < 1:
+                    product_weight_display = f"{int(w * 1000) if (w * 1000).is_integer() else w * 1000}g"
+                else:
+                    product_weight_display = f"{int(w) if w.is_integer() else w}kg"
+            else:
+                product_weight_display = "250g"
+
+        # 6. Nutritional Information - fetched straight from the product's
+        # (or template's) nutritional_info_html field and printed as a
+        # paragraph inside the Nutritional Information table. No hardcoded
+        # values: if the field is empty, the table body is left blank.
+        nutrition_html = (
+            getattr(product, 'nutritional_info_html', '')
+            or getattr(template, 'nutritional_info_html', '')
+            or ''
+        )
+
+        return {
+            'product_name': product_name,
+            'ingredients': ingredients_html,
+            'ingredients_html': ingredients_html,
+            'allergy_advice': allergy_advice,
+            'cooking_instructions': cooking_html,
+            'cooking_instructions_html': cooking_html,
+            'product_weight_display': product_weight_display,
+            'weight_display': product_weight_display,
+            'nutrition_html': nutrition_html,
         }

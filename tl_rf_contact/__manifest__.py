@@ -21,6 +21,7 @@
         "data/sequence.xml",
         "data/actions.xml",
         "views/res_partner_views.xml",
+        "views/res_partner_referral_views.xml",
         "wizard/close_reason_wizard.xml",
     ],
 
