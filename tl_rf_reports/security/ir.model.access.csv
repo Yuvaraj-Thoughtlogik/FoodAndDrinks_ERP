@@ -10,4 +10,3 @@ access_prediction_report_line,prediction.report.line,model_prediction_report_lin
 access_prediction_report_line_all,prediction.report.line all,model_prediction_report_line,,1,1,1,1
 access_active_batch_report_wizard,active.batch.report.wizard,model_active_batch_report_wizard,base.group_user,1,1,1,1
 access_round_batch_activity_wizard,round.batch.activity.wizard,model_round_batch_activity_wizard,base.group_user,1,1,1,1
-access_sale_order_line_report_lines,sale.order.line.report_lines,model_sale_order_line_report_lines,base.group_user,1,1,1,1

@@ -56,7 +56,7 @@
         'report/plain_label_report_views.xml',
         'report/chilled_front_sleeve_label_report_views.xml',
         'views/sale_order_views.xml',
-        'views/sale_order_line_report_lines_views.xml',
+        # 'views/sale_order_line_report_lines_views.xml',
         'views/purchase_order_views.xml',
         'views/mrp_production_views.xml',
         'views/menus.xml',
