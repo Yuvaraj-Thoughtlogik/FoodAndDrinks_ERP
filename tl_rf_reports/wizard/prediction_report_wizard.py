@@ -224,6 +224,7 @@ class PredictionReportWizard(models.TransientModel):
             'context': {
                 'default_wizard_id': self.id,
                 'search_default_group_by_vendor': 1,
+                'search_default_group_by_category': 1,
             },
             'target': 'current',
         }
@@ -278,6 +279,13 @@ class PredictionReportLine(models.TransientModel):
         related='product_id.categ_id',
         store=True,
         readonly=True
+    )
+    
+    qty_available = fields.Float(
+        string='Available Qty',
+        related='product_id.qty_available',
+        digits='Product Unit of Measure',
+        readonly=True,
     )
 
     required_qty = fields.Float(

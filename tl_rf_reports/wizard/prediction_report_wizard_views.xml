@@ -79,6 +79,7 @@
                 <field name="categ_id" readonly="1" />
                 
                 <!-- Required Qty vs Editable Ordered Qty -->
+                <field name="qty_available" sum="Total Available Qty" readonly="1"/>
                 <field name="required_qty" sum="Total Required Qty" readonly="1" />
                 <field name="ordered_qty" sum="Total Ordered Qty" />
                 <field name="uom_id" readonly="1" string="Unit of Measure" />
