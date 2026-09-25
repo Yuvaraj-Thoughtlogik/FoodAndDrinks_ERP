@@ -28,21 +28,25 @@ class ReportPrediction(models.AbstractModel):
     # BOM helpers
     # ------------------------------------------------------------------
     def _find_bom(self, product):
-        """Return the applicable BOM for a product (variant-specific first,
-        falling back to a template-level BOM), or an empty recordset if the
-        product has no BOM. Both 'Manufacture this product' and 'Kit'
-        (phantom) BOM types are considered a BOM for this report.
+        """Return the applicable Kit (phantom) BOM for a product
+        (variant-specific first, falling back to a template-level BOM), or
+        an empty recordset if the product is not a Kit. 'Manufacture this
+        product' BOMs are deliberately ignored: a manufactured product is
+        reported under its own name, only Kits are replaced by their
+        components.
         """
         BomModel = self.env['mrp.bom']
         company_ids = [self.env.company.id, False]
 
         bom = BomModel.search([
+            ('type', '=', 'phantom'),
             ('product_id', '=', product.id),
             ('company_id', 'in', company_ids),
         ], limit=1, order='sequence, id')
 
         if not bom:
             bom = BomModel.search([
+                ('type', '=', 'phantom'),
                 ('product_tmpl_id', '=', product.product_tmpl_id.id),
                 ('product_id', '=', False),
                 ('company_id', 'in', company_ids),
@@ -50,16 +54,16 @@ class ReportPrediction(models.AbstractModel):
 
         return bom
 
-    def _explode_bom(self, product, qty, bom_cache):
+    def _explode_bom(self, product, qty, bom_cache, _seen=None):
         """Given a sold product and its ordered qty, return a list of
         (reporting_product, reporting_qty) tuples to feed into the report.
 
-        - If the product has no BOM: returns [(product, qty)] unchanged.
-        - If the product has a BOM (manufacture or kit): returns one entry
-          per BOM component, with the component qty scaled to the ordered
-          qty of the finished product. The finished product itself is
-          NOT included in this case (single-level explosion only - a
-          component that itself has a BOM is not exploded further).
+        - Product is not a Kit (no BOM, or a Manufacture BOM): returns
+          [(product, qty)] unchanged - the main product name is shown.
+        - Product is a Kit: returns one entry per Kit component, with the
+          component qty scaled to the ordered qty. The Kit product itself
+          is NOT included. A component that is itself a Kit is exploded
+          further (same as Odoo's own stock explosion of nested kits).
         """
         if product.id not in bom_cache:
             bom_cache[product.id] = self._find_bom(product)
@@ -67,6 +71,8 @@ class ReportPrediction(models.AbstractModel):
 
         if not bom:
             return [(product, qty)]
+
+        seen = (_seen or set()) | {product.id}
 
         # Qty (in the BOM's own UoM) that the ordered qty corresponds to.
         finished_uom = bom.product_uom_id or product.uom_id
@@ -97,8 +103,13 @@ class ReportPrediction(models.AbstractModel):
 
             qty_per_unit = (line_qty / bom_produced_qty) if bom_produced_qty else 0.0
             comp_qty = qty_per_unit * qty_in_bom_uom
-            if comp_qty:
+            if not comp_qty:
+                continue
+            if component.id in seen:
+                # Circular kit definition - stop here instead of recursing forever.
                 result.append((component, comp_qty))
+            else:
+                result.extend(self._explode_bom(component, comp_qty, bom_cache, seen))
 
         # Safety net: a BOM with no usable lines should not make the
         # ordered qty disappear from the report.
@@ -272,17 +283,24 @@ class ReportPrediction(models.AbstractModel):
             ('product_uom_qty', '>', 0),
         ]
 
+        van_domain = [('order_id.delivery_channel', 'in', ('regal_van', False))]
+        if wizard.depot_ids:
+            depot_ids = wizard.depot_ids.ids
+            # sol.depot_id IN depot_ids OR (sol.depot_id IS NULL AND so.warehouse_id IN depot_ids)
+            van_domain = ['&'] + van_domain + [
+                '|', ('depot_id', 'in', depot_ids),
+                '&', ('depot_id', '=', False), ('order_id.warehouse_id', 'in', depot_ids),
+            ]
+        courier_domain = [('order_id.delivery_channel', '=', 'courier')]
+
         if wizard.delivery_channel == 'courier':
-            domain.append(('order_id.delivery_channel', '=', 'courier'))
+            domain += courier_domain
+        elif wizard.delivery_channel == 'both':
+            # Both channels merged into one report: courier lines are always
+            # included, the depot filter only narrows the Regal Van lines.
+            domain += ['|'] + courier_domain + van_domain
         else:
-            domain.append(('order_id.delivery_channel', 'in', ('regal_van', False)))
-            if wizard.depot_ids:
-                depot_ids = wizard.depot_ids.ids
-                # sol.depot_id IN depot_ids OR (sol.depot_id IS NULL AND so.warehouse_id IN depot_ids)
-                domain += [
-                    '|', ('depot_id', 'in', depot_ids),
-                    '&', ('depot_id', '=', False), ('order_id.warehouse_id', 'in', depot_ids),
-                ]
+            domain += van_domain
 
         if wizard.categ_ids:
             domain.append(('categ_id', 'in', wizard.categ_ids.ids))
@@ -564,14 +582,13 @@ class ReportPredictionCourier(models.AbstractModel):
     Delivery Date, Stock Code and Quantity Ordered (no depot pivot, no
     date-collapsing: every row repeats its own Delivery Date).
 
-    BOM handling: same policy as the main report - BOM type does not
-    matter (Manufacture or Kit both count). If the product has ANY
-    applicable BOM, its components are displayed instead of the product,
-    qty scaled to the Sale Order Line qty and consolidated across
-    products/orders. No BOM -> the product is displayed as-is. This is
-    delegated to the main report's own _find_bom()/_explode_bom() (single
-    level, both BOM types) so both reports share one BOM-explosion
-    implementation instead of drifting apart.
+    BOM handling: same policy as the main report - only Kit (phantom)
+    BOMs are exploded. A Kit is displayed as its components, qty scaled to
+    the Sale Order Line qty and consolidated across products/orders; any
+    other product (no BOM, or a Manufacture BOM) is displayed as-is. This
+    is delegated to the main report's own _find_bom()/_explode_bom() so
+    both reports share one BOM-explosion implementation instead of
+    drifting apart.
     """
 
     _name = 'report.tl_rf_reports.report_prediction_courier'
