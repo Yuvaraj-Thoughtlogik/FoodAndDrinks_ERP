@@ -168,6 +168,44 @@ class SaleOrder(models.Model):
         help="Historical sales orders for the selected customer, excluding the current order."
     )
 
+    # Computed Yes/No indicator for Alt Addr
+    has_alt_address = fields.Selection([
+        ('Yes', 'Yes'),
+        ('No', 'No')
+    ], string="Alt Addr", compute="_compute_has_alt_address", store=True)
+    
+    # Computed string field to combine/represent the selected payment mode
+    pay_type = fields.Char(
+        string="Pay Type",
+        compute="_compute_pay_type",
+        store=True
+    )
+
+    @api.depends('partner_id', 'partner_shipping_id')
+    def _compute_has_alt_address(self):
+        for order in self:
+            if order.partner_shipping_id and order.partner_id and order.partner_shipping_id != order.partner_id:
+                order.has_alt_address = 'Yes'
+            else:
+                order.has_alt_address = 'No'
+
+    @api.depends('pay_card_reader', 'pay_kb', 'pay_lnp', 'pay_cash', 'pay_cheque', 'pay_card')
+    def _compute_pay_type(self):
+        for order in self:
+            modes = []
+            if order.pay_card or order.pay_card_reader:
+                modes.append("DEBIT CARD")
+            if order.pay_cash:
+                modes.append("CASH")
+            if order.pay_cheque:
+                modes.append("CHEQUE")
+            if order.pay_kb:
+                modes.append("K/B")
+            if order.pay_lnp:
+                modes.append("LNP")
+
+            order.pay_type = ", ".join(modes) if modes else "N/A"
+
     @api.depends('partner_id')
     def _compute_order_history_ids(self):
         for order in self:
