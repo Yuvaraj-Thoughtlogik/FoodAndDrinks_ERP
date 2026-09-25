@@ -7,10 +7,14 @@ and displays:
 - Product Name (Bold, Large, Centered)
 - Ingredients (with bold allergens and scientific name in italics)
 - Allergy Advice (with bold allergen references)
-- Cooking Instruction (Oven and Microwave instructions)
+- Cooking Instruction
 - Bottom Section:
-  - Left: Official GB GG476 Oval Health Mark Stamp + Product Weight (e.g. 250g) from MO
+  - Left: Official GB GG476 Oval Health Mark Stamp + Product Weight
   - Right: Nutritional Information Table with clear grid borders
+
+All product data (ingredients, allergy advice, cooking instructions, weight,
+nutrition) comes from the backend only. If a field is empty, that section is
+left off the label - no default / sample text is printed.
 
 DIMENSIONS & PAPER FORMAT:
 - Paper Format: 100mm x 75mm Portrait/Landscape standard thermal label roll format.
@@ -226,14 +230,13 @@ class ProductionLabelReportChilledBackSleeve(models.AbstractModel):
 
         product_name = xml_escape(label.get('product_name') or '')
 
-        # 1. Ingredients text
+        # 1. Ingredients - from the product's ingredients field only.
+        # Empty field -> no ingredients section on the label.
         ingredients_raw = label.get('ingredients_html') or label.get('ingredients') or ''
         ingredients_formatted = _format_html_to_reportlab(ingredients_raw)
-        # if not ingredients_formatted:
-        #     ingredients_formatted = "<b>Ingredients:</b> Salmon (<i>Salmo Salar</i>) (<b>Fish</b>) 90%, Mint Glaze 10%, Sugar, Acids (Sodium Diacetate, Malic Acid), Dried Glucose Syrup, Modified Starch, Salt, Dried Mint (3.6%), Yeast Extract (Yeast Extract, Salt), Dried Tomato, Colours (Paprika Extract and Natural Rosemary Flavouring, Curcumin), Natural Flavouring, Thickeners (Xanthan Gum, Guar Gum) Natural Garden Mint Flavouring."
-        # elif not ingredients_formatted.lower().startswith(
-        #         '<b>ingredients') and not ingredients_formatted.lower().startswith('ingredients'):
-        #     ingredients_formatted = f"<b>Ingredients:</b> {ingredients_formatted}"
+        if ingredients_formatted and not ingredients_formatted.lower().startswith(
+                '<b>ingredients') and not ingredients_formatted.lower().startswith('ingredients'):
+            ingredients_formatted = f"<b>Ingredients:</b> {ingredients_formatted}"
 
         # 2. Allergy Advice - from the product's allergens_notice field (no hardcoded text)
         allergy_formatted = _format_field_to_reportlab(label.get('allergy_advice') or '')
@@ -241,18 +244,13 @@ class ProductionLabelReportChilledBackSleeve(models.AbstractModel):
                 'allergy advice'):
             allergy_formatted = f"<b>Allergy Advice:</b> {allergy_formatted}"
 
-        # 3. Cooking Instructions
+        # 3. Cooking Instructions - from the product's cooking instructions field only.
+        # Empty field -> no cooking section on the label.
         cooking_raw = label.get('cooking_instructions_html') or label.get('cooking_instructions') or ''
         cooking_formatted = _format_html_to_reportlab(cooking_raw)
-        # if not cooking_formatted:
-        #     cooking_formatted = (
-        #         "<b>Oven:</b> Pierce film and place in a pre-heated oven at 200°C for approx 20-25 minutes (chilled), 25-30 minutes (frozen).<br/>"
-        #         "<b>Microwave: (850w):</b> Pierce film several times and cook on full power for 3-4 minutes (chilled), 5-6 minutes (frozen).<br/>"
-        #         "Remove from packaging and serve."
-        #     )
 
-        # 4. Weight
-        weight_display = xml_escape(label.get('product_weight_display') or label.get('weight_display') or '250g')
+        # 4. Weight - from the product / MO only. Empty -> no weight printed.
+        weight_display = xml_escape(label.get('product_weight_display') or label.get('weight_display') or '')
 
         # 5. Nutritional Info - from the product's nutritional_info_html field (no hardcoded values)
         nutrition_formatted = _format_field_to_reportlab(label.get('nutrition_html') or '')
@@ -263,17 +261,19 @@ class ProductionLabelReportChilledBackSleeve(models.AbstractModel):
         story.append(Paragraph(product_name, styles['title']))
         story.append(Spacer(1, gap(0.8)))
 
-        # 2. Ingredients Section
-        story.append(Paragraph(ingredients_formatted, styles['body']))
-        story.append(Spacer(1, gap(0.6)))
+        # 2. Ingredients Section (only when the product has ingredients)
+        if ingredients_formatted:
+            story.append(Paragraph(ingredients_formatted, styles['body']))
+            story.append(Spacer(1, gap(0.6)))
 
         # 3. Allergy Advice Section
         if allergy_formatted:
             story.append(Paragraph(allergy_formatted, styles['body']))
             story.append(Spacer(1, gap(0.6)))
 
-        # 4. Cooking Instructions Section
-        story.append(Paragraph(cooking_formatted, styles['body']))
+        # 4. Cooking Instructions Section (only when the product has cooking instructions)
+        if cooking_formatted:
+            story.append(Paragraph(cooking_formatted, styles['body']))
         story.append(Spacer(1, gap(1.0)))
 
         # 5. Bottom Section (2 Columns: Left = GB Oval + Weight, Right = Nutrition Table)
@@ -282,11 +282,12 @@ class ProductionLabelReportChilledBackSleeve(models.AbstractModel):
 
         # Left Flowables
         stamp = _label_circle_flowable(scale=scale)
-        left_table_data = [
-            [stamp],
-            [Spacer(1, gap(1.0))],
-            [Paragraph(weight_display, styles['weight'])],
-        ]
+        left_table_data = [[stamp]]
+        if weight_display:
+            left_table_data += [
+                [Spacer(1, gap(1.0))],
+                [Paragraph(weight_display, styles['weight'])],
+            ]
         left_table = Table(left_table_data, colWidths=[left_width])
         left_table.setStyle(TableStyle([
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
@@ -316,6 +317,9 @@ class ProductionLabelReportChilledBackSleeve(models.AbstractModel):
             ('BOTTOMPADDING', (0, 0), (-1, -1), pad),
         ]))
 
+        # Empty nutrition field -> no nutrition table (the stamp/weight column stays).
+        if not nutrition_formatted:
+            nutri_table = ''
         bottom_table = Table([[left_table, nutri_table]], colWidths=[left_width, right_width])
         bottom_table.setStyle(TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'BOTTOM'),
@@ -327,7 +331,6 @@ class ProductionLabelReportChilledBackSleeve(models.AbstractModel):
         story.append(bottom_table)
 
         return story
-        
 
     def _measure_story_height(self, story, avail_width):
         """Measures total height needed by story flowables."""
