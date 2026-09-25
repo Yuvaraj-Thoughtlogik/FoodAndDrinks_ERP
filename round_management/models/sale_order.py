@@ -480,7 +480,37 @@ class SaleOrder(models.Model):
 
         return super().create(vals_list)
 
+    # def write(self, vals):
+#     if not self.env.context.get('skip_date_sync'):
+#         tz_name = self.env.user.tz or 'UTC'
+#         local_tz = pytz.timezone(tz_name)
+#
+#         if 'delivery_date' in vals and 'commitment_date' not in vals:
+#             if vals.get('delivery_date'):
+#                 d_date = fields.Date.to_date(vals['delivery_date'])
+#                 naive_dt = datetime.combine(d_date, DEFAULT_DELIVERY_TIME)
+#                 vals['commitment_date'] = local_tz.localize(naive_dt).astimezone(pytz.UTC).replace(tzinfo=None)
+#                 if 'week_number' not in vals:
+#                     iso_year, iso_week, _ = d_date.isocalendar()
+#                     vals['week_number'] = f"{iso_year}{str(iso_week).zfill(2)}"
+#             else:
+#                 vals['commitment_date'] = False
+#
+#         elif 'commitment_date' in vals and 'delivery_date' not in vals:
+#             if vals.get('commitment_date'):
+#                 c_dt = fields.Datetime.to_datetime(vals['commitment_date'])
+#                 local_d = pytz.UTC.localize(c_dt).astimezone(local_tz).date()
+#                 vals['delivery_date'] = local_d
+#                 if 'week_number' not in vals:
+#                     iso_year, iso_week, _ = local_d.isocalendar()
+#                     vals['week_number'] = f"{iso_year}{str(iso_week).zfill(2)}"
+#             else:
+#                 vals['delivery_date'] = False
+#
+#     return super().write(vals)
+        
     def write(self, vals):
+        # 1. Delivery Date / Commitment Date synchronization
         if not self.env.context.get('skip_date_sync'):
             tz_name = self.env.user.tz or 'UTC'
             local_tz = pytz.timezone(tz_name)
@@ -489,7 +519,13 @@ class SaleOrder(models.Model):
                 if vals.get('delivery_date'):
                     d_date = fields.Date.to_date(vals['delivery_date'])
                     naive_dt = datetime.combine(d_date, DEFAULT_DELIVERY_TIME)
-                    vals['commitment_date'] = local_tz.localize(naive_dt).astimezone(pytz.UTC).replace(tzinfo=None)
+
+                    vals['commitment_date'] = (
+                        local_tz.localize(naive_dt)
+                        .astimezone(pytz.UTC)
+                        .replace(tzinfo=None)
+                    )
+
                     if 'week_number' not in vals:
                         iso_year, iso_week, _ = d_date.isocalendar()
                         vals['week_number'] = f"{iso_year}{str(iso_week).zfill(2)}"
@@ -499,15 +535,70 @@ class SaleOrder(models.Model):
             elif 'commitment_date' in vals and 'delivery_date' not in vals:
                 if vals.get('commitment_date'):
                     c_dt = fields.Datetime.to_datetime(vals['commitment_date'])
-                    local_d = pytz.UTC.localize(c_dt).astimezone(local_tz).date()
+                    local_d = (
+                        pytz.UTC.localize(c_dt)
+                        .astimezone(local_tz)
+                        .date()
+                    )
+
                     vals['delivery_date'] = local_d
+
                     if 'week_number' not in vals:
                         iso_year, iso_week, _ = local_d.isocalendar()
                         vals['week_number'] = f"{iso_year}{str(iso_week).zfill(2)}"
                 else:
                     vals['delivery_date'] = False
 
-        return super().write(vals)
+        # 2. Store the Sale Order changes
+        res = super().write(vals)
+
+        # 3. Sync Sale Order lines with draft invoices
+        if 'order_line' in vals:
+            for order in self:
+                draft_invoices = order.invoice_ids.filtered(
+                    lambda inv:
+                        inv.move_type == 'out_invoice'
+                        and inv.state == 'draft'
+                )
+
+                for invoice in draft_invoices:
+
+                    # Existing invoice lines mapped to sale order lines
+                    inv_line_map = {}
+
+                    for inv_line in invoice.invoice_line_ids:
+                        for sale_line in inv_line.sale_line_ids:
+                            inv_line_map[sale_line.id] = inv_line
+
+                    so_line_ids = order.order_line.ids
+
+                    # Update existing lines / create new lines
+                    for line in order.order_line:
+
+                        if line.id in inv_line_map:
+                            inv_line_map[line.id].write({
+                                'quantity': line.product_uom_qty,
+                                'price_unit': line.price_unit,
+                                'name': line.name,
+                            })
+
+                        else:
+                            self.env['account.move.line'].create({
+                                'move_id': invoice.id,
+                                'product_id': line.product_id.id,
+                                'quantity': line.product_uom_qty,
+                                'price_unit': line.price_unit,
+                                'name': line.name,
+                                'tax_ids': [(6, 0, line.tax_ids.ids)],
+                                'sale_line_ids': [(6, 0, [line.id])],
+                            })
+
+                    # Remove invoice lines for deleted SO lines
+                    for so_line_id, inv_line in inv_line_map.items():
+                        if so_line_id not in so_line_ids:
+                            inv_line.unlink()
+
+        return res
 
     @api.depends('partner_id', 'partner_id.round_id')
     def _compute_partner_id_set_round(self):
