@@ -108,7 +108,15 @@ class ProductLabelWizard(models.TransientModel):
         """Expiry from the product template's Expiration Date field
         (expiration_time, Inventory tab), printed as days, e.g. '2 Days'.
         Empty when the product has no expiry set - the row is then hidden."""
-        days = product.expiration_time or 0
+        # Read from product.template safely: the field may not exist on
+        # product.product (or at all if the expiry module is not installed).
+        template = product.product_tmpl_id
+        days = 0
+        if 'expiration_time' in template._fields:
+            days = template.expiration_time or 0
+        # Only print when the product uses expiry dates and has days set.
+        if 'use_expiration_date' in template._fields and not template.use_expiration_date:
+            days = 0
         if not days:
             return ''
         return _("%s Day", days) if days == 1 else _("%s Days", days)

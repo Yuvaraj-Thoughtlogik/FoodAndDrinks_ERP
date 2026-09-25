@@ -229,11 +229,11 @@ class ProductionLabelReportChilledBackSleeve(models.AbstractModel):
         # 1. Ingredients text
         ingredients_raw = label.get('ingredients_html') or label.get('ingredients') or ''
         ingredients_formatted = _format_html_to_reportlab(ingredients_raw)
-        if not ingredients_formatted:
-            ingredients_formatted = "<b>Ingredients:</b> Salmon (<i>Salmo Salar</i>) (<b>Fish</b>) 90%, Mint Glaze 10%, Sugar, Acids (Sodium Diacetate, Malic Acid), Dried Glucose Syrup, Modified Starch, Salt, Dried Mint (3.6%), Yeast Extract (Yeast Extract, Salt), Dried Tomato, Colours (Paprika Extract and Natural Rosemary Flavouring, Curcumin), Natural Flavouring, Thickeners (Xanthan Gum, Guar Gum) Natural Garden Mint Flavouring."
-        elif not ingredients_formatted.lower().startswith(
-                '<b>ingredients') and not ingredients_formatted.lower().startswith('ingredients'):
-            ingredients_formatted = f"<b>Ingredients:</b> {ingredients_formatted}"
+        # if not ingredients_formatted:
+        #     ingredients_formatted = "<b>Ingredients:</b> Salmon (<i>Salmo Salar</i>) (<b>Fish</b>) 90%, Mint Glaze 10%, Sugar, Acids (Sodium Diacetate, Malic Acid), Dried Glucose Syrup, Modified Starch, Salt, Dried Mint (3.6%), Yeast Extract (Yeast Extract, Salt), Dried Tomato, Colours (Paprika Extract and Natural Rosemary Flavouring, Curcumin), Natural Flavouring, Thickeners (Xanthan Gum, Guar Gum) Natural Garden Mint Flavouring."
+        # elif not ingredients_formatted.lower().startswith(
+        #         '<b>ingredients') and not ingredients_formatted.lower().startswith('ingredients'):
+        #     ingredients_formatted = f"<b>Ingredients:</b> {ingredients_formatted}"
 
         # 2. Allergy Advice - from the product's allergens_notice field (no hardcoded text)
         allergy_formatted = _format_field_to_reportlab(label.get('allergy_advice') or '')
@@ -244,12 +244,12 @@ class ProductionLabelReportChilledBackSleeve(models.AbstractModel):
         # 3. Cooking Instructions
         cooking_raw = label.get('cooking_instructions_html') or label.get('cooking_instructions') or ''
         cooking_formatted = _format_html_to_reportlab(cooking_raw)
-        if not cooking_formatted:
-            cooking_formatted = (
-                "<b>Oven:</b> Pierce film and place in a pre-heated oven at 200°C for approx 20-25 minutes (chilled), 25-30 minutes (frozen).<br/>"
-                "<b>Microwave: (850w):</b> Pierce film several times and cook on full power for 3-4 minutes (chilled), 5-6 minutes (frozen).<br/>"
-                "Remove from packaging and serve."
-            )
+        # if not cooking_formatted:
+        #     cooking_formatted = (
+        #         "<b>Oven:</b> Pierce film and place in a pre-heated oven at 200°C for approx 20-25 minutes (chilled), 25-30 minutes (frozen).<br/>"
+        #         "<b>Microwave: (850w):</b> Pierce film several times and cook on full power for 3-4 minutes (chilled), 5-6 minutes (frozen).<br/>"
+        #         "Remove from packaging and serve."
+        #     )
 
         # 4. Weight
         weight_display = xml_escape(label.get('product_weight_display') or label.get('weight_display') or '250g')
