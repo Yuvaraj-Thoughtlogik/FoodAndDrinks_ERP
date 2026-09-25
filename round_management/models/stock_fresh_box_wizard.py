@@ -460,37 +460,7 @@ class StockFreshBoxWizard(models.TransientModel):
             'note': f"Processed {len(self.line_ids)} lines. Created/Updated {len(processed_mos)} MOs. Purged {len(mo_to_purge)} obsolete MOs."
         })
 
-        history_line_vals = [
-            {
-                'history_id': history_rec.id,
-                'sale_order_id': line.sale_order_id.id,
-                'sale_line_id': line.sale_line_id.id,
-                'order_number': line.order_number,
-                'customer_code': line.customer_code,
-                'round_batch_id': line.round_batch_id.id if line.round_batch_id else False,
-                'round_id': line.round_id.id if line.round_id else False,
-                'delivery_date': line.delivery_date or self.start_date,
-                'delivery_channel': self.delivery_channel,
-                'depot': line.depot or (line.sale_order_id.warehouse_id.name if line.sale_order_id and line.sale_order_id.warehouse_id else ''),
-                'is_late_order': line.is_late_order,
-                'late_status': line.late_status,
-
-                'product_id': line.product_id.id,
-                'product_code': line.product_code,
-                'product_name': line.product_name,
-                'product_desc': line.product_desc,
-                'is_assembly': line.is_assembly,
-                'uom_id': line.uom_id.id,
-                'box_id': line.box_id,
-                'category_id': line.category_id.id if line.category_id else False,
-                'box_number': line.box_number,
-                'box_weight': line.box_weight,
-                'special_requirements_notes_id': line.special_requirements_notes_id.id if line.special_requirements_notes_id else False,
-            } for line in self.line_ids
-        ]
-
-        if history_line_vals:
-            self.env['stock.fresh.box.history.line'].create(history_line_vals)
+        self._sync_history_lines(history_rec)
 
         return {
             'name': _('Pack Box Split MOs'),
@@ -507,6 +477,72 @@ class StockFreshBoxWizard(models.TransientModel):
             },
             'target': 'current',
         }
+
+    def _prepare_history_line_vals(self, line, history_rec):
+        return {
+            'history_id': history_rec.id,
+            'sale_order_id': line.sale_order_id.id,
+            'sale_line_id': line.sale_line_id.id,
+            'order_number': line.order_number,
+            'customer_code': line.customer_code,
+            'round_batch_id': line.round_batch_id.id if line.round_batch_id else False,
+            'round_id': line.round_id.id if line.round_id else False,
+            'delivery_date': line.delivery_date or self.start_date,
+            'delivery_channel': self.delivery_channel,
+            'depot': line.depot or (line.sale_order_id.warehouse_id.name if line.sale_order_id and line.sale_order_id.warehouse_id else ''),
+            'is_late_order': line.is_late_order,
+            'late_status': line.late_status,
+
+            'product_id': line.product_id.id,
+            'product_code': line.product_code,
+            'product_name': line.product_name,
+            'product_desc': line.product_desc,
+            'is_assembly': line.is_assembly,
+            'uom_id': line.uom_id.id,
+            'box_id': line.box_id,
+            'category_id': line.category_id.id if line.category_id else False,
+            'box_number': line.box_number,
+            'box_weight': line.box_weight,
+            'special_requirements_notes_id': line.special_requirements_notes_id.id if line.special_requirements_notes_id else False,
+        }
+
+    def _sync_history_lines(self, history_rec):
+        """Replaces the history lines of every sale line in this run instead
+        of appending a fresh copy each time MOs are (re)generated. Existing
+        rows are rewritten in place (moved onto `history_rec`), missing ones
+        are created and surplus ones removed. A Late Order run only produces
+        late rows, so it only replaces the late rows of those sale lines -
+        the normal rows from the regular run are left untouched."""
+        HistoryLine = self.env['stock.fresh.box.history.line']
+        sale_lines = self.line_ids.sale_line_id
+        if not sale_lines:
+            return
+
+        domain = [('sale_line_id', 'in', sale_lines.ids)]
+        if self.is_late_order:
+            domain.append(('is_late_order', '=', True))
+        existing_by_sale_line = {}
+        for hist_line in HistoryLine.search(domain, order='id'):
+            existing_by_sale_line.setdefault(hist_line.sale_line_id.id, []).append(hist_line)
+
+        to_create = []
+        to_remove = HistoryLine
+        for sale_line in sale_lines:
+            pool = existing_by_sale_line.get(sale_line.id, [])
+            wiz_lines = self.line_ids.filtered(lambda l: l.sale_line_id == sale_line)
+            for wiz_line in wiz_lines:
+                vals = self._prepare_history_line_vals(wiz_line, history_rec)
+                if pool:
+                    pool.pop(0).write(vals)
+                else:
+                    to_create.append(vals)
+            for leftover in pool:
+                to_remove |= leftover
+
+        if to_remove:
+            to_remove.unlink()
+        if to_create:
+            HistoryLine.create(to_create)
 
 
 class StockFreshBoxWizardLine(models.TransientModel):
