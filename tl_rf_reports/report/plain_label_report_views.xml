@@ -82,8 +82,8 @@
                              text - not product fields) & Catch Info (sourced live from the
                              product's fish_info field, no hardcoded fallback). -->
                         <div style="margin-top:1.2mm; font-size:7.5px; line-height:1.22; text-align:left;">
-                            <div>Allergens including Gluten are in <b>Bold</b></div>
-                            <div>Although every effort has been made to remove bones, some may remain.</div>
+<!--                            <div>Allergens including Gluten are in <b>Bold</b></div>-->
+<!--                            <div>Although every effort has been made to remove bones, some may remain.</div>-->
                             <div t-if="label.get('catch_info')">
                                 <span t-esc="label.get('catch_info')"/>
                             </div>
