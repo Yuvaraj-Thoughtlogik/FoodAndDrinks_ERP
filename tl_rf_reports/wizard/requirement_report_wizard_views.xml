@@ -88,7 +88,7 @@
                 
                 <!-- Dynamic Vendor Filter & Editable Price -->
                 <field name="vendor_id" options="{'no_create': True}" domain="[('id', 'in', vendor_ids)]" />
-                <button name="action_open_product_vendors"
+                <button name="action_open_product_vendors" groups="purchase.group_purchase_user"
                         type="object"
                         string="Link New Vendor"
                         icon="fa-user-plus"
@@ -143,7 +143,7 @@
                 <button name="action_create_rfq" string="Create PO" type="object"
                     class="btn-primary" icon="fa-shopping-cart"
                     invisible="purchase_order_id != False" />
-                <button name="action_open_product_vendors" string="Create Vendor" type="object"
+                <button name="action_open_product_vendors" groups="purchase.group_purchase_user" string="Create Vendor" type="object"
                     class="btn-secondary" icon="fa-user-plus"
                     invisible="purchase_order_id != False" />
                 <field name="order_status" widget="statusbar" statusbar_visible="draft,sent,purchase,done" />
@@ -192,12 +192,12 @@
             <form string="Product Vendors">
                 <sheet>
                     <field name="product_variant_count" invisible="1" />
-                    <field name="standard_price" invisible="1" />
+                    <field name="standard_price" invisible="1" groups="purchase.group_purchase_user" />
                     <div class="oe_title">
                         <h1><field name="name" readonly="1" /></h1>
                     </div>
                     <notebook>
-                        <page string="Purchase" name="purchase">
+                        <page string="Purchase" name="purchase" groups="purchase.group_purchase_user">
                             <field name="seller_ids"
                                 context="{'default_product_tmpl_id': id, 'default_price': standard_price, 'product_template_invisible_variant': True, 'list_view_ref': 'purchase.product_supplierinfo_tree_view2'}"
                                 nolabel="1"
