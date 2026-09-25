@@ -11,6 +11,8 @@ class PredictionReportWizard(models.TransientModel):
     _name = 'prediction.report.wizard'
     _description = 'Prediction Report Wizard'
 
+
+
     delivery_channel = fields.Selection(
         selection=[
             ('regal_van', 'Regal Van Delivery'),
