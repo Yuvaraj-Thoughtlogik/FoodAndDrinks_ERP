@@ -652,6 +652,7 @@ class ReportPackingList(models.AbstractModel):
                       AND so.delivery_date <= %(date_to)s
                       AND COALESCE(so.is_late_order, false) = %(is_late)s
                       AND (so.company_id IS NULL OR so.company_id IN %(company_ids)s)
+                      AND (%(no_categ_filter)s OR pt.categ_id IN %(categ_ids)s)
                     ORDER BY so.delivery_date ASC, so.name ASC, sol.id ASC
                 """
                 params = {
@@ -660,6 +661,8 @@ class ReportPackingList(models.AbstractModel):
                     'is_late': bool(wiz.include_late_orders),
                     'company_ids': company_ids,
                     'lang': lang,
+                    'no_categ_filter': not wiz.categ_ids,
+                    'categ_ids': tuple(wiz.categ_ids.ids) or (0,),
                 }
                 self.env.cr.execute(courier_query, params)
                 c_rows = self.env.cr.dictfetchall()
@@ -784,6 +787,10 @@ class ReportPackingList(models.AbstractModel):
             if wizard.depot_ids:
                 depot_filter = "AND b.depot_id IN %(depot_ids)s"
                 params['depot_ids'] = tuple(wizard.depot_ids.ids)
+            categ_filter = ""
+            if wizard.categ_ids:
+                categ_filter = "AND pt.categ_id IN %(categ_ids)s"
+                params['categ_ids'] = tuple(wizard.categ_ids.ids)
 
             van_query = f"""
                 SELECT 
@@ -822,6 +829,7 @@ class ReportPackingList(models.AbstractModel):
                 WHERE b.delivery_date >= %(date_from)s 
                   AND b.delivery_date <= %(date_to)s
                   {depot_filter}
+                  {categ_filter}
                   AND (b.company_id IS NULL OR b.company_id IN %(company_ids)s)
                 ORDER BY b.delivery_date ASC, b.code ASC, b.id ASC, sol.id ASC
             """
@@ -959,6 +967,14 @@ class ReportPackingList(models.AbstractModel):
                 domain.append(('sale_line_id.depot_id', 'in', wizard.depot_ids.ids))
         if late is not None:
             domain.append(('is_late_order', '=', late))
+        if wizard.categ_ids:
+            # Same category the report groups the line under: the history
+            # line's own category, falling back to the product's category.
+            categ_ids = wizard.categ_ids.ids
+            domain += [
+                '|', ('category_id', 'in', categ_ids),
+                '&', ('category_id', '=', False), ('product_id.categ_id', 'in', categ_ids),
+            ]
         return self.env['stock.fresh.box.history.line'].search(domain)
 
     @api.model
@@ -1670,6 +1686,8 @@ class ReportPackingList(models.AbstractModel):
             c.title_col_ratio = title_col_ratio
             return c
 
+        doc.title = title_text or 'Packing List'  # PDF metadata - shown by browser PDF viewers
+        doc.author = self.env.company.name or ''
         doc.build(story, canvasmaker=_make_canvas)
         pdf_value = buffer.getvalue()
         buffer.close()

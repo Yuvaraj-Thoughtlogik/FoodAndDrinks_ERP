@@ -112,7 +112,7 @@ class PredictionReportWizard(models.TransientModel):
 
         Courier uses the courier layout; Regal Van and 'Both' use the main
         layout. For 'Both' the lines of both channels are merged into that
-        single report (courier lines appear under a 'Courier' depot row)
+        single report (courier lines are listed under their real depot)
         instead of printing two separate reports."""
         self.ensure_one()
         self._check_has_lines()

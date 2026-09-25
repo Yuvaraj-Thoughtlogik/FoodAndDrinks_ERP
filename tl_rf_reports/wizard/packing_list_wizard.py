@@ -67,6 +67,15 @@ class PackingListWizard(models.TransientModel):
         default=_default_depot_ids,
         help="Select one or more depots. Leave unselected to include all depots."
     )
+    categ_ids = fields.Many2many(
+        'product.category',
+        'packing_list_wizard_category_rel',
+        'wizard_id',
+        'category_id',
+        string='Product Category',
+        help="Only products belonging to these categories are included in the report. "
+             "Leave empty to include all categories."
+    )
     include_late_orders = fields.Boolean(
         string='Late Order',
         default=False,

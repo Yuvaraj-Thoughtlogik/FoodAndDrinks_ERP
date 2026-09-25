@@ -38,6 +38,13 @@
                                    class="o_horizontal_checkboxes"
                                    nolabel="1"/>
                         </group>
+
+                        <group colspan="4">
+                            <field name="categ_ids"
+                                   widget="many2many_tags"
+                                   options="{'no_create': True}"
+                                   placeholder="All Categories"/>
+                        </group>
                     </group>
                 </sheet>
                 <footer>

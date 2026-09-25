@@ -405,6 +405,8 @@ class ReportBoxCountReport(models.AbstractModel):
             c.printed_at_text = printed_at_str
             return c
 
+        doc.title = 'Box Count Report'  # PDF metadata - shown by browser PDF viewers
+        doc.author = self.env.company.name or ''
         doc.build(story, canvasmaker=_make_canvas)
         pdf_value = buffer.getvalue()
         buffer.close()

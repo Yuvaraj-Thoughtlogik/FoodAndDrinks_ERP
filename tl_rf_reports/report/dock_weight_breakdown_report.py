@@ -164,7 +164,7 @@ class ReportDockWeightBreakdown(models.AbstractModel):
 
             # Courier Delivery Flow
             if getattr(wizard, 'delivery_channel', 'regal_van') == 'courier':
-                is_late = bool(wizard.include_late_orders)
+                is_late = wizard._is_late_report()
                 categ_ids = wizard._get_filter_category_ids()
                 orders = self.env['sale.order'].search(
                     [
@@ -185,7 +185,7 @@ class ReportDockWeightBreakdown(models.AbstractModel):
                 for order in orders:
                     lines = order.order_line.filtered(
                         lambda l: not l.display_type and l.product_id and l.product_uom_qty > 0
-                        and bool(l.is_late_order) == is_late
+                        and wizard._line_matches_late(l)
                         and wizard._line_matches_category(l, categ_ids)
                     )
                     if not lines:
@@ -281,7 +281,7 @@ class ReportDockWeightBreakdown(models.AbstractModel):
                 continue
 
             # Regal Van Delivery Flow (Batch-based)
-            is_late = bool(wizard.include_late_orders)
+            is_late = wizard._is_late_report()
             categ_ids = wizard._get_filter_category_ids()
             batch_domain = [
                 ('delivery_date', '>=', wizard.delivery_date_from),
@@ -322,7 +322,7 @@ class ReportDockWeightBreakdown(models.AbstractModel):
                 for order in orders:
                     lines = order.order_line.filtered(
                         lambda l: not l.display_type and l.product_id and l.product_uom_qty > 0
-                        and bool(l.is_late_order) == is_late
+                        and wizard._line_matches_late(l)
                         and wizard._line_matches_category(l, categ_ids)
                     )
                     if not lines:
@@ -484,13 +484,13 @@ class ReportDockWeightBreakdown(models.AbstractModel):
         if not orders:
             return None
 
-        is_late = bool(wizard.include_late_orders)
+        is_late = wizard._is_late_report()
         categ_ids = wizard._get_filter_category_ids()
         categories_map = {}
         for order in orders:
             lines = order.order_line.filtered(
                 lambda l: not l.display_type and l.product_id and l.product_uom_qty > 0
-                and bool(l.is_late_order) == is_late
+                and wizard._line_matches_late(l)
                 and wizard._line_matches_category(l, categ_ids)
             )
             for line in lines:
@@ -551,9 +551,12 @@ class ReportDockWeightBreakdown(models.AbstractModel):
         if not category_pages:
             return None
 
-        return self._build_courier_pdf_bytes(category_pages, delivery_date_from_str, delivery_date_to_str, is_late)
+        return self._build_courier_pdf_bytes(
+            category_pages, delivery_date_from_str, delivery_date_to_str, is_late,
+            is_all=wizard.report_type == 'all',
+        )
 
-    def _build_courier_pdf_bytes(self, category_pages, delivery_date_from_str, delivery_date_to_str, is_late=False):
+    def _build_courier_pdf_bytes(self, category_pages, delivery_date_from_str, delivery_date_to_str, is_late=False, is_all=False):
         """Pure layout step - takes already-grouped/sorted category pages and
         draws them. Split out from _generate_courier_pdf() so the layout code
         can be exercised standalone (e.g. by a smoke test) without touching
@@ -589,7 +592,7 @@ class ReportDockWeightBreakdown(models.AbstractModel):
                 story.append(PageBreak())
 
             categ_esc = xml_escape((cat_page['categ_name'] or '').upper())
-            flow_label = "Courier ALT's" if is_late else "Courier"
+            flow_label = "Courier ALT's" if is_late else ("Courier All" if is_all else "Courier")
             title = Paragraph(f"{flow_label} {categ_esc} Filleters Weights", title_style)
             info = Paragraph(
                 f"For Packing between {today_str} and {today_str}<br/>"
@@ -664,6 +667,8 @@ class ReportDockWeightBreakdown(models.AbstractModel):
             c.footer_left_text = footer_text
             return c
 
+        doc.title = 'Dock Weight Breakdown Report'  # PDF metadata - shown by browser PDF viewers
+        doc.author = self.env.company.name or ''
         doc.build(story, canvasmaker=_make_canvas)
         pdf_value = buffer.getvalue()
         buffer.close()
@@ -686,87 +691,101 @@ class ReportDockWeightBreakdown(models.AbstractModel):
         printed_at_dt = fields.Datetime.context_timestamp(self, fields.Datetime.now())
         printed_at_str = printed_at_dt.strftime('%d/%m/%Y %H:%M:%S')
 
+        is_late = wizard._is_late_report()
+        categ_ids = wizard._get_filter_category_ids()
+
+        # (depot record, sale orders) pairs to report on. Regal Van orders
+        # come from the Round Batches (depot = batch depot); for 'Both' the
+        # courier orders are added too, each line under its real depot
+        # (line depot, else the order's warehouse) so they merge with the
+        # Regal Van weights there - there is no separate "Courier" depot.
+        depot_lines = []  # (depot, line)
+
         batch_domain = [
             ('delivery_date', '>=', wizard.delivery_date_from),
             ('delivery_date', '<=', wizard.delivery_date_to),
         ]
         if wizard.depot_ids:
             batch_domain.append(('depot_id', 'in', wizard.depot_ids.ids))
-        elif hasattr(wizard, 'depot_id') and wizard.depot_id:
-            batch_domain.append(('depot_id', '=', wizard.depot_id.id))
-
         batches = self.env['round.management.batch'].search(
             batch_domain, order='delivery_date asc, code asc, id asc'
         )
-        if not batches:
-            return None
-
-        is_late = bool(wizard.include_late_orders)
-        categ_ids = wizard._get_filter_category_ids()
-        depots_map = {}
         for batch in batches:
             orders = batch.order_ids.filtered(
                 lambda so: so.state in ('sale', 'done')
                 and getattr(so, 'delivery_channel', False) in ('regal_van', False)
             )
-            if not orders:
+            for line in orders.order_line:
+                depot_lines.append((batch.depot_id, line))
+
+        if wizard.delivery_channel == 'both':
+            courier_orders = self.env['sale.order'].search([
+                ('delivery_channel', '=', 'courier'),
+                ('state', 'in', ['sale', 'done']),
+                ('delivery_date', '>=', wizard.delivery_date_from),
+                ('delivery_date', '<=', wizard.delivery_date_to),
+            ], order='delivery_date asc, name asc')
+            for line in courier_orders.order_line:
+                depot = line.depot_id or line.order_id.warehouse_id
+                if wizard.depot_ids and depot not in wizard.depot_ids:
+                    continue
+                depot_lines.append((depot, line))
+
+        depots_map = {}
+        for depot, line in depot_lines:
+            if not (
+                not line.display_type and line.product_id and line.product_uom_qty > 0
+                and wizard._line_matches_late(line)
+                and wizard._line_matches_category(line, categ_ids)
+            ):
                 continue
 
-            depot = batch.depot_id
             depot_name = depot.name or _('Grimsby')
             # Group by display name, not database id: two different depot or
             # category records that happen to render the same text (e.g.
             # per-company duplicates) must not split into two pages.
             depot_key = depot_name.lower()
-
             if depot_key not in depots_map:
                 depots_map[depot_key] = {'depot_name': depot_name, 'categories': {}}
 
-            for order in orders:
-                lines = order.order_line.filtered(
-                    lambda l: not l.display_type and l.product_id and l.product_uom_qty > 0
-                    and bool(l.is_late_order) == is_late
-                    and wizard._line_matches_category(l, categ_ids)
+            product = line.product_id
+            categ = product.categ_id
+            categ_name = (categ.name or _('FRESH')).upper()
+            categ_key = categ_name.lower()
+
+            if categ_key not in depots_map[depot_key]['categories']:
+                depots_map[depot_key]['categories'][categ_key] = {'categ_name': categ_name, 'products': {}}
+
+            prod_key = product.id
+            if prod_key not in depots_map[depot_key]['categories'][categ_key]['products']:
+                uom = line.product_uom_id or product.product_tmpl_id.uom_id
+                unit_weight = self._extract_unit_weight_from_vals(
+                    uom.name or '' if uom else '',
+                    product.weight or product.product_tmpl_id.weight,
+                    line.gross_net_weight or product.product_tmpl_id.gross_net_weight,
+                    line.min_weight,
+                    product.name,
                 )
-                for line in lines:
-                    product = line.product_id
-                    categ = product.categ_id
-                    categ_name = (categ.name or _('FRESH')).upper()
-                    categ_key = categ_name.lower()
+                depots_map[depot_key]['categories'][categ_key]['products'][prod_key] = {
+                    'product_name': product.name or '',
+                    'unit_weight': unit_weight,
+                    'total_weight': 0.0,
+                    'reduced_weight': 0.0,
+                    'increased_weight': 0.0,
+                }
 
-                    if categ_key not in depots_map[depot_key]['categories']:
-                        depots_map[depot_key]['categories'][categ_key] = {'categ_name': categ_name, 'products': {}}
+            qty = float(line.product_uom_qty or 0.0)
+            prod_info = depots_map[depot_key]['categories'][categ_key]['products'][prod_key]
+            line_weight = (prod_info['unit_weight'] * qty) if prod_info['unit_weight'] > 0 else qty
+            prod_info['total_weight'] += line_weight
 
-                    prod_key = product.id
-                    if prod_key not in depots_map[depot_key]['categories'][categ_key]['products']:
-                        uom = line.product_uom_id or product.product_tmpl_id.uom_id
-                        unit_weight = self._extract_unit_weight_from_vals(
-                            uom.name or '' if uom else '',
-                            product.weight or product.product_tmpl_id.weight,
-                            line.gross_net_weight or product.product_tmpl_id.gross_net_weight,
-                            line.min_weight,
-                            product.name,
-                        )
-                        depots_map[depot_key]['categories'][categ_key]['products'][prod_key] = {
-                            'product_name': product.name or '',
-                            'unit_weight': unit_weight,
-                            'total_weight': 0.0,
-                            'reduced_weight': 0.0,
-                            'increased_weight': 0.0,
-                        }
-
-                    qty = float(line.product_uom_qty or 0.0)
-                    prod_info = depots_map[depot_key]['categories'][categ_key]['products'][prod_key]
-                    line_weight = (prod_info['unit_weight'] * qty) if prod_info['unit_weight'] > 0 else qty
-                    prod_info['total_weight'] += line_weight
-
-                    if is_late:
-                        delta_qty = float(line.late_qty_delta or 0.0)
-                        delta_weight = (prod_info['unit_weight'] * delta_qty) if prod_info['unit_weight'] > 0 else delta_qty
-                        if delta_weight < 0:
-                            prod_info['reduced_weight'] += -delta_weight
-                        elif delta_weight > 0:
-                            prod_info['increased_weight'] += delta_weight
+            if is_late:
+                delta_qty = float(line.late_qty_delta or 0.0)
+                delta_weight = (prod_info['unit_weight'] * delta_qty) if prod_info['unit_weight'] > 0 else delta_qty
+                if delta_weight < 0:
+                    prod_info['reduced_weight'] += -delta_weight
+                elif delta_weight > 0:
+                    prod_info['increased_weight'] += delta_weight
 
         combo_pages = []
         for d_key, d_val in sorted(depots_map.items(), key=lambda item: item[1]['depot_name']):
@@ -782,9 +801,11 @@ class ReportDockWeightBreakdown(models.AbstractModel):
         if not combo_pages:
             return None
 
-        return self._build_van_pdf_bytes(combo_pages, formatted_date, printed_at_str, is_late)
+        return self._build_van_pdf_bytes(
+            combo_pages, formatted_date, printed_at_str, is_late, is_all=wizard.report_type == 'all',
+        )
 
-    def _build_van_pdf_bytes(self, combo_pages, formatted_date, printed_at_str, is_late=False):
+    def _build_van_pdf_bytes(self, combo_pages, formatted_date, printed_at_str, is_late=False, is_all=False):
         """Pure layout step - takes already-grouped/sorted depot+category
         pages and draws them. Split out from _generate_van_pdf() so the
         layout code can be exercised standalone (e.g. by a smoke test)
@@ -809,7 +830,12 @@ class ReportDockWeightBreakdown(models.AbstractModel):
         delta_style = ParagraphStyle('DockVanDelta', fontName='Helvetica', fontSize=7.5, leading=9, alignment=2)
 
         formatted_date_esc = xml_escape(formatted_date)
-        report_title = "Dock Weight ALT's Breakdown Report" if is_late else "Dock Weight Breakdown Report"
+        if is_late:
+            report_title = "Dock Weight ALT's Breakdown Report"
+        elif is_all:
+            report_title = "All Dock Weight Breakdown Report"
+        else:
+            report_title = "Dock Weight Breakdown Report"
 
         story = []
         for idx, combo_page in enumerate(combo_pages):
@@ -880,6 +906,8 @@ class ReportDockWeightBreakdown(models.AbstractModel):
             c.footer_left_text = footer_text
             return c
 
+        doc.title = 'Dock Weight Breakdown Report'  # PDF metadata - shown by browser PDF viewers
+        doc.author = self.env.company.name or ''
         doc.build(story, canvasmaker=_make_canvas)
         pdf_value = buffer.getvalue()
         buffer.close()

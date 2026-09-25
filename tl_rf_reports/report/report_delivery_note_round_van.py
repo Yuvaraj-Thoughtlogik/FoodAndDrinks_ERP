@@ -10,7 +10,8 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.platypus import (
-    Flowable, HRFlowable, Image, KeepTogether, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
+    Flowable, HRFlowable, Image, KeepTogether, PageBreak, PageBreakIfNotEmpty, Paragraph, SimpleDocTemplate,
+    Spacer, Table, TableStyle,
 )
 from reportlab.pdfgen import canvas
 
@@ -27,9 +28,12 @@ class _HeaderMarker(Flowable):
     for every physical page that batch spans - the canvas just re-draws
     whatever was last stamped when a page is finalised (see _VanNoteCanvas).
     """
-    def __init__(self, header_text):
+    def __init__(self, header_text, plain=False):
         super().__init__()
         self.header_text = header_text
+        # plain=True: the following pages are an attached document (B2B
+        # invoice / driver copy) - no round header, footer or page number.
+        self.plain = plain
         self.width = 0
         self.height = 0
 
@@ -38,6 +42,7 @@ class _HeaderMarker(Flowable):
 
     def draw(self):
         self.canv.current_header = self.header_text
+        self.canv.current_plain = self.plain
 
 
 class _VanNoteCanvas(canvas.Canvas):
@@ -50,6 +55,7 @@ class _VanNoteCanvas(canvas.Canvas):
         super().__init__(*args, **kwargs)
         self._saved_page_states = []
         self.current_header = None
+        self.current_plain = False
 
     def showPage(self):
         self._saved_page_states.append(dict(self.__dict__))
@@ -63,6 +69,8 @@ class _VanNoteCanvas(canvas.Canvas):
         super().save()
 
     def _draw_decorations(self):
+        if self.current_plain:
+            return
         self.saveState()
         margin = 9 * mm
         width = A4[0] - (2 * margin)
@@ -210,7 +218,13 @@ class ReportDeliveryNoteRoundVan(DeliveryNoteReportMixin, models.AbstractModel):
         picking_name = (picking.name or '') if picking else ''
         barcode_value = (getattr(picking, 'barcode', False) or picking_name) if picking else ''
 
+        commercial = main_partner.commercial_partner_id
+        customer_type = main_partner.customer_type or commercial.customer_type
+
         return {
+            'order_id': order.id,
+            'picking_id': picking.id if picking else False,
+            'is_b2b': customer_type == 'b2b_trade',
             'cust': cust_str,
             'addr': addr_str,
             'tel': tel_str,
@@ -451,7 +465,7 @@ class ReportDeliveryNoteRoundVan(DeliveryNoteReportMixin, models.AbstractModel):
         story = []
         for gi, group in enumerate(batch_groups):
             if gi:
-                story.append(PageBreak())
+                story.append(PageBreakIfNotEmpty())
 
             header_text = (
                 f"DELIVERY NOTE FOR ROUND: <b>{xml_escape(group['batch_name'])}</b> "
@@ -463,21 +477,65 @@ class ReportDeliveryNoteRoundVan(DeliveryNoteReportMixin, models.AbstractModel):
             story.append(_HeaderMarker(header_text))
             story.append(Spacer(1, 2 * mm))
 
+            # Set after a B2B drop's attached invoice/driver copy: the round's
+            # notes resume on a new page - but only once another drop really
+            # follows. Adding the break + header marker straight after the
+            # attachments would start a page for the zero-size marker alone,
+            # printing an empty page (round header/footer only) at the end.
+            resume_notes = False
             for drop in group['drops']:
+                if resume_notes:
+                    story.append(PageBreakIfNotEmpty())
+                    story.append(_HeaderMarker(header_text))
+                    resume_notes = False
                 story.append(KeepTogether(self._build_drop_flowables(
                     drop, printable_width, cust_style, addr_style, tel_style,
                     item_style, note_style, caption_style, pay_style, order_style, price_style,
                 )))
+                if drop.get('is_b2b'):
+                    attached = self._build_b2b_attachments(drop, printable_width)
+                    if attached:
+                        story.append(PageBreakIfNotEmpty())
+                        story.append(_HeaderMarker(None, plain=True))
+                        story += attached
+                        resume_notes = True
 
         def _make_canvas(*args, **kwargs):
             c = _VanNoteCanvas(*args, **kwargs)
             c.printed_at_text = printed_at_text
             return c
 
+        doc.title = 'Delivery Note Round - Regal Van'  # PDF metadata - shown by browser PDF viewers
+        doc.author = self.env.company.name or ''
         doc.build(story, canvasmaker=_make_canvas)
         pdf_value = buffer.getvalue()
         buffer.close()
         return pdf_value
+
+    def _get_b2b_invoices(self, order):
+        """Customer invoices of the Sales Order, posted or still draft
+        (cancelled invoices and credit notes are not printed)."""
+        return order.invoice_ids.filtered(
+            lambda m: m.move_type == 'out_invoice' and m.state in ('draft', 'posted')
+        ).sorted('id')
+
+    def _build_b2b_attachments(self, drop, width):
+        """B2B customer: the Sales Order's Invoice, then the Driver Copy of
+        the same Delivery Order, each starting on its own page.
+        Delivery Order -> Sales Order -> Invoice; Delivery Order -> Driver Copy."""
+        order = self.env['sale.order'].browse(drop['order_id'])
+        flowables = []
+        invoice_report = self.env['report.tl_rf_reports.report_invoice_regal']
+        for invoice in self._get_b2b_invoices(order):
+            if flowables:
+                flowables.append(PageBreak())
+            flowables += invoice_report.with_company(invoice.company_id)._build_invoice_flowables(invoice, width)
+        if drop.get('picking_id'):
+            picking = self.env['stock.picking'].browse(drop['picking_id'])
+            if flowables:
+                flowables.append(PageBreak())
+            flowables += self.env['report.tl_rf_reports.report_driver_copy']._build_driver_copy_flowables(picking, width)
+        return flowables
 
     def _build_drop_flowables(
         self, drop, printable_width, cust_style, addr_style, tel_style,

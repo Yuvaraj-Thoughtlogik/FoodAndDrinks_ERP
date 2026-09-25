@@ -461,6 +461,8 @@ class ProductionLabelReportPlain(models.AbstractModel):
                 story.append(PageBreak())
             story.extend(self._build_fitted_story(label, index, total_labels))
 
+        doc.title = 'Plain Labels'  # PDF metadata - shown by browser PDF viewers
+        doc.author = self.env.company.name or ''
         doc.build(story, canvasmaker=_make_canvas)
         pdf_value = buffer.getvalue()
         buffer.close()

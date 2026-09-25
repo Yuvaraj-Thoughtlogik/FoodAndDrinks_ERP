@@ -196,6 +196,8 @@ class ProductionLabelReportPlainFrozen(models.AbstractModel):
                 story.append(PageBreak())
             story.extend(self._plain_frozen_label_flowables(label, index, total_labels, styles))
 
+        doc.title = 'Plain Frozen Labels'  # PDF metadata - shown by browser PDF viewers
+        doc.author = self.env.company.name or ''
         doc.build(story)
         pdf_value = buffer.getvalue()
         buffer.close()

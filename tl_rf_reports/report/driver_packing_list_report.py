@@ -668,6 +668,8 @@ class ReportDriverPackingList(models.AbstractModel):
             buffer, pagesize=A4,
             leftMargin=12 * mm, rightMargin=12 * mm, topMargin=32 * mm, bottomMargin=12 * mm,
         )
+        doc.title = 'Driver Packing List'  # PDF metadata - shown by browser PDF viewers
+        doc.author = self.env.company.name or ''
         doc.build(story, canvasmaker=_DriverPackingListCanvas)
         pdf_value = buffer.getvalue()
         buffer.close()

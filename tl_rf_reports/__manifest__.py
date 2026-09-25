@@ -20,6 +20,7 @@
         'base',
         'web',
         'sale',
+        'account',
         'stock',
         'purchase',
         'mrp',
@@ -51,6 +52,7 @@
         'report/driver_packing_list_report.xml',
         'report/purchase_order_report_actions.xml',
         'report/purchase_order_report_templates.xml',
+        'report/driver_copy_report_views.xml',
         'report/frozen_label_report_views.xml',
         'report/plain_frozen_label_report_views.xml',
         'report/plain_label_report_views.xml',
@@ -66,7 +68,6 @@
     'assets': {
         'web.assets_backend': [
             'tl_rf_reports/static/src/scss/horizontal_checkboxes.scss',
-            'tl_rf_reports/static/src/js/print_and_open_lines.js',
         ],
     },
     'installable': True,

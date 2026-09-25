@@ -166,7 +166,7 @@ class ReportPrediction(models.AbstractModel):
                     date_display = ''
 
                 # Depot / Delivery Channel
-                if wizard.delivery_channel == 'courier' or getattr(line.order_id, 'delivery_channel', False) == 'courier':
+                if wizard.delivery_channel == 'courier':
                     depot_name = _('Courier')
                     depot_key = 'courier'
                 else:
@@ -283,24 +283,26 @@ class ReportPrediction(models.AbstractModel):
             ('product_uom_qty', '>', 0),
         ]
 
-        van_domain = [('order_id.delivery_channel', 'in', ('regal_van', False))]
+        depot_domain = []
         if wizard.depot_ids:
             depot_ids = wizard.depot_ids.ids
             # sol.depot_id IN depot_ids OR (sol.depot_id IS NULL AND so.warehouse_id IN depot_ids)
-            van_domain = ['&'] + van_domain + [
+            depot_domain = [
                 '|', ('depot_id', 'in', depot_ids),
                 '&', ('depot_id', '=', False), ('order_id.warehouse_id', 'in', depot_ids),
             ]
-        courier_domain = [('order_id.delivery_channel', '=', 'courier')]
 
         if wizard.delivery_channel == 'courier':
-            domain += courier_domain
+            domain.append(('order_id.delivery_channel', '=', 'courier'))
         elif wizard.delivery_channel == 'both':
-            # Both channels merged into one report: courier lines are always
-            # included, the depot filter only narrows the Regal Van lines.
-            domain += ['|'] + courier_domain + van_domain
+            # Both channels merged into one report, every line (courier
+            # included) listed under its real depot - so the depot filter
+            # applies to both channels alike.
+            domain.append(('order_id.delivery_channel', 'in', ('regal_van', 'courier', False)))
+            domain += depot_domain
         else:
-            domain += van_domain
+            domain.append(('order_id.delivery_channel', 'in', ('regal_van', False)))
+            domain += depot_domain
 
         if wizard.categ_ids:
             domain.append(('categ_id', 'in', wizard.categ_ids.ids))
@@ -352,7 +354,10 @@ class ReportPrediction(models.AbstractModel):
                 date_key = '9999-99-99'
                 date_display = ''
 
-            if wizard.delivery_channel == 'courier' or line.delivery_channel == 'courier':
+            # 'Both': courier lines go under their real depot (line depot,
+            # else the order's warehouse) and merge with the Regal Van qty
+            # there - there is no separate "Courier" depot.
+            if wizard.delivery_channel == 'courier':
                 depot_name = _('Courier')
                 depot_key = 'courier'
             else:
@@ -567,6 +572,8 @@ class ReportPrediction(models.AbstractModel):
             story.append(prediction_table)
 
         numbered_canvas = self._make_numbered_canvas(data['footer_date_str'])
+        doc.title = 'Prediction Report'  # PDF metadata - shown by browser PDF viewers
+        doc.author = self.env.company.name or ''
         doc.build(story, canvasmaker=numbered_canvas)
         pdf_value = buffer.getvalue()
         buffer.close()
@@ -899,6 +906,8 @@ class ReportPredictionCourier(models.AbstractModel):
             story.append(prediction_table)
 
         numbered_canvas = self._make_numbered_canvas(data['footer_date_str'])
+        doc.title = 'Prediction Report'  # PDF metadata - shown by browser PDF viewers
+        doc.author = self.env.company.name or ''
         doc.build(story, canvasmaker=numbered_canvas)
         pdf_value = buffer.getvalue()
         buffer.close()

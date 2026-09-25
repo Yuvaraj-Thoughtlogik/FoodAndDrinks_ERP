@@ -60,13 +60,19 @@ class RequirementReportWizard(models.TransientModel):
         help="Select one or more depots. Leave unselected to include all depots."
     )
 
+    @api.model
+    def _default_categ_ids(self):
+        return self.env['product.category'].search([('name', '=ilike', 'Fresh')])
+
     categ_ids = fields.Many2many(
         'product.category',
         'requirement_report_wizard_category_rel',
         'wizard_id',
         'category_id',
         string='Product Category',
-        help="Select one or more product categories to filter. Leave empty to include all categories."
+        default=_default_categ_ids,
+        help="Fresh is selected by default. Add or remove categories as required; "
+             "leave empty to include all categories."
     )
 
     line_ids = fields.One2many(

@@ -72,25 +72,50 @@ class ReportRequirement(models.AbstractModel):
         categories_map[categ_key]['total_qty'] += qty
 
     @api.model
-    def _explode_requirement_line(self, product, qty, boms_by_product):
+    def _explode_requirement_line(self, product, qty, boms_by_product, _uom=None, _seen=None):
         """Returns the (stock item, qty) pairs one sale order line contributes
-        to the report: the BOM components scaled to the ordered qty when the
-        product has a BOM (the finished product itself is never reported),
-        otherwise the product itself. Shared by the PDF and the wizard's
-        View Lines so both always show the same products/quantities."""
-        bom = boms_by_product.get(product)
-        if not bom:
+        to the report. Shared by the PDF and the wizard's View Lines so both
+        always show the same products/quantities.
+
+        - Sold product with a BOM (Kit or Manufacture): replaced by its
+          components, scaled to the ordered qty.
+        - A component that itself has a BOM (Manufacture, or a nested Kit)
+          is replaced in turn by *its* components, qty scaled through each
+          level, all the way down.
+        - Anything without a BOM is reported as-is.
+
+        boms_by_product doubles as a BOM cache: components not preloaded by
+        the caller are looked up once and stored in it. _uom is the unit qty
+        is expressed in (None for the sold line itself: its qty is taken as
+        is, same as before); _seen guards against circular BOMs.
+        """
+        if product not in boms_by_product:
+            boms_by_product[product] = self.env['mrp.bom']._bom_find(product)[product]
+        bom = boms_by_product[product]
+        if not bom or (_seen and product.id in _seen):
             return [(product, qty)] if qty else []
+
+        if _uom and bom.product_uom_id and _uom != bom.product_uom_id:
+            try:
+                qty = _uom._compute_quantity(qty, bom.product_uom_id)
+            except Exception:
+                pass
         bom_batch_qty = bom.product_qty or 1.0
+        seen = (_seen or set()) | {product.id}
+
         result = []
         for bom_line in bom.bom_line_ids:
             component = bom_line.product_id
-            if not component:
+            if not component or bom_line._skip_bom_line(product):
                 continue
             component_qty = (bom_line.product_qty / bom_batch_qty) * qty
             if component_qty:
-                result.append((component, component_qty))
-        return result
+                result.extend(self._explode_requirement_line(
+                    component, component_qty, boms_by_product,
+                    _uom=bom_line.product_uom_id, _seen=seen,
+                ))
+        # Safety net: a BOM with no usable lines must not make the qty vanish.
+        return result or [(product, qty)]
 
     @api.model
     def _get_report_values(self, docids, data=None):
@@ -346,6 +371,8 @@ class ReportRequirement(models.AbstractModel):
             p.drawOn(canvas_obj, 12 * mm, 10 * mm)
             canvas_obj.restoreState()
 
+        doc.title = 'Requirement Report'  # PDF metadata - shown by browser PDF viewers
+        doc.author = self.env.company.name or ''
         doc.build(story, onFirstPage=_draw_footer, onLaterPages=_draw_footer)
         pdf_value = buffer.getvalue()
         buffer.close()
@@ -488,6 +515,8 @@ class ReportRequirementCourier(models.AbstractModel):
             p.drawOn(canvas_obj, 12 * mm, 10 * mm)
             canvas_obj.restoreState()
 
+        doc.title = 'Requirement Report'  # PDF metadata - shown by browser PDF viewers
+        doc.author = self.env.company.name or ''
         doc.build(story, onFirstPage=_draw_footer, onLaterPages=_draw_footer)
         pdf_value = buffer.getvalue()
         buffer.close()

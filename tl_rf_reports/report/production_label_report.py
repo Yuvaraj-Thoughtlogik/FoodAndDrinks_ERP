@@ -282,6 +282,8 @@ class ProductionLabelReport(models.AbstractModel):
                 story.append(PageBreak())
             story.extend(self._label_flowables(label, index, total_labels, logo_flowable, is_van, styles))
 
+        doc.title = 'Production Labels'  # PDF metadata - shown by browser PDF viewers
+        doc.author = self.env.company.name or ''
         doc.build(story)
         pdf_value = buffer.getvalue()
         buffer.close()

@@ -480,6 +480,8 @@ class ReportActiveBatch(models.AbstractModel):
             canv.drawString(12 * mm, 8 * mm, f"Printed on {printed_at_str}")
             canv.restoreState()
 
+        doc.title = 'Active Batch Report'  # PDF metadata - shown by browser PDF viewers
+        doc.author = self.env.company.name or ''
         doc.build(story, onFirstPage=_draw_footer, onLaterPages=_draw_footer)
         pdf_value = buffer.getvalue()
         buffer.close()
