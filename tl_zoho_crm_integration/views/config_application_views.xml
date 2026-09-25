@@ -1,0 +1,46 @@
+<odoo>
+    <!-- Inherit Form View to Modify it -->
+    <record id="view_zoho_config_application_crm_form" model="ir.ui.view">
+        <field name="name">zoho.config.application.crm.form</field>
+        <field name="model">zoho.config.application</field>
+        <field name="inherit_id" ref="tl_odoo_zoho_integration.view_zoho_config_application_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//header" position="inside">
+                <button name="action_import_crm_module" type="object"
+                         invisible="addon_name != 'tl_zoho_crm_integration'" class="o_button_generate_leads"
+                        string="Import Standard CRM Module" display="always"
+                />
+
+                <button class="btn btn-primary"
+                        name="create_crm_scheduled_action"
+                        invisible="not schedule_ids or addon_name != 'tl_zoho_crm_integration'"
+                        type="object"
+                        icon="fa-clock-o"
+                        confirm="Do you want to set up this scheduled synchronization?"
+                        string="Schedule Sync"/>
+
+            </xpath>
+            <xpath expr="//sheet/group[1]" position="inside">
+                <group invisible="not schedule_ids or addon_name != 'tl_zoho_crm_integration'">
+                    <button class="btn btn-secondary shadow-sm"
+                            name="sync_crm_from_cron"
+                            type="object"
+                            confirm="Do you want to synchronization now?"
+                            string="Sync Now"/>
+                </group>
+            </xpath>
+        </field>
+    </record>
+    <!-- Inherit Form View to Modify it -->
+    <record id="view_zoho_config_application_kanban_import_module" model="ir.ui.view">
+        <field name="name">zoho.config.application.kanban</field>
+        <field name="model">zoho.config.application</field>
+        <field name="inherit_id" ref="tl_odoo_zoho_integration.view_zoho_config_application_kanban"/>
+        <field name="arch" type="xml">
+            <xpath expr="//kanban/templates/t[@t-name='menu']/a[@name='action_create_module']" position="after">
+                <a t-if="installed"  invisible="addon_name != 'tl_zoho_crm_integration'" name="action_import_crm_module" type="object" role="menuitem" class="dropdown-item" >Import Standard CRM Module</a>
+            </xpath>
+
+        </field>
+    </record>
+</odoo>

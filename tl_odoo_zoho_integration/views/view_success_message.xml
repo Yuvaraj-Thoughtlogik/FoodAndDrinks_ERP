@@ -1,0 +1,77 @@
+<odoo>
+    <template id="success_redirect_template">
+        <style>
+            .zoho-auth-wrapper {
+                height: 100vh;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                font-family: 'Segoe UI', 'Roboto', sans-serif;
+                margin: 0;
+            }
+
+            .zoho-auth-card {
+                background: rgba(255, 255, 255, 0.05);
+                backdrop-filter: blur(15px);
+                -webkit-backdrop-filter: blur(15px);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 20px;
+                padding: 40px 30px;
+                max-width: 480px;
+                width: 90%;
+                box-shadow: 0 0 40px rgba(114, 9, 183, 0.4);
+                text-align: center;
+                color: #fff;
+                background: linear-gradient(135deg, #1a1a1d, #3a0ca3);
+                animation: zoho-fadeInUp 0.7s ease-out;
+            }
+
+            .zoho-auth-icon {
+                font-size: 80px;
+                color: #00ffae;
+                text-shadow: 0 0 10px #00ffae, 0 0 20px #00ffae;
+                animation: zoho-pulse 1.5s infinite;
+            }
+
+            @keyframes zoho-fadeInUp {
+                from { opacity: 0; transform: translateY(30px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
+
+            @keyframes zoho-pulse {
+                0% { transform: scale(1); opacity: 1; }
+                50% { transform: scale(1.1); opacity: 0.85; }
+                100% { transform: scale(1); opacity: 1; }
+            }
+        </style>
+
+        <t t-name="zoho.success_redirect_template">
+            <div class="zoho-auth-wrapper">
+                <div class="zoho-auth-card">
+                    <div class="zoho-auth-icon">
+                        <i class="fa fa-check-circle"></i>
+                    </div>
+                    <h2>Authentication Successful</h2>
+                    <p>Redirecting to your Odoo portal in
+                        <span id="countdown">5</span> seconds...
+                    </p>
+                </div>
+            </div>
+            <input type="hidden" id="redirect_url" t-att-value="redirect_url"/>
+            <script type="text/javascript">
+                var redirectUrl = document.getElementById('redirect_url').value;
+                var countdown = 5;
+                var countdownElement = document.getElementById('countdown');
+
+                var interval = setInterval(function() {
+                    countdown--;
+                    countdownElement.textContent = countdown;
+                    if (countdown &lt;= 0) {
+                        clearInterval(interval);
+                        window.location.href = redirectUrl;
+                    }
+                }, 1000);
+            </script>
+        </t>
+    </template>
+</odoo>

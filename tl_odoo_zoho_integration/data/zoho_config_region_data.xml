@@ -1,0 +1,40 @@
+<odoo>
+    <data noupdate="0">
+
+        <!-- US -->
+        <record id="zoho_region_us" model="zoho.config.region">
+            <field name="name">US (United States)</field>
+            <field name="base_url">https://www.zohoapis.com</field>
+            <field name="account_url">https://accounts.zoho.com</field>
+        </record>
+
+        <!-- EU -->
+        <record id="zoho_region_eu" model="zoho.config.region">
+            <field name="name">EU (Europe)</field>
+            <field name="base_url">https://www.zohoapis.eu</field>
+            <field name="account_url">https://accounts.zoho.eu</field>
+        </record>
+
+        <!-- IN -->
+        <record id="zoho_region_in" model="zoho.config.region">
+            <field name="name">IN (India)</field>
+            <field name="base_url">https://www.zohoapis.in</field>
+            <field name="account_url">https://accounts.zoho.in</field>
+        </record>
+
+        <!-- AU -->
+        <record id="zoho_region_au" model="zoho.config.region">
+            <field name="name">AU (Australia)</field>
+            <field name="base_url">https://www.zohoapis.com.au</field>
+            <field name="account_url">https://accounts.zoho.com.au</field>
+        </record>
+
+        <!-- CN -->
+        <record id="zoho_region_cn" model="zoho.config.region">
+            <field name="name">CN (China)</field>
+            <field name="base_url">https://www.zohoapis.com.cn</field>
+            <field name="account_url">https://accounts.zoho.com.cn</field>
+        </record>
+
+    </data>
+</odoo>

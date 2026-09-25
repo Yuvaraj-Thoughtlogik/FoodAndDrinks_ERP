@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="tl_odoo_zoho_integration.NotifyMessage">
+      <div class="notify-msg glow" id="notifyBar">
+      <i class="fa-solid fa-circle-check notify-icon"></i>
+      <span t-out="value">Your changes were saved successfully!</span>
+  </div>
+    </t>
+</templates>

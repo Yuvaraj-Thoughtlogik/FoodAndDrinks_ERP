@@ -1,0 +1,103 @@
+.zoho_app_kanban{
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 15px;
+    align-items: center !important;
+    padding: 18px !important;
+    border-radius: 12px;
+    background: #ffffff;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    width: 450px !important;
+}
+.zoho_app_kanban .o_dropdown_kanban,.zoho_app_kanban button,.zoho_app_kanban .btn{
+    pointer-events: auto !important;
+}
+.no-open{
+    pointer-events: none !important;
+    transform: unset !important;
+    box-shadow: unset !important;
+}
+article.zoho_app_kanban:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+.zoho_app_kanban .card-icon {
+    flex-shrink: 0;
+}
+.zoho_app_kanban .card-body {
+    flex: 1;
+}
+.zoho_app_kanban .card-title {
+    font-weight: 600;
+    font-size: 1.1rem;
+    margin-bottom: 4px;
+}
+.zoho_app_kanban .card-desc {
+    color: #6c757d;
+    font-size: 0.85rem;
+    margin: 0;
+}
+.zoho_app_kanban .card-stats {
+    font-size: 0.9rem;
+    font-weight: 500;
+    margin-top: 6px;
+}
+.zoho_app_kanban .card-footer {
+    margin-top: 10px;
+    display: flex;
+    gap: 8px;
+}
+    .notify-msg {
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        gap: 10px;
+        margin: 10px 0;
+        width: 100%;
+        background: linear-gradient(135deg, #2E7D32, #4CAF50);
+        color: white;
+        padding: 14px 20px;
+        font-size: 14px;
+        font-weight: 500;
+        border-radius: 8px;
+        text-align: center;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+
+        /* animation */
+        opacity: 0;
+        transform: translateY(-20px);
+        animation: slideDownFade 0.6s ease forwards;
+    }
+
+    /* lively glowing effect */
+    .notify-msg.glow {
+        box-shadow: 7px 12px 14px rgba(76, 175, 80, 0.1), 0 0 20px rgba(76, 175, 80, 0.5);
+    }
+
+    @keyframes slideDownFade {
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    /* subtle pulse icon */
+    .notify-icon {
+        font-size: 18px;
+        animation: pulseIcon 1.4s infinite;
+    }
+
+    @keyframes pulseIcon {
+        0%, 100% { transform: scale(1); opacity: 1; }
+        50% { transform: scale(1.2); opacity: 0.8; }
+    }
+.jsoneditor-frame{
+    display: none;
+}
+.jsoneditor{
+    border:none;
+}
+.jsoneditor-menu{
+    background-color: gray;
+    border-bottom: 1px solid black;
+}

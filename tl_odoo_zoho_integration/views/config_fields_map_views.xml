@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo>
+    <!-- list view for Zoho Config Fields (Optional stand-alone) -->
+    <record id="view_zoho_config_fields_list" model="ir.ui.view">
+        <field name="name">zoho.config.fields.map.list</field>
+        <field name="model">zoho.config.fields.map</field>
+        <field name="arch" type="xml">
+            <list create="false">
+                <field name="name"/>
+                <field name="odoo_field_name"/>
+                <field name="field_type"/>
+                <field name="cr_sync_module_id"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Form view for Zoho Config Fields (Optional stand-alone) -->
+    <record id="view_zoho_config_fields_form" model="ir.ui.view">
+        <field name="name">zoho.config.fields.map.form</field>
+        <field name="model">zoho.config.fields.map</field>
+        <field name="arch" type="xml">
+            <form create="false" edit="false">
+                <sheet>
+                    <group>
+                        <field name="name"/>
+                        <field name="odoo_field_name"/>
+                        <field name="field_type"/>
+                        <field name="cr_sync_module_id"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+</odoo>

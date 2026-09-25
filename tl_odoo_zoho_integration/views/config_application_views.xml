@@ -1,0 +1,208 @@
+<odoo>
+    <record id="view_zoho_config_application_form" model="ir.ui.view">
+        <field name="name">zoho.config.application.form</field>
+        <field name="model">zoho.config.application</field>
+        <field name="arch" type="xml">
+            <form string="Zoho CRM Configuration" create="false">
+                <header>
+                    <button
+                            name="action_create_module"
+                            type="object"
+                            icon="fa-plus"
+                            string="Create Custom Module"
+                    />
+                    <button
+                            name="action_active_all_view"
+                            invisible="not schedule_ids"
+                            type="object"
+                            icon="fa-refresh"
+                            string="Active All Views"
+                    />
+
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_logs"
+                                type="object"
+                                class="btn-secondary"
+                                string="Log History"
+                                icon="fa-list-alt"/>
+
+                        <button name="action_view_modules"
+                                type="object"
+                                class="btn-secondary"
+                                string="Modules"
+                                icon="fa-cubes"/>
+                        <button name="action_view_crons"
+                                type="object"
+                                class="btn-secondary"
+                                string="Schedules"
+                                icon="fa-clock-o"/>
+                    </div>
+
+                    <group>
+                        <group>
+                            <field name="name" readonly="1"/>
+                            <label for="zoho_to_odoo"/>
+                            <div class="oe_row">
+                                <field name="zoho_to_odoo" string="Sync Type"/>
+                                <label for="zoho_to_odoo" string="Zoho to Odoo"/>
+                                <field name="odoo_to_zoho" string="Odoo to Zoho"/>
+                                <label for="odoo_to_zoho"/>
+                            </div>
+                            <field name="sync_frequency"/>
+                        </group>
+                    </group>
+
+                    <field name="notify_msg" invisible="re_schedule or not notify_msg" widget="notify_msg_widget" nolabel="1"/>
+
+                    <div style="margin-bottom:30px;" class="alert alert-warning" role="alert" invisible="not re_schedule or not schedule_ids">
+                        The Sync Modules or Sync Frequency have been modified. The synchronization is still running on the old schedule. Please reschedule to apply the changes.
+                    </div>
+
+                    <notebook>
+                        <page name="Sync Configuration">
+                            <group string="Sync Modules">
+                                <field name="schedule_ids" colspan="4" nolabel="1">
+                                    <list editable="bottom">
+                                        <field name="sequence" widget="handle"/>
+                                        <field name="module_id"/>
+                                        <field name="odoo_model_name"/>
+                                        <field name="sync_type"/>
+                                        <field name="name"/>
+                                        <field name="last_sync" readonly="1"/>
+                                        <button type="object" name="action_view_module" invisible="not module_id" class="btn-outline-primary shadow-sm btn-sm" string="View Module"/>
+                                        <!--                                        <span style="display:block;width:5px;"></span>-->
+                                        <button type="object" name="action_view_logs" invisible="not module_id" class="btn-secondary shadow-sm btn-sm" string="View Logs"/>
+                                    </list>
+                                    <form>
+                                        <group>
+                                            <group>
+                                                <field name="module_id"/>
+                                                <label for="zoho_to_odoo"/>
+                                                <div class="oe_row">
+                                                    <field name="zoho_to_odoo" string="Sync Type"/>
+                                                    <label for="zoho_to_odoo" string="Zoho to Odoo"/>
+                                                    <field name="odoo_to_zoho" string="Odoo to Zoho"/>
+                                                    <label for="odoo_to_zoho"/>
+                                                </div>
+                                                <field name="sync_frequency"/>
+                                                <field name="cron_id"/>
+                                            </group>
+                                        </group>
+
+                                    </form>
+                                </field>
+                            </group>
+                        </page>
+                    </notebook>
+                </sheet>
+
+            </form>
+        </field>
+    </record>
+
+    <record id="view_zoho_config_application_list" model="ir.ui.view">
+        <field name="name">zoho.config.application.list</field>
+        <field name="model">zoho.config.application</field>
+        <field name="arch" type="xml">
+            <list create="false" string="Zoho CRM Configuration">
+                <field name="name"/>
+                <field name="sync_type"/>
+                <field name="sync_frequency"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_zoho_config_application_kanban" model="ir.ui.view">
+        <field name="name">zoho.config.application.kanban</field>
+        <field name="model">zoho.config.application</field>
+        <field name="arch" type="xml">
+            <kanban create="false" class="o_modules_kanban">
+                <header>
+                     <button name="update_app_list" type="object" class="btn btn-primary shadow-sm btn-sm"
+                        string="Update App list" display="always"
+                />
+                </header>
+                <field name="name"/>
+                <field name="sync_type"/> <!-- example extra field -->
+                <field name="addon_state"/> <!-- example extra field -->
+
+                <templates>
+                    <t t-name="menu">
+                        <t t-set="installed" t-value="record.addon_state.raw_value == 'installed'"/>
+                        <a type="object" name="action_view_addon_info" class="dropdown-item">Addon Info</a>
+                        <a t-if="installed" invisible="not schedule_ids" name="action_active_all_view" type="object" role="menuitem" class="dropdown-item" >Active All Views</a>
+                        <a t-if="installed" name="action_create_module" type="object" role="menuitem" class="dropdown-item" >Create Custom Module</a>
+                        <a t-if="installed" name="action_deactivate_addon" type="object" role="menuitem" class="dropdown-item" >Deactivate</a>
+<!--                        <a name="unlink" type="object" role="menuitem" class="dropdown-item" >delete</a>-->
+                    </t>
+                    <t t-name="card" class="zoho_app_kanban no-open">
+                        <t t-set="installed" t-value="record.addon_state.raw_value == 'installed'"/>
+                        <aside class="card-icon">
+                            <field name="icon" widget="image_url" options="{'size': [70, 100]}"/>
+                            <field t-if="record.icon_flag.raw_value" name="icon_flag" class="oe_module_flag"/>
+                        </aside>
+
+                        <main class="card-body">
+                            <!-- Title -->
+                            <div class="card-title">
+                                <field name="name"/>
+                            </div>
+
+                            <!-- Description -->
+                            <p class="card-desc">
+                                <code><field name="description"/></code>
+                            </p>
+
+                            <!-- Stats -->
+                            <div class="card-stats">
+                                Total schedules: <field name="schedule_count"/>
+                            </div>
+
+                            <!-- Footer buttons -->
+                            <footer t-if="installed" class="card-footer d-flex gap-3" >
+                                <button
+                                        type="object"
+                                        class="btn btn-outline-secondary btn-sm shadow-sm"
+                                        name="action_view_modules"
+                                        icon="fa-cubes me-1"
+                                        string="View Modules"
+                                />
+                                <button
+                                        type="object"
+                                        class="btn btn-outline-secondary btn-sm shadow-sm"
+                                        name="action_view_logs"
+                                        icon="fa-list-alt me-1"
+                                        string="View Logs"
+                                />
+                                <a type="open" role="button" title="Open the Application"
+                                   class="btn btn-primary btn-sm shadow-sm">
+                                    <i  class="fa fa-folder-open me-1"/> Open
+                                </a>
+                            </footer>
+                            <footer t-else="" class="card-footer d-flex gap-3" >
+                                <button
+                                        type="object"
+                                        class="btn btn-primary btn-sm shadow-sm"
+                                        name="action_active_addon"
+                                        icon="fa-play me-1"
+                                        string="Activate"
+                                />
+                                <button
+                                        type="object"
+                                        class="btn btn-secondary btn-sm shadow-sm"
+                                        name="action_view_addon_info"
+                                        icon="fa-info-circle me-1"
+                                        string="Addon Info"
+                                />
+                            </footer>
+                        </main>
+                        <!--                        </article>-->
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+
+</odoo>

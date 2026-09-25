@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo>
+    <record id="action_zoho_config_fields" model="ir.actions.act_window">
+        <field name="name">Zoho Sync Fields Map</field>
+        <field name="res_model">zoho.config.fields.map</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'group_by': 'cr_sync_module_id'}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No fields mapping found
+            </p>
+            <p>
+                Fields mapping defines how Zoho fields connect with Odoo fields.
+                Create a new mapping to sync data between Zoho modules and Odoo models.
+            </p>
+        </field>
+    </record>
+    <!-- Action and Menu for Zoho Modules -->
+    <record id="action_zoho_config_module" model="ir.actions.act_window">
+        <field name="name">Zoho Sync Modules</field>
+        <field name="res_model">zoho.config.module</field>
+        <field name="view_mode">kanban,list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No Zoho modules found
+            </p>
+            <p>
+                Zoho modules represent the entities you want to synchronize
+                (like Leads, Contacts, Invoices, or Creator apps).
+                Add or import modules here to enable syncing.
+            </p>
+        </field>
+    </record>
+
+    <record id="action_open_first_zoho_config" model="ir.actions.server">
+        <field name="name">Open First Zoho Config</field>
+        <field name="model_id" ref="model_zoho_config"/>
+        <field name="state">code</field>
+        <field name="code">action = env['zoho.config'].open_first_record()</field>
+    </record>
+
+    <record id="action_zoho_config_logs" model="ir.actions.act_window">
+        <field name="name">Zoho Config Logs</field>
+        <field name="res_model">zoho.config.logs</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <record id="action_zoho_config_application" model="ir.actions.act_window">
+        <field name="name">Zoho Applications</field>
+        <field name="res_model">zoho.config.application</field>
+        <field name="view_mode">kanban,list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No Zoho applications found
+            </p>
+            <p>
+                Install or activate Zoho integration addons
+                (e.g. CRM, Creator, Books, ...).<br/>
+                Applications will appear here automatically once the related addon is installed.
+            </p>
+        </field>
+
+    </record>
+
+
+<!--    <record id="action_compute_zoho_application" model="ir.actions.server">-->
+<!--        <field name="name">Zoho Application</field>-->
+<!--        <field name="model_id" ref="model_zoho_config"/>-->
+<!--        <field name="state">code</field>-->
+<!--        <field name="code">action = env['zoho.config'].open_action()</field>-->
+<!--    </record>-->
+    <record id="action_compute_zoho_application_root" model="ir.actions.server">
+        <field name="name">Zoho Application</field>
+        <field name="model_id" ref="model_zoho_config"/>
+        <field name="state">code</field>
+        <field name="code">action = env['zoho.config'].open_menu()</field>
+    </record>
+
+    <record id="action_open_after_install" model="ir.actions.server">
+        <field name="name">Open First Zoho Config</field>
+        <field name="model_id" ref="model_zoho_config"/>
+        <field name="state">code</field>
+        <field name="code">action = env['zoho.config'].action_open_after_install()</field>
+    </record>
+
+    <record id="open_config_after_install" model="ir.actions.todo">
+        <field name="action_id" ref="tl_odoo_zoho_integration.action_compute_zoho_application_root"/>
+    </record>
+
+
+
+<!--    <menuitem id="menu_zoho_integration_root" name="Zoho Connector" sequence="10"-->
+<!--              web_icon="tl_odoo_zoho_integration,static/description/icon.png"-->
+<!--              action="action_compute_zoho_application_root"/>-->
+    <menuitem id="menu_zoho_integration_root" name="Zoho Connector" sequence="10"
+              web_icon="tl_odoo_zoho_integration,static/description/icon.png"
+              />
+
+<!--    <menuitem id="menu_zoho_application" name="Zoho Applications"-->
+<!--              parent="menu_zoho_integration_root" sequence="10"-->
+<!--              action="action_compute_zoho_application"/>-->
+    <menuitem id="menu_zoho_application" name="Zoho Applications"
+              parent="menu_zoho_integration_root" sequence="10"
+              action="action_zoho_config_application"/>
+
+    <menuitem id="menu_zoho_configuration" name="Configuration"
+              parent="menu_zoho_integration_root" sequence="999"
+              action="action_open_first_zoho_config"/>
+
+
+    <!--    <menuitem id="menu_zoho_root" name="Zoho Sync" sequence="10"/>-->
+<!--    <menuitem id="menu_zoho_structure" name="Data Structure" parent="menu_zoho_integration_root" sequence="20"/>-->
+
+    <menuitem id="menu_zoho_modules" name="Modules Map" parent="menu_zoho_integration_root" action="action_zoho_config_module" sequence="20"/>
+
+<!--    <menuitem id="menu_zoho_fields" name="Fields Map" parent="menu_zoho_structure" action="action_zoho_config_fields" sequence="21"/>-->
+
+    <menuitem id="menu_zoho_config_logs"
+              name="Logs"
+              parent="menu_zoho_integration_root"
+              action="action_zoho_config_logs"
+              sequence="30"/>
+
+</odoo>

@@ -1,0 +1,100 @@
+<odoo>
+    <data noupdate="0">
+
+        <record id="zoho_module_users" model="zoho.import.module.name">
+            <field name="name">Users</field>
+            <field name="sequence">1</field>
+        </record>
+
+        <record id="zoho_module_accounts" model="zoho.import.module.name">
+            <field name="name">Accounts</field>
+            <field name="sequence">2</field>
+        </record>
+
+        <record id="zoho_module_contacts" model="zoho.import.module.name">
+            <field name="name">Contacts</field>
+            <field name="sequence">3</field>
+        </record>
+
+        <record id="zoho_module_products" model="zoho.import.module.name">
+            <field name="name">Products</field>
+            <field name="sequence">4</field>
+        </record>
+
+        <record id="zoho_module_vendors" model="zoho.import.module.name">
+            <field name="name">Vendors</field>
+            <field name="sequence">5</field>
+        </record>
+
+        <record id="zoho_module_leads" model="zoho.import.module.name">
+            <field name="name">Leads</field>
+            <field name="sequence">6</field>
+        </record>
+
+        <record id="zoho_module_deals" model="zoho.import.module.name">
+            <field name="name">Deals</field>
+            <field name="sequence">7</field>
+        </record>
+
+        <record id="zoho_module_quotes" model="zoho.import.module.name">
+            <field name="name">Quotes</field>
+            <field name="sequence">8</field>
+        </record>
+
+        <record id="zoho_module_sales_orders" model="zoho.import.module.name">
+            <field name="name">Sales_Orders</field>
+            <field name="sequence">9</field>
+        </record>
+
+        <record id="zoho_module_purchase_orders" model="zoho.import.module.name">
+            <field name="name">Purchase_Orders</field>
+            <field name="sequence">10</field>
+        </record>
+
+        <record id="zoho_module_invoices" model="zoho.import.module.name">
+            <field name="name">Invoices</field>
+            <field name="sequence">11</field>
+        </record>
+
+        <record id="zoho_module_tasks" model="zoho.import.module.name">
+            <field name="name">Tasks</field>
+            <field name="sequence">12</field>
+        </record>
+
+        <record id="zoho_module_meetings" model="zoho.import.module.name">
+            <field name="name">Meetings</field>
+            <field name="sequence">13</field>
+        </record>
+
+        <record id="zoho_module_calls" model="zoho.import.module.name">
+            <field name="name">Calls</field>
+            <field name="sequence">14</field>
+        </record>
+
+        <record id="zoho_module_events" model="zoho.import.module.name">
+            <field name="name">Events</field>
+            <field name="sequence">15</field>
+        </record>
+
+        <record id="zoho_module_approvals" model="zoho.import.module.name">
+            <field name="name">Approvals</field>
+            <field name="sequence">16</field>
+        </record>
+
+        <record id="zoho_module_my_jobs" model="zoho.import.module.name">
+            <field name="name">My_Jobs</field>
+            <field name="sequence">17</field>
+        </record>
+
+        <record id="zoho_module_reports" model="zoho.import.module.name">
+            <field name="name">Reports</field>
+            <field name="sequence">18</field>
+        </record>
+
+        <record id="zoho_module_analytics" model="zoho.import.module.name">
+            <field name="name">Analytics</field>
+            <field name="sequence">19</field>
+        </record>
+
+    </data>
+</odoo>
