@@ -60,6 +60,36 @@ class BatchReportWizard(models.TransientModel):
         help="When unchecked, Late Orders are excluded. When checked, Late Orders are filtered."
     )
 
+    @api.model
+    def _default_category_ids(self):
+        return self.env['product.category'].search([('name', '=ilike', 'Fresh')])
+
+    category_ids = fields.Many2many(
+        'product.category',
+        'batch_report_wizard_category_rel',
+        'wizard_id',
+        'category_id',
+        string='Product Categories',
+        default=_default_category_ids,
+        help="Only products in these categories (or their sub-categories) are included. "
+             "Leave empty to include all categories."
+    )
+
+    def _get_filter_category_ids(self):
+        """Selected categories plus their sub-categories, or an empty list
+        when no category is selected (= no filtering)."""
+        self.ensure_one()
+        if not self.category_ids:
+            return []
+        return self.env['product.category'].search([('id', 'child_of', self.category_ids.ids)]).ids
+
+    def _line_matches_category(self, line, categ_ids=None):
+        """True when the sale order line's product falls within the wizard's
+        category filter (always True when no category is selected)."""
+        if categ_ids is None:
+            categ_ids = self._get_filter_category_ids()
+        return not categ_ids or line.product_id.categ_id.id in categ_ids
+
     # Legacy / alias compatibility
     start_date = fields.Date(
         related='delivery_date_from',
@@ -105,6 +135,7 @@ class BatchReportWizard(models.TransientModel):
         unchanged; only the report_action piece inside it is now an
         ir.actions.act_url download."""
         self.ensure_one()
+        categ_ids = self._get_filter_category_ids()
 
         if self.delivery_channel == 'courier':
             order_domain = [
@@ -118,6 +149,8 @@ class BatchReportWizard(models.TransientModel):
                 # qualifying line, not just orders flagged late as a whole.
                 ('order_line.is_late_order', '=', bool(self.include_late_orders)),
             ]
+            if categ_ids:
+                order_domain.append(('order_line.product_id.categ_id', 'in', categ_ids))
 
             matching_orders = self.env['sale.order'].search(order_domain)
             if not matching_orders:
@@ -182,6 +215,7 @@ class BatchReportWizard(models.TransientModel):
         eligible_orders = eligible_orders.filtered(
             lambda so: any(
                 bool(l.is_late_order) == is_late
+                and self._line_matches_category(l, categ_ids)
                 for l in so.order_line
                 if not l.display_type and l.product_id and l.product_uom_qty > 0
             )
@@ -214,6 +248,7 @@ class BatchReportWizard(models.TransientModel):
     def action_view_lines(self):
         """Opens the Sale Order Line list view with grouping by category (Courier) or depot and category (Regal Van)."""
         self.ensure_one()
+        categ_ids = self._get_filter_category_ids()
 
         if self.delivery_channel == 'courier':
             domain = [
@@ -225,6 +260,8 @@ class BatchReportWizard(models.TransientModel):
                 ('product_id', '!=', False),
                 ('is_late_order', '=', bool(self.include_late_orders)),
             ]
+            if categ_ids:
+                domain.append(('product_id.categ_id', 'in', categ_ids))
 
             matching_lines = self.env['sale.order.line'].search_count(domain)
             if not matching_lines:
@@ -264,6 +301,8 @@ class BatchReportWizard(models.TransientModel):
         if self.depot_ids:
             domain.append(('depot_id', 'in', self.depot_ids.ids))
         domain.append(('is_late_order', '=', bool(self.include_late_orders)))
+        if categ_ids:
+            domain.append(('product_id.categ_id', 'in', categ_ids))
 
         matching_lines = self.env['sale.order.line'].search_count(domain)
         if not matching_lines:

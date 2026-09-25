@@ -46,8 +46,7 @@
                     <button name="action_print_report" string="Print PDF" type="object"
                         class="btn-secondary" icon="fa-print" data-hotkey="p" />
                     <button name="action_view_lines" string="View Lines" type="object"
-                        class="btn-primary" icon="fa-list" data-hotkey="q"
-                        invisible="delivery_channel == 'both'" />
+                        class="btn-primary" icon="fa-list" data-hotkey="q" />
                     <button string="Cancel" class="btn-secondary" special="cancel" data-hotkey="x" />
                 </footer>
             </form>
@@ -61,5 +60,165 @@
         <field name="view_mode">form</field>
         <field name="target">new</field>
         <field name="view_id" ref="view_requirement_report_wizard_form" />
+    </record>
+
+    <!-- Requirement Report Line List View -->
+   <record id="view_requirement_report_line_tree" model="ir.ui.view">
+        <field name="name">requirement.report.line.list</field>
+        <field name="model">requirement.report.line</field>
+        <field name="arch" type="xml">
+            <list string="Requirement Report Lines" create="0" edit="1" editable="bottom">
+                <header>
+                    <button name="action_create_rfq" string="Create PO" type="object"
+                        class="btn-primary" display="always" icon="fa-shopping-cart" />
+                </header>
+                <field name="vendor_ids" column_invisible="True" />
+                <field name="product_id" readonly="1" />
+                <field name="product_code" optional="show" readonly="1" />
+                <field name="categ_id" readonly="1" />
+                
+                <!-- Required Qty vs Editable Ordered Qty -->
+                <field name="qty_available" sum="Total Available Qty" readonly="1"/>
+                <field name="required_qty" sum="Total Required Qty" readonly="1" />
+                <field name="ordered_qty" sum="Total Ordered Qty" />
+                <field name="uom_id" readonly="1" string="Unit of Measure" />
+                <field name="price_unit" optional="show" />
+                <!-- Status Badge -->
+                
+                
+                <!-- Dynamic Vendor Filter & Editable Price -->
+                <field name="vendor_id" options="{'no_create': True}" domain="[('id', 'in', vendor_ids)]" />
+                <button name="action_open_product_vendors"
+                        type="object"
+                        string="Link New Vendor"
+                        icon="fa-user-plus"
+                        class="btn-link"
+                        invisible="purchase_order_id != False" />
+
+                <field name="purchase_order_id" readonly="1" optional="show" />
+                <field name="order_status" widget="badge" 
+                   decoration-info="order_status in ('draft', 'sent')" 
+                   decoration-warning="order_status == 'to_approve'" 
+                   decoration-success="order_status in ('purchase', 'done')" 
+                   decoration-danger="order_status == 'cancel'" />
+            
+            
+            <button name="action_view_purchase_order" 
+                    type="object" 
+                    string="View PO" 
+                    icon="fa-external-link" 
+                    class="btn-link" 
+                    invisible="purchase_order_id == False" />
+            </list>
+        </field>
+    </record>
+
+    <!-- Requirement Report Line Search View -->
+    <record id="view_requirement_report_line_search" model="ir.ui.view">
+        <field name="name">requirement.report.line.search</field>
+        <field name="model">requirement.report.line</field>
+        <field name="arch" type="xml">
+            <search string="Search Requirement Report Lines">
+                <field name="product_id" />
+                <field name="vendor_id" />
+                <field name="categ_id" />
+                <separator />
+                <filter string="Without Vendor" name="no_vendor" domain="[('vendor_id', '=', False)]" />
+                <group>
+                    <filter string="Vendor" name="group_by_vendor" domain="[]" context="{'group_by': 'vendor_group'}" />
+                    <filter string="Category" name="group_by_category" domain="[]" context="{'group_by': 'categ_id'}" />
+                    <filter string="Product" name="group_by_product" domain="[]" context="{'group_by': 'product_id'}" />
+                </group>
+            </search>
+        </field>
+    </record>
+    
+    
+    <record id="view_requirement_report_line_form" model="ir.ui.view">
+    <field name="name">requirement.report.line.form</field>
+    <field name="model">requirement.report.line</field>
+    <field name="arch" type="xml">
+        <form string="Requirement Report Line" create="0">
+            <header>
+                <button name="action_create_rfq" string="Create PO" type="object"
+                    class="btn-primary" icon="fa-shopping-cart"
+                    invisible="purchase_order_id != False" />
+                <button name="action_open_product_vendors" string="Create Vendor" type="object"
+                    class="btn-secondary" icon="fa-user-plus"
+                    invisible="purchase_order_id != False" />
+                <field name="order_status" widget="statusbar" statusbar_visible="draft,sent,purchase,done" />
+            </header>
+            <sheet>
+                <!-- PO Smart Button -->
+                <div class="oe_button_box" name="button_box">
+                    <button name="action_view_purchase_order"
+                        type="object"
+                        class="oe_stat_button"
+                        icon="fa-credit-card"
+                        invisible="purchase_order_id == False">
+                        <div class="o_stat_info">
+                            <span class="o_stat_text">Purchase Order</span>
+                        </div>
+                    </button>
+                </div>
+
+                <group>
+                    <group>
+                        <field name="vendor_ids" invisible="1" />
+                        <field name="product_id" readonly="1" />
+                        <field name="product_code" readonly="1" />
+                        <field name="categ_id" readonly="1" />
+                        <field name="purchase_order_id" readonly="1" />
+                    </group>
+                    <group>
+                        <field name="required_qty" readonly="1" />
+                        <field name="ordered_qty" />
+                        <field name="uom_id" readonly="1" />
+                        <field name="vendor_id" options="{'no_create': True}" domain="[('id', 'in', vendor_ids)]" />
+                        <field name="price_unit" />
+                    </group>
+                </group>
+            </sheet>
+        </form>
+    </field>
+</record>
+
+    <!-- Create Vendor pop-up: the product with only its Purchase tab -->
+    <record id="product_template_requirement_vendor_form" model="ir.ui.view">
+        <field name="name">product.template.requirement.vendor.form</field>
+        <field name="model">product.template</field>
+        <field name="priority">100</field>
+        <field name="arch" type="xml">
+            <form string="Product Vendors">
+                <sheet>
+                    <field name="product_variant_count" invisible="1" />
+                    <field name="standard_price" invisible="1" />
+                    <div class="oe_title">
+                        <h1><field name="name" readonly="1" /></h1>
+                    </div>
+                    <notebook>
+                        <page string="Purchase" name="purchase">
+                            <field name="seller_ids"
+                                context="{'default_product_tmpl_id': id, 'default_price': standard_price, 'product_template_invisible_variant': True, 'list_view_ref': 'purchase.product_supplierinfo_tree_view2'}"
+                                nolabel="1"
+                                invisible="product_variant_count &gt; 1" />
+                            <field name="variant_seller_ids"
+                                context="{'model': 'product.template', 'active_id': id, 'list_view_ref': 'purchase.product_supplierinfo_tree_view2'}"
+                                nolabel="1"
+                                invisible="product_variant_count &lt;= 1" />
+                            <group string="Purchase Description">
+                                <field name="description_purchase" nolabel="1" colspan="2"
+                                    placeholder="This note is added to purchase orders." />
+                            </group>
+                        </page>
+                    </notebook>
+                </sheet>
+                <footer>
+                    <button name="action_requirement_vendor_done" string="Save" type="object"
+                        class="btn-primary" data-hotkey="s" />
+                    <button string="Discard" class="btn-secondary" special="cancel" data-hotkey="x" />
+                </footer>
+            </form>
+        </field>
     </record>
 </odoo>

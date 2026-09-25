@@ -124,8 +124,8 @@ class ReportProductionReport(models.AbstractModel):
     # Sorting - identical convention to report_packing_list.py /
     # report_driver_packing_list.py: products sort by their master "Sort
     # Seq" (food_packaging_info.product.template.sort_seq), unsorted
-    # products first, ties broken alphabetically; categories sort FROZEN,
-    # then FRESH, then everything else alphabetically.
+    # products first, ties broken alphabetically; categories sort FRESH,
+    # then FROZEN, then everything else alphabetically.
     # ------------------------------------------------------------------
     @api.model
     def _get_sort_key(self, line_item):
@@ -162,9 +162,9 @@ class ReportProductionReport(models.AbstractModel):
     @api.model
     def _get_category_sort_key(self, categ_name):
         name = (categ_name or '').strip().upper()
-        if 'FROZEN' in name:
-            return (0, name)
         if 'FRESH' in name:
+            return (0, name)
+        if 'FROZEN' in name:
             return (1, name)
         return (2, name)
 

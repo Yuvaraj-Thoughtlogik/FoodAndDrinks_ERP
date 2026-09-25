@@ -26,6 +26,12 @@ def _format_weight_display(val):
     return formatted
 
 
+def _category_sort_key(categ_name):
+    """Fresh category always first, every other category alphabetically."""
+    name = (categ_name or '').strip().upper()
+    return (0 if 'FRESH' in name else 1, name)
+
+
 class _DockWeightCanvas(canvas.Canvas):
     """Two-pass canvas that redraws a footer line on every physical page once
     the document is fully laid out. The original QWeb template shows a fixed
@@ -159,6 +165,7 @@ class ReportDockWeightBreakdown(models.AbstractModel):
             # Courier Delivery Flow
             if getattr(wizard, 'delivery_channel', 'regal_van') == 'courier':
                 is_late = bool(wizard.include_late_orders)
+                categ_ids = wizard._get_filter_category_ids()
                 orders = self.env['sale.order'].search(
                     [
                         ('delivery_channel', '=', 'courier'),
@@ -179,6 +186,7 @@ class ReportDockWeightBreakdown(models.AbstractModel):
                     lines = order.order_line.filtered(
                         lambda l: not l.display_type and l.product_id and l.product_uom_qty > 0
                         and bool(l.is_late_order) == is_late
+                        and wizard._line_matches_category(l, categ_ids)
                     )
                     if not lines:
                         continue
@@ -238,7 +246,7 @@ class ReportDockWeightBreakdown(models.AbstractModel):
                         grand_total_weight += line_weight
 
                 category_pages = []
-                for c_key, c_val in sorted(categories_map.items(), key=lambda item: item[1]['categ_name']):
+                for c_key, c_val in sorted(categories_map.items(), key=lambda item: _category_sort_key(item[1]['categ_name'])):
                     prod_list = sorted(
                         c_val['products'].values(),
                         key=lambda item: item['product_name']
@@ -274,6 +282,7 @@ class ReportDockWeightBreakdown(models.AbstractModel):
 
             # Regal Van Delivery Flow (Batch-based)
             is_late = bool(wizard.include_late_orders)
+            categ_ids = wizard._get_filter_category_ids()
             batch_domain = [
                 ('delivery_date', '>=', wizard.delivery_date_from),
                 ('delivery_date', '<=', wizard.delivery_date_to),
@@ -314,6 +323,7 @@ class ReportDockWeightBreakdown(models.AbstractModel):
                     lines = order.order_line.filtered(
                         lambda l: not l.display_type and l.product_id and l.product_uom_qty > 0
                         and bool(l.is_late_order) == is_late
+                        and wizard._line_matches_category(l, categ_ids)
                     )
                     if not lines:
                         continue
@@ -385,7 +395,7 @@ class ReportDockWeightBreakdown(models.AbstractModel):
 
             combo_pages = []
             for d_key, d_val in sorted(depots_map.items(), key=lambda item: item[1]['depot_name']):
-                for c_key, c_val in sorted(d_val['categories'].items(), key=lambda item: item[1]['categ_name']):
+                for c_key, c_val in sorted(d_val['categories'].items(), key=lambda item: _category_sort_key(item[1]['categ_name'])):
                     prod_list = sorted(
                         c_val['products'].values(),
                         key=lambda item: item['product_name']
@@ -475,11 +485,13 @@ class ReportDockWeightBreakdown(models.AbstractModel):
             return None
 
         is_late = bool(wizard.include_late_orders)
+        categ_ids = wizard._get_filter_category_ids()
         categories_map = {}
         for order in orders:
             lines = order.order_line.filtered(
                 lambda l: not l.display_type and l.product_id and l.product_uom_qty > 0
                 and bool(l.is_late_order) == is_late
+                and wizard._line_matches_category(l, categ_ids)
             )
             for line in lines:
                 product = line.product_id
@@ -528,7 +540,7 @@ class ReportDockWeightBreakdown(models.AbstractModel):
                         prod_info['increased_weight'] += delta_weight
 
         category_pages = []
-        for c_key, c_val in sorted(categories_map.items(), key=lambda item: item[1]['categ_name']):
+        for c_key, c_val in sorted(categories_map.items(), key=lambda item: _category_sort_key(item[1]['categ_name'])):
             prod_list = sorted(c_val['products'].values(), key=lambda item: item['product_name'])
             if prod_list:
                 category_pages.append({
@@ -690,6 +702,7 @@ class ReportDockWeightBreakdown(models.AbstractModel):
             return None
 
         is_late = bool(wizard.include_late_orders)
+        categ_ids = wizard._get_filter_category_ids()
         depots_map = {}
         for batch in batches:
             orders = batch.order_ids.filtered(
@@ -713,6 +726,7 @@ class ReportDockWeightBreakdown(models.AbstractModel):
                 lines = order.order_line.filtered(
                     lambda l: not l.display_type and l.product_id and l.product_uom_qty > 0
                     and bool(l.is_late_order) == is_late
+                    and wizard._line_matches_category(l, categ_ids)
                 )
                 for line in lines:
                     product = line.product_id
@@ -756,7 +770,7 @@ class ReportDockWeightBreakdown(models.AbstractModel):
 
         combo_pages = []
         for d_key, d_val in sorted(depots_map.items(), key=lambda item: item[1]['depot_name']):
-            for c_key, c_val in sorted(d_val['categories'].items(), key=lambda item: item[1]['categ_name']):
+            for c_key, c_val in sorted(d_val['categories'].items(), key=lambda item: _category_sort_key(item[1]['categ_name'])):
                 prod_list = sorted(c_val['products'].values(), key=lambda item: item['product_name'])
                 if prod_list:
                     combo_pages.append({
