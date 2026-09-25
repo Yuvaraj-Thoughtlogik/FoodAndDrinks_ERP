@@ -108,7 +108,7 @@ class ReportBoxCountReport(models.AbstractModel):
     _description = 'Box Count Report Generator (Regal Van, Draft Manufacturing Orders, grouped by Category -> Depot -> Round Batch)'
 
     # ------------------------------------------------------------------
-    # Sorting - categories sort FROZEN, then FRESH, then everything else
+    # Sorting - categories sort FRESH, then FROZEN, then everything else
     # alphabetically (same convention as report_production_report.py);
     # depots sort alphabetically; within a depot, batches sort by their
     # numeric Batch Code when possible, falling back to a plain string sort.
@@ -116,9 +116,9 @@ class ReportBoxCountReport(models.AbstractModel):
     @api.model
     def _get_category_sort_key(self, categ_name):
         name = (categ_name or '').strip().upper()
-        if 'FROZEN' in name:
-            return (0, name)
         if 'FRESH' in name:
+            return (0, name)
+        if 'FROZEN' in name:
             return (1, name)
         return (2, name)
 

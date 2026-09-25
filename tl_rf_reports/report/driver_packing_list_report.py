@@ -561,85 +561,21 @@ class ReportDriverPackingList(models.AbstractModel):
         alphabetical, then Product Master sort number) are unchanged from
         before.
 
-        Sourced from sale.order.line.report_lines (same BoM-exploded rows
-        as the Factory Only Packing List - see SaleOrderLine.
-        _get_report_line_vals), but combining BOTH normal and late_order
-        rows into one total per product: unlike the other Packing List
-        variants, the Driver Packing List is an overall total across the
-        whole date range and deliberately does not filter on Late Order
-        status (see PackingListWizard._action_print_driver_packing_list)."""
-        line_domain = [
-            ('delivery_channel', 'in', ('regal_van', False)),
-            ('order_id.state', 'in', ('sale', 'done')),
-            ('delivery_date', '>=', wizard.delivery_date_from),
-            ('delivery_date', '<=', wizard.delivery_date_to),
-            ('display_type', '=', False),
-            ('product_id', '!=', False),
-            ('product_uom_qty', '>', 0),
-        ]
-        if wizard.depot_ids:
-            line_domain.append(('depot_id', 'in', wizard.depot_ids.ids))
-
-        order_lines = self.env['sale.order.line'].search(line_domain)
-        if not order_lines:
+        Sourced from stock.fresh.box.history.line (same Pack Box rows as
+        the Factory Only Packing List - see ReportPackingList.
+        _get_history_lines), but combining BOTH normal and late rows into
+        one total per product: unlike the other Packing List variants, the
+        Driver Packing List is an overall total across the whole date
+        range and deliberately does not filter on Late Order status (see
+        PackingListWizard._action_print_driver_packing_list). Box rows are
+        COUNTED, "Full Bulk" rows SUMMED, so a +2 normal and a -1 late
+        bulk row net to 1."""
+        packing_report = self.env['report.tl_rf_reports.report_packing_list']
+        history_lines = packing_report._get_history_lines(wizard, 'regal_van')
+        if not history_lines:
             return None
 
-        # Force-refresh report_line_ids so a BoM line reflects the current
-        # Manufacturing Order / move_raw_ids state (see
-        # SaleOrderLine._recompute_report_lines) before reading them.
-        order_lines._recompute_report_lines()
-
-        report_lines = self.env['sale.order.line.report_lines'].search(
-            [('sale_order_line_id', 'in', order_lines.ids)]
-        )
-        if not report_lines:
-            return None
-
-        report_lines = report_lines.sorted(
-            lambda rl: (rl.batch_id.delivery_date or datetime.date.min, rl.batch_id.code or '', rl.batch_id.id)
-        )
-
-        batches_map = {}
-        for report_line in report_lines:
-            batch = report_line.batch_id
-            product = report_line.product_id
-            if not batch or not product:
-                continue
-
-            if batch.id not in batches_map:
-                batches_map[batch.id] = {'batch': batch, 'categories_map': {}}
-            b_map = batches_map[batch.id]
-
-            categ_name = (report_line.categ_id.name or _('Other')).strip().upper()
-            categ_key = report_line.categ_id.id or 0
-            b_map['categories_map'].setdefault(categ_key, {'categ_name': categ_name, 'products': {}})
-            c_prods = b_map['categories_map'][categ_key]['products']
-
-            # BoM rows (physical boxes) stay separate by box qty (0.5kg vs
-            # 1kg); a plain non-BoM row's qty is just the line's own
-            # quantity, so those merge/sum together regardless of value -
-            # this report combines normal + late rows into one total, so a
-            # +2 confirmed and a -1 late delta must net to 1, not print as
-            # two separate rows.
-            group_key = (product.id, report_line.qty if report_line.from_bom else False, report_line.notes or '')
-            if group_key not in c_prods:
-                sort_num = self._extract_sort_number(product)
-                c_prods[group_key] = {
-                    'product_id': product.id,
-                    'product_name': report_line.name or product.name,
-                    'box_qty': 0.0,
-                    'sort_num': sort_num,
-                    'sort_str': str(sort_num) if sort_num else '',
-                }
-            # A BoM row is one MO's raw-material consumption - one row is
-            # one physical box, so same-product rows are COUNTED (matching
-            # the Factory Only Packing List). A plain non-BoM row's qty IS
-            # the line's own quantity, so those are SUMMED instead.
-            if report_line.from_bom:
-                c_prods[group_key]['box_qty'] += 1
-            else:
-                c_prods[group_key]['box_qty'] += report_line.qty
-
+        batches_map = packing_report._group_history_lines_by_batch(history_lines)
         if not batches_map:
             return None
 

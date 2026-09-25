@@ -297,7 +297,7 @@
             
             <xpath expr="//notebook" position="inside">
                 <page string="Order History" name="order_history_tab">
-                    <group string="Previous Orders" expand="1">
+                    <group string="Previous Orders">
                         <field name="order_history_ids" mode="list,form" nolabel="1" readonly="1">
                             
                             <!-- Master Order History List -->

@@ -229,7 +229,7 @@
                 <filter string="Spare Vehicles In Use" name="spare_vehicles" domain="[('is_spare_vehicle', '=', True)]"/>
                 <filter string="B2B Runs Only" name="b2b_only" domain="[('is_b2b_batch', '=', True)]"/>
 
-                <group expand="0" string="Group By">
+                <group string="Group By">
                     <filter string="Delivery Date" name="group_by_date" context="{'group_by': 'delivery_date:day'}"/>
                     <filter string="ISO Week" name="group_by_week" context="{'group_by': 'week_number'}"/>
                     <filter string="Driver" name="group_by_driver" context="{'group_by': 'driver_id'}"/>

@@ -95,42 +95,45 @@ class SaleOrderLine(models.Model):
     )
     lock_line = fields.Boolean()
 
-    report_line_ids = fields.One2many(
-        'sale.order.line.report_lines',
-        'sale_order_line_id',
-        string='Report Lines',
-        compute='_compute_report_line_ids',
-        store=True,
-        help="Packing-list rows for this line. For a product with a BoM, one row "
-             "per raw-material component (move_raw_ids) of its linked Manufacturing "
-             "Order (production_sale_line_id); for a product without a BoM, a single "
-             "row for the line itself. See _compute_report_line_ids.",
-    )
+    # sale.order.line.report_lines is no longer used - the Packing List
+    # reports read stock.fresh.box.history.line instead (see
+    # report/packing_list_report.py _get_history_lines).
+    # report_line_ids = fields.One2many(
+    #     'sale.order.line.report_lines',
+    #     'sale_order_line_id',
+    #     string='Report Lines',
+    #     compute='_compute_report_line_ids',
+    #     store=True,
+    #     help="Packing-list rows for this line. For a product with a BoM, one row "
+    #          "per raw-material component (move_raw_ids) of its linked Manufacturing "
+    #          "Order (production_sale_line_id); for a product without a BoM, a single "
+    #          "row for the line itself. See _compute_report_line_ids.",
+    # )
 
-    # Regal Van is driven by confirmed_qty/late_qty_delta (the frozen
-    # snapshot plus any change made after it was locked in), Courier by
-    # the live product_uom_qty - see _get_report_line_vals.
-    @api.depends(
-        'product_id', 'product_uom_qty', 'special_requirements_notes_id',
-        'delivery_channel', 'confirmed_qty', 'late_qty_delta',
-    )
-    def _compute_report_line_ids(self):
-        Bom = self.env['mrp.bom']
-        products = self.mapped('product_id')
-        boms_by_product = Bom._bom_find(products=products) if products else {}
+    # # Regal Van is driven by confirmed_qty/late_qty_delta (the frozen
+    # # snapshot plus any change made after it was locked in), Courier by
+    # # the live product_uom_qty - see _get_report_line_vals.
+    # @api.depends(
+    #     'product_id', 'product_uom_qty', 'special_requirements_notes_id',
+    #     'delivery_channel', 'confirmed_qty', 'late_qty_delta',
+    # )
+    # def _compute_report_line_ids(self):
+    #     Bom = self.env['mrp.bom']
+    #     products = self.mapped('product_id')
+    #     boms_by_product = Bom._bom_find(products=products) if products else {}
 
-        for line in self:
-            line.report_line_ids.unlink()
-            vals_list = line._get_report_line_vals(boms_by_product.get(line.product_id))
-            line.report_line_ids = [(0, 0, vals) for vals in vals_list]
+    #     for line in self:
+    #         line.report_line_ids.unlink()
+    #         vals_list = line._get_report_line_vals(boms_by_product.get(line.product_id))
+    #         line.report_line_ids = [(0, 0, vals) for vals in vals_list]
 
-    def _recompute_report_lines(self):
-        """Force-refreshes report_line_ids. The linked Manufacturing Order
-        (and its move_raw_ids) is created/edited on mrp.production, a
-        different model that this field's @api.depends can't reach, so the
-        Packing List report calls this right before reading report_line_ids
-        to guarantee it reflects the current MO state."""
-        self._compute_report_line_ids()
+    # def _recompute_report_lines(self):
+    #     """Force-refreshes report_line_ids. The linked Manufacturing Order
+    #     (and its move_raw_ids) is created/edited on mrp.production, a
+    #     different model that this field's @api.depends can't reach, so the
+    #     Packing List report calls this right before reading report_line_ids
+    #     to guarantee it reflects the current MO state."""
+    #     self._compute_report_line_ids()
 
     @staticmethod
     def _compose_report_name(base_name, notes):
@@ -141,130 +144,130 @@ class SaleOrderLine(models.Model):
         notes = (notes or '').strip()
         return f"{base_name} # {notes} #" if notes else base_name
 
-    def _plain_report_line_vals(self, qty, notes, late=False):
-        """A single non-exploded "<qty> kg <product>" row - used for the
-        confirmed_qty/late_qty_delta row of a non-BoM Regal Van line, and
-        for a Courier line's (always non-late) live-quantity row."""
-        return {
-            'name': f"{self.product_id.name or ''}",
-            'product_id': self.product_id.id,
-            'box_content': f"{_format_report_qty(qty)} kg",
-            'qty': qty,
-            'notes': notes,
-            'late_order': late,
-        }
+    # def _plain_report_line_vals(self, qty, notes, late=False):
+    #     """A single non-exploded "<qty> kg <product>" row - used for the
+    #     confirmed_qty/late_qty_delta row of a non-BoM Regal Van line, and
+    #     for a Courier line's (always non-late) live-quantity row."""
+    #     return {
+    #         'name': f"{self.product_id.name or ''}",
+    #         'product_id': self.product_id.id,
+    #         'box_content': f"{_format_report_qty(qty)} kg",
+    #         'qty': qty,
+    #         'notes': notes,
+    #         'late_order': late,
+    #     }
 
-    def _get_report_qty_split(self):
-        """Returns (normal_qty, late_qty) for this line's report rows. Regal
-        Van reads confirmed_qty/late_qty_delta (the frozen batch-print
-        snapshot plus any change made after it). Courier has no batch/
-        confirmed_qty concept: a late Courier order's lines are flagged
-        entirely late via lock_line (see _compute_late_order), so
-        late_qty_delta already holds the FULL live product_uom_qty in that
-        case and normal_qty stays 0; a non-late Courier order instead
-        reports its live product_uom_qty as the normal qty."""
-        self.ensure_one()
-        if self.delivery_channel == 'courier':
-            if self.late_qty_delta:
-                return 0.0, self.late_qty_delta
-            return self.product_uom_qty, 0.0
-        return self.confirmed_qty, self.late_qty_delta
+    # def _get_report_qty_split(self):
+    #     """Returns (normal_qty, late_qty) for this line's report rows. Regal
+    #     Van reads confirmed_qty/late_qty_delta (the frozen batch-print
+    #     snapshot plus any change made after it). Courier has no batch/
+    #     confirmed_qty concept: a late Courier order's lines are flagged
+    #     entirely late via lock_line (see _compute_late_order), so
+    #     late_qty_delta already holds the FULL live product_uom_qty in that
+    #     case and normal_qty stays 0; a non-late Courier order instead
+    #     reports its live product_uom_qty as the normal qty."""
+    #     self.ensure_one()
+    #     if self.delivery_channel == 'courier':
+    #         if self.late_qty_delta:
+    #             return 0.0, self.late_qty_delta
+    #         return self.product_uom_qty, 0.0
+    #     return self.confirmed_qty, self.late_qty_delta
 
-    def _get_report_line_vals(self, bom):
-        """Builds the create-vals for this line's report lines (see
-        report_line_ids). `bom` is the product's BoM (or a falsy recordset)
-        as resolved by mrp.bom._bom_find, passed in so callers can look it
-        up once for a whole batch of lines instead of per line.
+    # def _get_report_line_vals(self, bom):
+    #     """Builds the create-vals for this line's report lines (see
+    #     report_line_ids). `bom` is the product's BoM (or a falsy recordset)
+    #     as resolved by mrp.bom._bom_find, passed in so callers can look it
+    #     up once for a whole batch of lines instead of per line.
 
-        Normal/late qty is sourced via _get_report_qty_split(): Regal Van
-        from confirmed_qty (the frozen snapshot taken when the batch was
-        locked in) plus, when the qty changed afterwards, a SEPARATE
-        late_qty_delta row - the two are never merged, so a late
-        addition/removal is never silently folded into what was already
-        packed. Courier has no batch/confirmed_qty concept, so it instead
-        gets a single live-product_uom_qty row, entirely late when the
-        order itself is late."""
-        self.ensure_one()
-        if not self.product_id:
-            return []
+    #     Normal/late qty is sourced via _get_report_qty_split(): Regal Van
+    #     from confirmed_qty (the frozen snapshot taken when the batch was
+    #     locked in) plus, when the qty changed afterwards, a SEPARATE
+    #     late_qty_delta row - the two are never merged, so a late
+    #     addition/removal is never silently folded into what was already
+    #     packed. Courier has no batch/confirmed_qty concept, so it instead
+    #     gets a single live-product_uom_qty row, entirely late when the
+    #     order itself is late."""
+    #     self.ensure_one()
+    #     if not self.product_id:
+    #         return []
 
-        notes = self.special_requirements_notes_id.name or ''
-        normal_qty, late_qty = self._get_report_qty_split()
+    #     notes = self.special_requirements_notes_id.name or ''
+    #     normal_qty, late_qty = self._get_report_qty_split()
 
-        if bom:
-            # A line can be split across several MOs (one per box, e.g. the
-            # Pack Box wizard's "Box 3/5" origin suffix) that all share this
-            # same production_sale_line_id, so all of them - not just the
-            # first - contribute their raw-material components. Each box's
-            # own is_late_order (round_management.MrpProduction), not the
-            # sale line's overall lateness, decides whether that specific
-            # box's rows are late.
-            # Normal (manufacturing) BoM: the Pack Box wizard
-            # (round_management/models/stock_fresh_box_wizard.py
-            # action_generate_mo) creates one MO per box directly for this
-            # line's product, so its own MOs already ARE the report rows.
-            productions = self.env['mrp.production'].search(
-                [('production_sale_line_id', '=', self.id)]
-            )
-            vals_list = []
-            for prod in productions:
-                qty = prod.product_qty or 0.0
-                component = prod.product_id
-                vals_list.append({
-                    'name': self._compose_report_name(f"{_format_report_qty(qty)} kg {component.name or ''}", notes),
-                    'product_id': component.id,
-                    'box_content': f"{_format_report_qty(qty)} kg",
-                    'qty': qty,
-                    'notes': notes,
-                    'late_order': bool(prod.is_late_order),
-                    'from_bom': True,
-                })
+    #     if bom:
+    #         # A line can be split across several MOs (one per box, e.g. the
+    #         # Pack Box wizard's "Box 3/5" origin suffix) that all share this
+    #         # same production_sale_line_id, so all of them - not just the
+    #         # first - contribute their raw-material components. Each box's
+    #         # own is_late_order (round_management.MrpProduction), not the
+    #         # sale line's overall lateness, decides whether that specific
+    #         # box's rows are late.
+    #         # Normal (manufacturing) BoM: the Pack Box wizard
+    #         # (round_management/models/stock_fresh_box_wizard.py
+    #         # action_generate_mo) creates one MO per box directly for this
+    #         # line's product, so its own MOs already ARE the report rows.
+    #         productions = self.env['mrp.production'].search(
+    #             [('production_sale_line_id', '=', self.id)]
+    #         )
+    #         vals_list = []
+    #         for prod in productions:
+    #             qty = prod.product_qty or 0.0
+    #             component = prod.product_id
+    #             vals_list.append({
+    #                 'name': self._compose_report_name(f"{_format_report_qty(qty)} kg {component.name or ''}", notes),
+    #                 'product_id': component.id,
+    #                 'box_content': f"{_format_report_qty(qty)} kg",
+    #                 'qty': qty,
+    #                 'notes': notes,
+    #                 'late_order': bool(prod.is_late_order),
+    #                 'from_bom': True,
+    #             })
 
-            if bom.type == 'phantom':
-                # Kit BoM: the wizard only creates a direct MO (picked up
-                # above) for a kit component that has its OWN manufacturing
-                # BoM - a component with no BoM at all is never manufactured
-                # on its own, so it never appears in `productions`. Add it
-                # here straight from the kit's BoM explosion instead.
-                component_products = bom.bom_line_ids.product_id
-                component_boms = self.env['mrp.bom']._bom_find(component_products) if component_products else {}
+    #         if bom.type == 'phantom':
+    #             # Kit BoM: the wizard only creates a direct MO (picked up
+    #             # above) for a kit component that has its OWN manufacturing
+    #             # BoM - a component with no BoM at all is never manufactured
+    #             # on its own, so it never appears in `productions`. Add it
+    #             # here straight from the kit's BoM explosion instead.
+    #             component_products = bom.bom_line_ids.product_id
+    #             component_boms = self.env['mrp.bom']._bom_find(component_products) if component_products else {}
 
-                for bom_line in bom.bom_line_ids:
-                    component = bom_line.product_id
-                    if component_boms.get(component):
-                        continue
+    #             for bom_line in bom.bom_line_ids:
+    #                 component = bom_line.product_id
+    #                 if component_boms.get(component):
+    #                     continue
 
-                    if normal_qty > 0:
-                        for _box_idx in range(int(normal_qty)):
-                            vals_list.append({
-                                'name': component.name,
-                                'product_id': component.id,
-                                'box_content': "",
-                                'qty': 1,
-                                'notes': notes,
-                                'late_order': False,
-                                'from_bom': True,
-                            })
-                    if late_qty > 0:
-                        for _box_idx in range(int(late_qty)):
-                            vals_list.append({
-                                'name': component.name,
-                                'product_id': component.id,
-                                'box_content': "",
-                                'qty': 1,
-                                'notes': notes,
-                                'late_order': True,
-                                'from_bom': True,
-                            })
+    #                 if normal_qty > 0:
+    #                     for _box_idx in range(int(normal_qty)):
+    #                         vals_list.append({
+    #                             'name': component.name,
+    #                             'product_id': component.id,
+    #                             'box_content': "",
+    #                             'qty': 1,
+    #                             'notes': notes,
+    #                             'late_order': False,
+    #                             'from_bom': True,
+    #                         })
+    #                 if late_qty > 0:
+    #                     for _box_idx in range(int(late_qty)):
+    #                         vals_list.append({
+    #                             'name': component.name,
+    #                             'product_id': component.id,
+    #                             'box_content': "",
+    #                             'qty': 1,
+    #                             'notes': notes,
+    #                             'late_order': True,
+    #                             'from_bom': True,
+    #                         })
 
-            return vals_list
+    #         return vals_list
 
-        vals_list = []
-        if normal_qty > 0:
-            vals_list.append(self._plain_report_line_vals(normal_qty, notes))
-        if late_qty:
-            vals_list.append(self._plain_report_line_vals(late_qty, notes, late=True))
-        return vals_list
+    #     vals_list = []
+    #     if normal_qty > 0:
+    #         vals_list.append(self._plain_report_line_vals(normal_qty, notes))
+    #     if late_qty:
+    #         vals_list.append(self._plain_report_line_vals(late_qty, notes, late=True))
+    #     return vals_list
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -294,10 +297,10 @@ class SaleOrderLine(models.Model):
                         qty=line.confirmed_qty,
                     ))
 
-    @api.depends('product_uom_qty','confirmed_qty')
+    @api.depends('product_uom_qty','confirmed_qty','order_id.is_late_order','lock_line')
     def _compute_late_order(self):
         for line in self:
-            if line.lock_line:
+            if line.lock_line or line.order_id.is_late_order:
                 line.is_late_order = True
                 line.late_qty_delta = line.product_uom_qty
 

@@ -72,6 +72,27 @@ class ReportRequirement(models.AbstractModel):
         categories_map[categ_key]['total_qty'] += qty
 
     @api.model
+    def _explode_requirement_line(self, product, qty, boms_by_product):
+        """Returns the (stock item, qty) pairs one sale order line contributes
+        to the report: the BOM components scaled to the ordered qty when the
+        product has a BOM (the finished product itself is never reported),
+        otherwise the product itself. Shared by the PDF and the wizard's
+        View Lines so both always show the same products/quantities."""
+        bom = boms_by_product.get(product)
+        if not bom:
+            return [(product, qty)] if qty else []
+        bom_batch_qty = bom.product_qty or 1.0
+        result = []
+        for bom_line in bom.bom_line_ids:
+            component = bom_line.product_id
+            if not component:
+                continue
+            component_qty = (bom_line.product_qty / bom_batch_qty) * qty
+            if component_qty:
+                result.append((component, component_qty))
+        return result
+
+    @api.model
     def _get_report_values(self, docids, data=None):
         docs = self.env['requirement.report.wizard'].browse(docids)
 
@@ -121,33 +142,14 @@ class ReportRequirement(models.AbstractModel):
                 d_date = line.order_id.delivery_date or wizard.delivery_date_from
                 d_date_str = d_date.strftime('%d/%m/%Y') if d_date else delivery_date_from_str
 
-                qty = line.product_uom_qty
-                bom = boms_by_product.get(product)
-
-                if bom:
-                    # Product has a BOM: explode into its components, scaled to the
-                    # ordered quantity, and report the components instead of the
-                    # finished product itself (the finished product is never added here).
-                    bom_batch_qty = bom.product_qty or 1.0
-                    for bom_line in bom.bom_line_ids:
-                        component = bom_line.product_id
-                        if not component:
-                            continue
-                        component_qty = (bom_line.product_qty / bom_batch_qty) * qty
-                        if not component_qty:
-                            continue
-                        self._add_requirement_entry(
-                            categories_map, wizard, component, component_qty, d_date_str,
-                            delivery_date_from_str, delivery_date_to_str,
-                        )
-                        grand_total_qty += component_qty
-                else:
-                    # No BOM: report the product itself, exactly as before.
+                for item_product, item_qty in self._explode_requirement_line(
+                    product, line.product_uom_qty, boms_by_product
+                ):
                     self._add_requirement_entry(
-                        categories_map, wizard, product, qty, d_date_str,
+                        categories_map, wizard, item_product, item_qty, d_date_str,
                         delivery_date_from_str, delivery_date_to_str,
                     )
-                    grand_total_qty += qty
+                    grand_total_qty += item_qty
 
             # Format category pages and split products into 2 columns (for Regal Van)
             category_pages = []

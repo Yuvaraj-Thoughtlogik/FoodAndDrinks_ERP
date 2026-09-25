@@ -104,7 +104,7 @@ class ProductionReportWizard(models.TransientModel):
 
     @api.model
     def _default_category_ids(self):
-        return self.env['product.category'].search([('name', 'in', ['Fresh', 'Chilled'])])
+        return self.env['product.category'].search([('name', '=ilike', 'Fresh')])
 
     category_ids = fields.Many2many(
         'product.category',
@@ -113,8 +113,9 @@ class ProductionReportWizard(models.TransientModel):
         'category_id',
         string='Categories',
         # domain=[('name', 'in', ['Fresh', 'Chilled'])],
-        # default=_default_category_ids,
-        help="Select Fresh, Chilled, or both product categories to include in the report."
+        default=_default_category_ids,
+        help="Fresh is selected by default. Add or remove categories as required; "
+             "leave empty to include all categories."
     )
 
 
@@ -259,8 +260,9 @@ class ProductionReportWizard(models.TransientModel):
             domain.append(('raw_material_production_id.is_late_order', '=', self.include_late_orders))
         if self.depot_ids:
             domain.append(('raw_material_production_id.depot_id', 'in', self.depot_ids.ids))
-        if self.category_id:
-            domain.append(('product_id.categ_id', '=', self.category_id.id))
+        if self.category_ids:
+            # Same category filter as the PDF: on the MO's finished product.
+            domain.append(('raw_material_production_id.product_id.categ_id', 'in', self.category_ids.ids))
         return domain
 
     def action_print_report(self):
