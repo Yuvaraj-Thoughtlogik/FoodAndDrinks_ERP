@@ -249,13 +249,18 @@ class ProductionLabelReport(models.AbstractModel):
 
         return story
 
-    def generate_pdf(self, wizard):
+    def generate_pdf(self, wizard, label_lines=None):
         """Returns the finished PDF (bytes) for the Production Label report
         (courier or regal van - the two visual variants of the QWeb
         templates in production_label_report_views.xml), or None if there
         is nothing to print. One physical label per page, at the fixed
-        100mm x 130mm page size."""
-        label_lines = wizard._get_label_data()
+        100mm x 130mm page size.
+
+        label_lines: optional pre-built list of label dicts. The Fresh label
+        passes the MO-line based data from wizard._get_fresh_label_data();
+        when omitted, the Sales Order line data (_get_label_data) is used."""
+        if label_lines is None:
+            label_lines = wizard._get_label_data()
         if not label_lines:
             return None
 
