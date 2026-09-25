@@ -95,6 +95,9 @@
                         class="btn-link"
                         invisible="purchase_order_id != False" />
 
+
+
+
                 <field name="purchase_order_id" readonly="1" optional="show" />
                 <field name="order_status" widget="badge" 
                    decoration-info="order_status in ('draft', 'sent')" 
