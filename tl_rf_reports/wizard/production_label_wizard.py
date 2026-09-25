@@ -265,7 +265,14 @@ class ProductionLabelWizard(models.TransientModel):
             report_model = self.env['report.tl_rf_reports.report_production_label_document_regal_van']
             filename_suffix = 'Regal_Van'
 
-        pdf_content = report_model.generate_pdf(self)
+        # Fresh labels are built from Manufacturing Order component lines
+        # (one label per MO line). Every other category that falls through to
+        # the Courier / Regal Van layout keeps the Sales Order line logic.
+        label_lines = None
+        if self.category_name == 'Fresh':
+            label_lines = self._get_fresh_label_data()
+
+        pdf_content = report_model.generate_pdf(self, label_lines=label_lines)
         if not pdf_content:
             raise UserError(_("No matching records found to generate labels for the selected criteria."))
 
@@ -332,6 +339,166 @@ class ProductionLabelWizard(models.TransientModel):
                 }
                 line_data.update(self._get_frozen_label_fields(order, product, use_by_date))
                 label_lines.append(line_data)
+
+        return label_lines
+
+    # ------------------------------------------------------------------
+    # FRESH LABEL - Manufacturing Order line based
+    # ------------------------------------------------------------------
+    def _get_mo_sale_order(self, mo):
+        """Returns the Sales Order an MO was created for (empty recordset if
+        none can be found).
+
+        Odoo 19 removed procurement.group (so mrp.production no longer has
+        procurement_group_id and stock.move no longer has group_id). Every
+        link below is therefore checked with `_fields` before it is read, so
+        the method works whichever of these fields exist. Tried in order:
+          1. a direct sale order / sale line field on the MO (custom or std)
+          2. stock references (Odoo 19: reference_ids -> sale_ids)
+          3. the finished moves' destination moves -> sale_line_id (MTO)
+          4. the MO's Source document (origin) matched against the SO name
+        """
+        SaleOrder = self.env['sale.order']
+
+        # 1. Direct field on the MO
+        for field_name in ('sale_order_id', 'sale_id', 'order_id'):
+            if field_name in mo._fields:
+                so = mo[field_name]
+                if so and so._name == 'sale.order':
+                    return so[:1]
+        if 'sale_line_id' in mo._fields and mo.sale_line_id:
+            return mo.sale_line_id.order_id[:1]
+
+        # 2. Odoo 19 stock references
+        if 'reference_ids' in mo._fields and mo.reference_ids:
+            refs = mo.reference_ids
+            if 'sale_ids' in refs._fields and refs.sale_ids:
+                return refs.sale_ids[:1]
+
+        # (older versions) procurement group
+        if 'procurement_group_id' in mo._fields and mo.procurement_group_id:
+            group = mo.procurement_group_id
+            if 'sale_id' in group._fields and group.sale_id:
+                return group.sale_id[:1]
+
+        # 3. Destination moves (MO -> delivery) carry the sale order line
+        dest_moves = mo.move_finished_ids.move_dest_ids
+        if dest_moves and 'sale_line_id' in dest_moves._fields:
+            sale = dest_moves.sale_line_id.order_id
+            if sale:
+                return sale[:1]
+
+        # 4. Source document. The MO origin looks like "[Fresh] S00032" (or
+        # "S00032, S00033"), so drop any "[..]" prefix, split on commas /
+        # spaces and match each token against the Sales Order number.
+        if mo.origin:
+            cleaned = re.sub(r'\[[^\]]*\]', ' ', mo.origin)
+            names = [n for n in re.split(r'[,\s]+', cleaned) if n]
+            if names:
+                so = SaleOrder.search([('name', 'in', names)], limit=1)
+                if so:
+                    return so
+
+        # 5. Last resort: the Sales Order in the MO's round batch that has
+        # this MO's product on one of its lines.
+        batch = mo.round_batch_id if 'round_batch_id' in mo._fields else False
+        if batch and 'order_ids' in batch._fields and mo.product_id:
+            so = batch.order_ids.filtered(
+                lambda o: mo.product_id in o.order_line.mapped('product_id')
+            )
+            if so:
+                return so[:1]
+
+        return SaleOrder
+
+    def _get_fresh_label_data(self):
+        """Fresh Label data built from Manufacturing Order lines.
+
+        - MOs are selected with the same filters as the other MO based
+          labels (_get_production_domain: delivery channel, delivery date
+          range, depot, late order).
+        - Every matching MO whose product (mo.product_id) belongs to the
+          selected category produces ONE label. Components are ignored.
+          MOs of the same product are NOT merged: 3 MOs = 3 labels.
+        - Product comes from the MO; customer / round / batch /
+          warehouse / delivery date come from the MO's linked Sales Order
+          (falling back to the MO's own batch / depot / delivery date).
+        - The label layout and all other printed information are unchanged.
+
+        Raises a UserError when no MO or no matching MO line is found.
+        """
+        self.ensure_one()
+        productions = self.env['mrp.production'].search(
+            self._get_production_domain(), order='id'
+        )
+        if not productions:
+            raise UserError(_(
+                "No Manufacturing Orders found for the selected Delivery Date "
+                "and filters. Fresh Labels cannot be printed."
+            ))
+
+        label_lines = []
+        for mo in productions:
+            order = self._get_mo_sale_order(mo)
+
+            # Batch / warehouse: Sales Order first (unchanged behaviour),
+            # then the MO's own round batch / depot.
+            batch = (order.batch_id if order else False) or getattr(mo, 'round_batch_id', False)
+            warehouse = (batch.depot_id if batch else False) or getattr(mo, 'depot_id', False)
+
+            delivery_date = (
+                (order.delivery_date if order else False)
+                or getattr(mo, 'delivery_date', False)
+                or (batch.delivery_date if batch else False)
+            )
+
+            # One label per MO, using the MO's own product (the product being
+            # manufactured) - NOT its components. 3 MOs = 3 labels, even for
+            # the same product.
+            product = mo.product_id
+            if not product or not product.categ_id:
+                continue
+            if self.category_id and product.categ_id.id != self.category_id.id:
+                continue
+
+            use_by_date = False
+            if delivery_date and product.expiration_time:
+                use_by_date = delivery_date + timedelta(days=product.expiration_time)
+
+            partner = order.partner_id if order else self.env['res.partner']
+            label_lines.append({
+                'customer_name': partner.name or '',
+                'customer_code': partner.customer_code or '',
+                'round_name': order.round_id.name if order and order.round_id else '',
+                'delivery_date_display': (
+                    delivery_date.strftime('%a, %d %B %Y') if delivery_date else ''
+                ),
+                'delivery_day_display': (
+                    delivery_date.strftime('%A') if delivery_date else ''
+                ),
+                'batch_code': batch.code if batch else '',
+                'category_name': product.categ_id.name or '',
+                'warehouse_name': warehouse.name if warehouse else '',
+                'product_name': product.name or '',
+                'origin_country': product.origin_country or '',
+                'product_barcode': product.barcode or '',
+                'product_default_code': product.default_code or '',
+                'use_by_display': (
+                    use_by_date.strftime('%d %B %Y') if use_by_date else ''
+                ),
+                # MO reference / quantity - kept in the data for traceability,
+                # not printed on the label (per design).
+                'mo_name': mo.name or '',
+                'mo_qty': mo.product_qty,
+                'mo_uom': mo.product_uom_id.name if mo.product_uom_id else '',
+            })
+
+        if not label_lines:
+            raise UserError(_(
+                "No Manufacturing Orders found for the '%s' category on the "
+                "selected Delivery Date. Fresh Labels cannot be printed.",
+                self.category_id.display_name,
+            ))
 
         return label_lines
 
