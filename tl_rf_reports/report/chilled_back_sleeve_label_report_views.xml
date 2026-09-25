@@ -60,9 +60,9 @@
                             </t>
                             <span t-raw="label.get('ingredients')"/>
                         </t>
-                        <t t-else="">
-                            <b>Ingredients:</b> Salmon (<i>Salmo Salar</i>) (<b>Fish</b>) 90%, Mint Glaze 10%, Sugar, Acids (Sodium Diacetate, Malic Acid), Dried Glucose Syrup, Modified Starch, Salt, Dried Mint (3.6%), Yeast Extract (Yeast Extract, Salt), Dried Tomato, Colours (Paprika Extract and Natural Rosemary Flavouring, Curcumin), Natural Flavouring, Thickeners (Xanthan Gum, Guar Gum) Natural Garden Mint Flavouring.
-                        </t>
+<!--                        <t t-else="">-->
+<!--                            <b>Ingredients:</b> Salmon (<i>Salmo Salar</i>) (<b>Fish</b>) 90%, Mint Glaze 10%, Sugar, Acids (Sodium Diacetate, Malic Acid), Dried Glucose Syrup, Modified Starch, Salt, Dried Mint (3.6%), Yeast Extract (Yeast Extract, Salt), Dried Tomato, Colours (Paprika Extract and Natural Rosemary Flavouring, Curcumin), Natural Flavouring, Thickeners (Xanthan Gum, Guar Gum) Natural Garden Mint Flavouring.-->
+<!--                        </t>-->
                     </div>
 
                     <!-- 3. Allergy Advice Section (from product allergens_notice field) -->
@@ -81,11 +81,11 @@
                         <t t-elif="label.get('cooking_instructions')">
                             <span t-raw="label.get('cooking_instructions')"/>
                         </t>
-                        <t t-else="">
-                            <div><b>Oven:</b> Pierce film and place in a pre-heated oven at 200°C for approx 20-25 minutes (chilled), 25-30 minutes (frozen).</div>
-                            <div><b>Microwave: (850w):</b> Pierce film several times and cook on full power for 3-4 minutes (chilled), 5-6 minutes (frozen).</div>
-                            <div>Remove from packaging and serve.</div>
-                        </t>
+<!--                        <t t-else="">-->
+<!--                            <div><b>Oven:</b> Pierce film and place in a pre-heated oven at 200°C for approx 20-25 minutes (chilled), 25-30 minutes (frozen).</div>-->
+<!--                            <div><b>Microwave: (850w):</b> Pierce film several times and cook on full power for 3-4 minutes (chilled), 5-6 minutes (frozen).</div>-->
+<!--                            <div>Remove from packaging and serve.</div>-->
+<!--                        </t>-->
                     </div>
 
                     <!-- 5. Bottom Section: Left (GB GG476 + Weight) & Right (Nutrition Table) -->
