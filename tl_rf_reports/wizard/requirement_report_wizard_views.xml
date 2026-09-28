@@ -67,20 +67,28 @@
         <field name="name">requirement.report.line.list</field>
         <field name="model">requirement.report.line</field>
         <field name="arch" type="xml">
-            <list string="Requirement Report Lines" create="0" edit="1" editable="bottom">
+            <list string="Requirement Report Lines" create="0" edit="1" editable="bottom"
+                decoration-success="balance_qty &lt;= 0 and purchased_qty &gt; 0"
+                decoration-danger="balance_qty &gt; 0">
+                <!-- Row colour: green = everything ordered (Balance <= 0), red = quantity still to order. -->
                 <header>
                     <button name="action_create_rfq" string="Create PO" type="object"
                         class="btn-primary" display="always" icon="fa-shopping-cart" />
                 </header>
                 <field name="vendor_ids" column_invisible="True" />
+                <field name="delivery_date_from" optional="hide" />
+                <field name="delivery_date_to" optional="hide" />
+                <field name="delivery_channel" optional="hide" />
                 <field name="product_id" readonly="1" />
                 <field name="product_code" optional="show" readonly="1" />
                 <field name="categ_id" readonly="1" />
                 
-                <!-- Required Qty vs Editable Ordered Qty -->
+                <!-- Required Qty vs editable Order Qty -->
                 <field name="qty_available" sum="Total Available Qty" readonly="1"/>
                 <field name="required_qty" sum="Total Required Qty" readonly="1" />
-                <field name="ordered_qty" sum="Total Ordered Qty" />
+                <field name="ordered_qty" sum="Total Order Qty" />
+                <field name="purchased_qty" sum="Total Purchased Qty" optional="show" />
+                <field name="balance_qty" sum="Total Balance" optional="show" />
                 <field name="uom_id" readonly="1" string="Unit of Measure" />
                 <field name="price_unit" optional="show" />
                 <!-- Status Badge -->
@@ -93,7 +101,7 @@
                         string="Link New Vendor"
                         icon="fa-user-plus"
                         class="btn-link"
-                        invisible="purchase_order_id != False" />
+                        invisible="balance_qty == 0" />
 
                 <field name="purchase_order_id" readonly="1" optional="show" />
                 <field name="order_status" widget="badge" 
@@ -142,10 +150,10 @@
             <header>
                 <button name="action_create_rfq" string="Create PO" type="object"
                     class="btn-primary" icon="fa-shopping-cart"
-                    invisible="purchase_order_id != False" />
+                    invisible="balance_qty == 0" />
                 <button name="action_open_product_vendors" groups="purchase.group_purchase_user" string="Create Vendor" type="object"
                     class="btn-secondary" icon="fa-user-plus"
-                    invisible="purchase_order_id != False" />
+                    invisible="balance_qty == 0" />
                 <field name="order_status" widget="statusbar" statusbar_visible="draft,sent,purchase,done" />
             </header>
             <sheet>
@@ -173,6 +181,8 @@
                     <group>
                         <field name="required_qty" readonly="1" />
                         <field name="ordered_qty" />
+                        <field name="purchased_qty" />
+                        <field name="balance_qty" />
                         <field name="uom_id" readonly="1" />
                         <field name="vendor_id" options="{'no_create': True}" domain="[('id', 'in', vendor_ids)]" />
                         <field name="price_unit" />

@@ -985,8 +985,10 @@ class ReportPackingList(models.AbstractModel):
         qty = hist_line.box_weight or 0.0
         is_box = (hist_line.box_number or '').startswith('Box ')
         if is_box:
+            # abs(): a removed (negative) box is still "1 kg <product>" - the
+            # sign is carried by the box count ("Remove 1 boxes").
             name = self.env['sale.order.line']._compose_report_name(
-                f"{_format_report_qty(qty)} kg {product.name or ''}", notes
+                f"{_format_report_qty(abs(qty))} kg {product.name or ''}", notes
             )
         else:
             name = product.name or hist_line.product_name or ''
@@ -1059,7 +1061,8 @@ class ReportPackingList(models.AbstractModel):
             # report/production_report.py for the same convention).
             # Box rows stay separate by box qty (0.5kg vs 1kg); "Full Bulk"
             # rows merge/sum together regardless of value.
-            group_key = (product.id, line_qty if is_box else False, line_notes)
+            # abs(): a removed (negative) box nets against the same-sized box.
+            group_key = (product.id, abs(line_qty) if is_box else False, line_notes)
             if group_key not in c_prods:
                 c_prods[group_key] = {
                     'product_id': product.id,
@@ -1072,7 +1075,8 @@ class ReportPackingList(models.AbstractModel):
             # row's qty IS the line's own quantity (no box-splitting
             # happens for it), so it's SUMMED instead.
             if is_box:
-                c_prods[group_key]['qty'] += 1
+                # A negative box is one to remove (late quantity reduction).
+                c_prods[group_key]['qty'] += -1 if line_qty < 0 else 1
             else:
                 c_prods[group_key]['qty'] += line_qty
 
@@ -1088,6 +1092,8 @@ class ReportPackingList(models.AbstractModel):
                 products = []
                 for p in c_val['products'].values():
                     qty_val = p['qty']
+                    if round(qty_val, 2) == 0:
+                        continue  # normal and late (reduction) rows cancelled out
                     product = self.env['product.product'].browse(p['product_id'])
                     unit_weight_kg = product.weight or product.product_tmpl_id.weight or 0.0
                     products.append({
@@ -1320,7 +1326,8 @@ class ReportPackingList(models.AbstractModel):
 
             line_name, line_qty, is_box, line_notes = self._history_line_info(hist_line)
             c_prods = b_map['categories_map'][categ_key]['products']
-            group_key = (product.id, line_qty if is_box else False, line_notes)
+            # abs(): a removed (negative) box nets against the same-sized box.
+            group_key = (product.id, abs(line_qty) if is_box else False, line_notes)
             if group_key not in c_prods:
                 sort_num = self._extract_sort_number(product)
                 c_prods[group_key] = {
@@ -1331,7 +1338,8 @@ class ReportPackingList(models.AbstractModel):
                     'sort_str': str(sort_num) if sort_num else '',
                 }
             if is_box:
-                c_prods[group_key]['box_qty'] += 1
+                # A negative box is one to remove (late quantity reduction).
+                c_prods[group_key]['box_qty'] += -1 if line_qty < 0 else 1
             else:
                 c_prods[group_key]['box_qty'] += line_qty
         return batches_map
@@ -1537,7 +1545,7 @@ class ReportPackingList(models.AbstractModel):
                     p['qty_display'] = delta_str
                     p['action_text'] = (
                         f"Additional {delta_str} boxes required" if delta > 0
-                        else f"Remove {delta_str} boxes"
+                        else f"Remove {delta_str.lstrip('-')} boxes"
                     )
                 cat_total = round(sum(p['box_qty'] for p in sorted_prods), 2)
                 batch_total_boxes += cat_total

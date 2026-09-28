@@ -11,6 +11,7 @@ class IrActionsReport(models.Model):
     # invoice layout instead of their QWeb template.
     RF_INVOICE_REPORTS = ('account.report_invoice_with_payments', 'account.report_invoice')
     RF_DRIVER_COPY_REPORT = 'tl_rf_reports.report_driver_copy'
+    RF_CUSTOMER_COPY_REPORT = 'tl_rf_reports.report_customer_copy'
 
     def _render_qweb_pdf_prepare_streams(self, report_ref, data, res_ids=None):
         """Serve the Regal Fish invoice and the Driver Copy from ReportLab
@@ -19,15 +20,17 @@ class IrActionsReport(models.Model):
         caller (Print menu, Send & Print, portal download, report attachment
         saving) goes through here, so they all get the same layout."""
         report_name = self._get_report(report_ref).report_name
-        if not res_ids or report_name not in self.RF_INVOICE_REPORTS + (self.RF_DRIVER_COPY_REPORT,):
+        copy_reports = {self.RF_DRIVER_COPY_REPORT: 'driver', self.RF_CUSTOMER_COPY_REPORT: 'customer'}
+        if not res_ids or report_name not in self.RF_INVOICE_REPORTS + tuple(copy_reports):
             return super()._render_qweb_pdf_prepare_streams(report_ref, data, res_ids=res_ids)
 
-        if report_name == self.RF_DRIVER_COPY_REPORT:
+        if report_name in copy_reports:
             records = self.env['stock.picking'].browse(res_ids)
             generator = self.env['report.tl_rf_reports.report_driver_copy']
+            copy_type = copy_reports[report_name]
 
             def render(record):
-                return generator.generate_pdf(record)
+                return generator.generate_pdf(record, copy_type=copy_type)
         else:
             records = self.env['account.move'].browse(res_ids)
             generator = self.env['report.tl_rf_reports.report_invoice_regal']

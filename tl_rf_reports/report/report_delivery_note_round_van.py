@@ -164,27 +164,24 @@ class ReportDeliveryNoteRoundVan(DeliveryNoteReportMixin, models.AbstractModel):
         return (street2, door_key, order.name or '')
 
     def _build_drop(self, order, pickings=None, delivery_product_ids=None, lines=None):
-        """Build one drop dict for an order, or None when the order has no delivery
-        or none of its lines are part of the delivery."""
+        """Build one drop dict for an order, or None when the order has no
+        delivery or no product lines.
+
+        Items are ALL of the Sales Order's product lines, in order-line
+        sequence, printed as "qty x product name" - no filtering on what is
+        on the delivery moves (a Kit is listed as the sold kit, not its
+        components). delivery_product_ids is kept in the signature for the
+        callers but no longer used."""
         if pickings is None:
             pickings = self._get_delivery_pickings(order)
         if not pickings:
             return None
 
-        if delivery_product_ids is None:
-            delivery_product_ids = self._get_delivery_product_ids(pickings)
-        if not delivery_product_ids:
-            return None
-
         if lines is None:
-            delivery_lines = order.order_line.filtered(
-                lambda l: not l.display_type and l.product_id and l.product_id.id in delivery_product_ids
-            )
+            delivery_lines = order.order_line.filtered(lambda l: not l.display_type and l.product_id)
         else:
-            delivery_lines = [
-                l for l in lines
-                if not l.display_type and l.product_id and l.product_id.id in delivery_product_ids
-            ]
+            delivery_lines = [l for l in lines if not l.display_type and l.product_id]
+        delivery_lines = sorted(delivery_lines, key=lambda l: (l.sequence, l.id))
 
         if not delivery_lines:
             return None
@@ -196,7 +193,7 @@ class ReportDeliveryNoteRoundVan(DeliveryNoteReportMixin, models.AbstractModel):
         addr_str = self._format_address(ship_partner)
         tel_str = getattr(ship_partner, 'phone', False) or getattr(ship_partner, 'mobile', False) or getattr(main_partner, 'mobile', False) or getattr(main_partner, 'phone', False) or ''
 
-        items = [self._format_line_item(line) for line in delivery_lines]
+        items = [f"{self._format_qty(line.product_uom_qty)} x {line.product_id.name or ''}" for line in delivery_lines]
 
         order_no = order.client_order_ref or order.name or ''
         note_str = self._clean_text(order.note)
@@ -520,21 +517,22 @@ class ReportDeliveryNoteRoundVan(DeliveryNoteReportMixin, models.AbstractModel):
         ).sorted('id')
 
     def _build_b2b_attachments(self, drop, width):
-        """B2B customer: the Sales Order's Invoice, then the Driver Copy of
-        the same Delivery Order, each starting on its own page.
-        Delivery Order -> Sales Order -> Invoice; Delivery Order -> Driver Copy."""
+        """B2B customer: the Driver Copy and the Customer Copy of the Delivery
+        Order, then the Sales Order's Invoice(s), each starting on its own page.
+        Delivery Order -> Driver/Customer Copy; Delivery Order -> Sales Order -> Invoice."""
         order = self.env['sale.order'].browse(drop['order_id'])
         flowables = []
+        if drop.get('picking_id'):
+            picking = self.env['stock.picking'].browse(drop['picking_id'])
+            copy_report = self.env['report.tl_rf_reports.report_driver_copy']
+            flowables += copy_report._build_driver_copy_flowables(picking, width, copy_type='driver')
+            flowables.append(PageBreak())
+            flowables += copy_report._build_driver_copy_flowables(picking, width, copy_type='customer')
         invoice_report = self.env['report.tl_rf_reports.report_invoice_regal']
         for invoice in self._get_b2b_invoices(order):
             if flowables:
                 flowables.append(PageBreak())
             flowables += invoice_report.with_company(invoice.company_id)._build_invoice_flowables(invoice, width)
-        if drop.get('picking_id'):
-            picking = self.env['stock.picking'].browse(drop['picking_id'])
-            if flowables:
-                flowables.append(PageBreak())
-            flowables += self.env['report.tl_rf_reports.report_driver_copy']._build_driver_copy_flowables(picking, width)
         return flowables
 
     def _build_drop_flowables(

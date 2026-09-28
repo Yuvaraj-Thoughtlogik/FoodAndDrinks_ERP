@@ -7,7 +7,6 @@ access_production_report_wizard,production.report.wizard,model_production_report
 access_production_label_wizard,production.label.wizard,model_production_label_wizard,base.group_user,1,1,1,1
 access_prediction_report_wizard,prediction.report.wizard,model_prediction_report_wizard,base.group_user,1,1,1,1
 access_requirement_report_line,requirement.report.line,model_requirement_report_line,base.group_user,1,1,1,1
-access_requirement_report_line_all,requirement.report.line all,model_requirement_report_line,,1,1,1,1
 access_active_batch_report_wizard,active.batch.report.wizard,model_active_batch_report_wizard,base.group_user,1,1,1,1
 access_round_batch_activity_wizard,round.batch.activity.wizard,model_round_batch_activity_wizard,base.group_user,1,1,1,1
 access_product_label_wizard,access.product.label.wizard,model_product_label_wizard,base.group_user,1,1,1,1

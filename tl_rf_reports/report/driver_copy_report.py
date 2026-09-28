@@ -18,9 +18,9 @@ def _esc(val):
 
 
 class ReportDriverCopy(DeliveryNoteReportMixin, models.AbstractModel):
-    """Driver Copy of a Delivery Order, built with ReportLab.
+    """Driver Copy / Customer Copy of a Delivery Order, built with ReportLab.
 
-    Printed from the Delivery Order (Print > Driver Copy, see
+    Printed from the Delivery Order (Print > Driver Copy / Customer Copy, see
     models/ir_actions_report.py) and appended after a B2B customer's
     delivery note in the Regal Van Delivery Note Round report.
 
@@ -29,7 +29,7 @@ class ReportDriverCopy(DeliveryNoteReportMixin, models.AbstractModel):
     company name, phone numbers).
     """
     _name = 'report.tl_rf_reports.report_driver_copy'
-    _description = 'Driver Copy (ReportLab)'
+    _description = 'Driver / Customer Copy (ReportLab)'
 
     @api.model
     def _get_report_values(self, docids, data=None):
@@ -85,8 +85,19 @@ class ReportDriverCopy(DeliveryNoteReportMixin, models.AbstractModel):
                 ))
         return rows
 
-    def _build_driver_copy_flowables(self, picking, width):
-        """Flowables for one Delivery Order, fitting a frame `width` points wide."""
+    COPY_TITLES = {'driver': 'Driver Copy', 'customer': 'Customer Copy'}
+    LINES_PER_CHUNK = 30
+
+    def _build_driver_copy_flowables(self, picking, width, copy_type='driver'):
+        """Flowables for one Delivery Order copy, fitting a frame `width` points wide.
+
+        copy_type:
+        - 'driver'  : Driver Copy - adds the customer tel/mob, the signature
+                      row (Delivered By / Received By / Print Name / Date) and
+                      the order Total with the payment tick boxes.
+        - 'customer': Customer Copy - delivery details only.
+        Both end with the retention-of-title line."""
+        is_driver = copy_type == 'driver'
         order = picking.sale_id
         company = picking.company_id
         partner = order.partner_id if order else picking.partner_id
@@ -97,45 +108,48 @@ class ReportDriverCopy(DeliveryNoteReportMixin, models.AbstractModel):
         order_no = order.name if order else (picking.origin or '')
 
         big = ParagraphStyle('DCBig', fontName='Helvetica', fontSize=12, leading=15)
-        big_bold = ParagraphStyle('DCBigBold', fontName='Helvetica-Bold', fontSize=12, leading=15)
         title = ParagraphStyle('DCTitle', fontName='Helvetica', fontSize=11, leading=14, alignment=TA_CENTER)
         company_name = ParagraphStyle('DCCompany', fontName='Helvetica-Bold', fontSize=9, leading=11, alignment=TA_CENTER)
         company_addr = ParagraphStyle('DCCompanyAddr', fontName='Helvetica', fontSize=7.5, leading=9.5, alignment=TA_CENTER)
         label = ParagraphStyle('DCLabel', fontName='Helvetica-Bold', fontSize=8, leading=10)
         value = ParagraphStyle('DCValue', fontName='Helvetica', fontSize=8, leading=10)
         value_center = ParagraphStyle('DCValueC', parent=value, alignment=TA_CENTER)
+        address = ParagraphStyle('DCAddress', fontName='Helvetica', fontSize=9, leading=11.5)
         th = ParagraphStyle('DCTh', fontName='Helvetica-Bold', fontSize=8, leading=10)
         th_center = ParagraphStyle('DCThC', parent=th, alignment=TA_CENTER)
+        small = ParagraphStyle('DCSmall', fontName='Helvetica', fontSize=8, leading=10)
 
         def u(text):
             return f"<u>{_esc(text)}</u>"
 
         flow = []
 
-        # --- "Del Note number" + "Driver Copy" ---
+        # --- "Del Note number" + copy title (outside the frame) ---
         top = Table(
-            [[
-                '',
-                Paragraph(f"Del Note number: &nbsp;&nbsp;&nbsp;&nbsp;<b>{_esc(order_no)}</b>", big),
-            ]],
+            [['', Paragraph(f"Del Note number: &nbsp;&nbsp;&nbsp;&nbsp;{_esc(order_no)}", big)]],
             colWidths=[width * 0.55, width * 0.45],
         )
-        top.setStyle(TableStyle([('ALIGN', (1, 0), (1, 0), 'RIGHT'), ('LEFTPADDING', (0, 0), (-1, -1), 0)]))
-        flow += [top, Spacer(1, 3 * mm), Paragraph(u('Driver Copy'), title), Spacer(1, 4 * mm)]
+        top.setStyle(TableStyle([('LEFTPADDING', (0, 0), (-1, -1), 0)]))
+        flow += [top, Spacer(1, 2 * mm), Paragraph(u(self.COPY_TITLES.get(copy_type, 'Driver Copy')), title),
+                 Spacer(1, 3 * mm)]
+
+        inner = width - 8 * mm  # frame padding left + right
+        sections = []  # one frame row each - the frame can split between rows
 
         # --- Company header ---
-        company_bits = [company.street, company.street2, company.city, company.state_id.name if company.state_id else '', company.zip]
+        company_bits = [company.street, company.street2, company.city,
+                        company.state_id.name if company.state_id else '', company.zip]
         contact_bits = []
         if company.phone:
             contact_bits.append(f"Tel: {_esc(company.phone)}")
         if getattr(company, 'fax', False):
             contact_bits.append(f"Fax: {_esc(company.fax)}")
-        box = [
+        sections.append([
             Paragraph(_esc(company.name), company_name),
             Paragraph(_esc(', '.join(b for b in company_bits if b)), company_addr),
             Paragraph(' '.join(contact_bits), company_addr),
             Spacer(1, 4 * mm),
-        ]
+        ])
 
         # --- Customer / order summary ---
         summary = Table(
@@ -149,9 +163,9 @@ class ReportDriverCopy(DeliveryNoteReportMixin, models.AbstractModel):
                      (getattr(order, 'delivery_date', False) if order else False) or picking.scheduled_date
                  )), value)],
             ],
-            colWidths=[width * 0.235] * 4,
+            colWidths=[inner * 0.25] * 4,
         )
-        summary.setStyle(TableStyle([('LEFTPADDING', (0, 0), (-1, -1), 0), ('TOPPADDING', (0, 0), (-1, -1), 1),
+        summary.setStyle(TableStyle([('LEFTPADDING', (0, 0), (-1, -1), 4 * mm), ('TOPPADDING', (0, 0), (-1, -1), 1),
                                      ('BOTTOMPADDING', (0, 0), (-1, -1), 1)]))
         company_row = Table(
             [[
@@ -160,85 +174,152 @@ class ReportDriverCopy(DeliveryNoteReportMixin, models.AbstractModel):
                 Paragraph(u('Depot:'), label),
                 Paragraph(_esc(warehouse.name if warehouse else ''), value),
             ]],
-            colWidths=[width * 0.18, width * 0.46, width * 0.10, width * 0.20],
+            colWidths=[inner * 0.22, inner * 0.46, inner * 0.10, inner * 0.22],
         )
-        company_row.setStyle(TableStyle([('LEFTPADDING', (0, 0), (-1, -1), 0), ('ALIGN', (2, 0), (2, 0), 'RIGHT')]))
-        box += [summary, company_row, Spacer(1, 1 * mm),
-                HRFlowable(width='100%', thickness=0.75, color=colors.black, spaceAfter=3 * mm)]
+        company_row.setStyle(TableStyle([('LEFTPADDING', (0, 0), (0, 0), 4 * mm), ('ALIGN', (2, 0), (2, 0), 'RIGHT'),
+                                         ('TOPPADDING', (0, 0), (-1, -1), 4)]))
+        sections.append([summary, company_row, Spacer(1, 1 * mm),
+                         HRFlowable(width='100%', thickness=0.75, color=colors.black, spaceAfter=2 * mm)])
 
-        # --- Addresses ---
-        phone = (partner.phone if partner else '') or ''
-        mobile = (getattr(partner, 'mobile', '') if partner else '') or ''
-        addresses = Table(
-            [
-                [Paragraph(u('Invoice Address:'), label), Paragraph(u('Delivery Address:'), label)],
-                [Paragraph(self._address_html(invoice_partner), value), Paragraph(self._address_html(delivery_partner), value)],
-                [Paragraph(f"tel: ({_esc(phone)})", value_center), Paragraph(f"mob: ({_esc(mobile)})", value_center)],
-            ],
-            colWidths=[width * 0.47, width * 0.47],
-        )
-        addresses.setStyle(TableStyle([
-            ('LEFTPADDING', (0, 0), (-1, -1), 6 * mm),
-            ('TOPPADDING', (0, 2), (-1, 2), 4 * mm),
-        ]))
-        box.append(addresses)
+        # --- Addresses (+ tel/mob on the driver copy) ---
+        address_rows = [
+            [Paragraph(u('Invoice Address:'), label), Paragraph(u('Delivery Address:'), label)],
+            [Paragraph(self._address_html(invoice_partner), address), Paragraph(self._address_html(delivery_partner), address)],
+        ]
+        if is_driver:
+            phone = (partner.phone if partner else '') or ''
+            mobile = (getattr(partner, 'mobile', '') if partner else '') or ''
+            address_rows.append([Paragraph(f"tel: ({_esc(phone)})", value_center),
+                                 Paragraph(f"mob: ({_esc(mobile)})", value_center)])
+        addresses = Table(address_rows, colWidths=[inner * 0.5, inner * 0.5])
+        address_style = [('LEFTPADDING', (0, 0), (-1, -1), 8 * mm)]
+        if is_driver:
+            address_style.append(('TOPPADDING', (0, 2), (-1, 2), 4 * mm))
+        addresses.setStyle(TableStyle(address_style))
+        sections.append([addresses, Spacer(1, 3 * mm)])
 
-        # Rounded frame around the company/customer header (as on the
-        # sample). The lines and notes stay outside it so a long order can
-        # flow onto further pages - a single table cell can't split.
-        frame = Table([[box]], colWidths=[width])
+        # --- Lines (chunked so a very long order can still split pages) ---
+        line_rows = [[
+            Paragraph(_esc(code), value),
+            Paragraph(f"{qty:.2f}", value_center),
+            Paragraph(_esc(description), value),
+        ] for code, qty, description in self._get_driver_copy_lines(picking)]
+        header = [Paragraph(u('Product Code:'), th), Paragraph(u('Qty Ordered:'), th_center), Paragraph(u('Description:'), th)]
+        chunks = [line_rows[i:i + self.LINES_PER_CHUNK] for i in range(0, len(line_rows), self.LINES_PER_CHUNK)] or [[]]
+        for idx, chunk in enumerate(chunks):
+            rows = ([header] if idx == 0 else []) + chunk
+            if not rows:
+                continue
+            lines_table = Table(rows, colWidths=[inner * 0.28, inner * 0.17, inner * 0.55])
+            style = [
+                ('BOX', (0, 0), (-1, -1), 0.75, colors.black),
+                ('LINEAFTER', (0, 0), (1, -1), 0.75, colors.black),
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('TOPPADDING', (0, 0), (-1, -1), 2),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+            ]
+            if idx == 0:
+                style += [('LINEBELOW', (0, 0), (-1, 0), 0.75, colors.black),
+                          ('TOPPADDING', (0, 0), (-1, 0), 7), ('BOTTOMPADDING', (0, 0), (-1, 0), 7),
+                          ('TOPPADDING', (0, 1), (-1, 1), 6)]
+            lines_table.setStyle(TableStyle(style))
+            sections.append([lines_table])
+
+        # --- Delivery notes (sales order notes) ---
+        notes = self._clean_text(order.note) if order else ''
+        note_block = [Spacer(1, 3 * mm), Paragraph(u('Delivery Notes:'), label)]
+        if notes:
+            note_block.append(Paragraph(_esc(notes).replace('\n', '<br/>'), ParagraphStyle(
+                'DCNotes', parent=value, leftIndent=4 * mm, spaceBefore=1 * mm,
+            )))
+        sections.append(note_block)
+
+        # --- Retention of title ---
+        sections.append([
+            Spacer(1, 10 * mm),
+            Paragraph(_esc(f"GOODS REMAIN THE PROPERTY OF {(company.name or '').upper()} UNTIL PAID IN FULL"), small),
+        ])
+
+        if is_driver:
+            # --- Signatures: label row, then a blank line to write on ---
+            gap = inner * 0.04
+            sig_w = (inner - 3 * gap) / 4
+            sig = Table(
+                [
+                    [Paragraph(u('Delivered By:'), label), '', Paragraph(u('Received By (Signature):'), label), '',
+                     Paragraph(u('Print Name:'), label), '', Paragraph(u('Date:'), label)],
+                    ['', '', '', '', '', '', ''],
+                ],
+                colWidths=[sig_w, gap, sig_w, gap, sig_w, gap, sig_w],
+                rowHeights=[None, 9 * mm],
+            )
+            sig.setStyle(TableStyle([
+                ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                ('LINEBELOW', (0, 1), (0, 1), 0.75, colors.black),
+                ('LINEBELOW', (2, 1), (2, 1), 0.75, colors.black),
+                ('LINEBELOW', (4, 1), (4, 1), 0.75, colors.black),
+                ('LINEBELOW', (6, 1), (6, 1), 0.75, colors.black),
+            ]))
+
+            # --- Total + payment tick boxes (ticked from the order's flags) ---
+            currency = order.currency_id.symbol if order and order.currency_id else ''
+            total = f"{currency}{order.amount_total:,.2f}" if order else ''
+            pay = [
+                ('Cash', bool(getattr(order, 'pay_cash', False))),
+                ('Cheque', bool(getattr(order, 'pay_cheque', False))),
+                ('On', False),
+                ('LNP', bool(getattr(order, 'pay_lnp', False))),
+            ]
+            box_w = 4.5 * mm
+            total_cells = [Paragraph(u('Total:'), label), Paragraph(_esc(total), value), '']
+            total_widths = [inner * 0.08, inner * 0.14, inner * 0.06]
+            box_style = []
+            for label_text, ticked in pay:
+                total_cells += [Paragraph(label_text, ParagraphStyle('DCPay', parent=value, alignment=2)),
+                                Paragraph('X' if ticked else '', value_center), '']
+                col = len(total_cells) - 2
+                box_style.append(('BOX', (col, 0), (col, 0), 0.75, colors.black))
+                total_widths += [inner * 0.10, box_w, inner * 0.06]
+            total_table = Table([total_cells], colWidths=total_widths, rowHeights=[box_w + 1])
+            total_table.setStyle(TableStyle([
+                ('LEFTPADDING', (0, 0), (-1, -1), 1),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 2),
+                ('TOPPADDING', (0, 0), (-1, -1), 0),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ] + box_style))
+            sections.append([Spacer(1, 6 * mm), sig, Spacer(1, 6 * mm), total_table])
+
+        # Rounded frame: one row per section, so it can break between rows.
+        frame = Table([[section] for section in sections], colWidths=[width])
         frame.setStyle(TableStyle([
             ('BOX', (0, 0), (-1, -1), 0.75, colors.black),
             ('ROUNDEDCORNERS', [6, 6, 6, 6]),
             ('LEFTPADDING', (0, 0), (-1, -1), 4 * mm),
             ('RIGHTPADDING', (0, 0), (-1, -1), 4 * mm),
-            ('TOPPADDING', (0, 0), (-1, -1), 3 * mm),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 4 * mm),
+            ('TOPPADDING', (0, 0), (-1, -1), 0),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+            ('TOPPADDING', (0, 0), (-1, 0), 3 * mm),
+            ('BOTTOMPADDING', (0, -1), (-1, -1), 4 * mm),
         ]))
-        flow += [frame, Spacer(1, 5 * mm)]
-
-        # --- Lines ---
-        rows = [[Paragraph(u('Product Code:'), th), Paragraph(u('Qty Ordered:'), th_center), Paragraph(u('Description:'), th)]]
-        for code, qty, description in self._get_driver_copy_lines(picking):
-            rows.append([
-                Paragraph(_esc(code), value),
-                Paragraph(f"{qty:.2f}", value_center),
-                Paragraph(_esc(description), value),
-            ])
-        lines_table = Table(rows, colWidths=[width * 0.28, width * 0.18, width * 0.54], repeatRows=1)
-        lines_table.setStyle(TableStyle([
-            ('BOX', (0, 0), (-1, -1), 0.75, colors.black),
-            ('LINEAFTER', (0, 0), (1, -1), 0.75, colors.black),
-            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('TOPPADDING', (0, 0), (-1, -1), 2),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 5),
-        ]))
-        flow += [lines_table, Spacer(1, 6 * mm)]
-
-        # --- Delivery notes (sales order notes) ---
-        notes = self._clean_text(order.note) if order else ''
-        flow.append(Paragraph(u('Delivery Notes:'), label))
-        if notes:
-            flow.append(Paragraph(_esc(notes).replace('\n', '<br/>'), ParagraphStyle(
-                'DCNotes', parent=value, leftIndent=4 * mm, spaceBefore=1 * mm,
-            )))
+        flow.append(frame)
         return flow
 
-    def generate_pdf(self, pickings):
-        """One PDF containing a Driver Copy for every picking, each on a new page."""
+    def generate_pdf(self, pickings, copy_type='driver'):
+        """One PDF containing a copy (driver/customer) for every picking, each on a new page."""
         buffer = io.BytesIO()
         doc = SimpleDocTemplate(
             buffer, pagesize=A4,
             leftMargin=12 * mm, rightMargin=12 * mm, topMargin=12 * mm, bottomMargin=12 * mm,
-            title=', '.join(p.name or '' for p in pickings),
+            title=f"{self.COPY_TITLES.get(copy_type, 'Driver Copy')} - " + ', '.join(
+                p.sale_id.name or p.name or '' for p in pickings),
         )
         width = A4[0] - 24 * mm
         story = []
         for idx, picking in enumerate(pickings):
             if idx:
                 story.append(PageBreak())
-            story += self._build_driver_copy_flowables(picking, width)
+            story += self._build_driver_copy_flowables(picking, width, copy_type=copy_type)
         doc.author = self.env.company.name or ''
         doc.build(story)
         value = buffer.getvalue()
