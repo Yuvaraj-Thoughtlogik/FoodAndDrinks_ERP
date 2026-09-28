@@ -59,7 +59,7 @@ class ResPartner(models.Model):
             ("agent", "Agent"),
             ("online", "Online"),
         ],
-        string="Customer Type",
+        string="Customer Type", required=True
     )
 
     last_sale_order = fields.Many2one(comodel_name="sale.order", string="Last Order",compute="_compute_last_sale_order",store=True)

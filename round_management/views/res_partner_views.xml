@@ -25,4 +25,27 @@
 
         </field>
     </record>
+    <record id="view_partner_form_inherit_mandatory" model="ir.ui.view">
+        <field name="name">res.partner.form.inherit.mandatory</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="arch" type="xml">
+
+            <!-- Make Name Required -->
+            <field name="name" position="attributes">
+                <attribute name="required">1</attribute>
+            </field>
+
+            <!-- Make Phone Required -->
+            <field name="phone" position="attributes">
+                <attribute name="required">1</attribute>
+            </field>
+
+            <!-- Make Address (Street) Required -->
+            <field name="street" position="attributes">
+                <attribute name="required">1</attribute>
+            </field>
+
+        </field>
+    </record>
 </odoo>

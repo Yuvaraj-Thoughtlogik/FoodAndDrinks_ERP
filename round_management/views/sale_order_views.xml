@@ -20,7 +20,7 @@
                 <label for="batch_id" string="Batch Code"/>
                   <div class="o_row">
                       <field name="batch_id" 
-                             string="Batch Code" 
+                             string="Batch Code"
                              context="{
                                  'list_view_ref': 'round_management.view_round_batch_tree',
                                  'order': 'delivery_date asc'
