@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     'name': "Regal Fish Reports",
-    'version': '19.0.1.0.1',
+    'version': '19.0.1.0.2',
     'summary': "Dock Weight Breakdown Report and Analytics for Regal Fish",
     'description': """
         Regal Fish Reports Module

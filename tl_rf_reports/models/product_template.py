@@ -12,7 +12,7 @@ class ProductTemplate(models.Model):
         the user doesn't have to pick it again."""
         line_id = self.env.context.get('requirement_line_id')
         line = self.env['requirement.report.line'].browse(line_id).exists() if line_id else False
-        if line and not line.purchase_order_id:
+        if line and (not line.purchase_line_ids or line.balance_qty > 0):
             product = line.product_id
             sellers = (product.seller_ids or product.product_tmpl_id.seller_ids).filtered(
                 lambda s: not s.product_id or s.product_id == product

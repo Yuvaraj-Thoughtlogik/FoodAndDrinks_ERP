@@ -293,19 +293,20 @@ class RequirementReportWizard(models.TransientModel):
 
     def _sync_requirement_lines(self):
         """Creates or refreshes the saved requirement lines for the wizard's
-        filters instead of generating a new set on every View Lines, so a
-        Purchase Order can't be created twice for the same requirement.
+        filters - always ONE line per product - instead of generating a new
+        set on every View Lines.
 
-        - Line already on an active Purchase Order: kept as it is (it shows
-          what was actually ordered).
-        - Still to order = current required qty - qty already on active
-          POs. When positive it is shown on one open line (e.g. the sale
-          order went from 7.5 to 9.5 after the PO: a new 2.0 line), so the
-          product's Required Qty total matches the sale orders and only the
-          extra quantity can be ordered. Ordered Qty follows it unless the
-          user changed it; the vendor/price picked by the user are kept.
-        - Nothing left to order (or product no longer required): open lines
-          are removed.
+        - Required Qty is refreshed from the current sale orders (also after
+          a PO was created: e.g. 2.4 -> 3.6 when a sale order line grew).
+          Order Qty is reset to it whenever Required Qty changes (a manual
+          Order Qty edit is only kept while Required Qty stays the same); vendor/price
+          picked by the user are kept. What is already on Purchase Orders is
+          tracked separately (purchase_line_ids / Purchased Qty), and Create
+          PO only orders the Balance - see RequirementReportLine.action_create_rfq().
+        - Duplicate lines of one product (older "still to order" lines) are
+          merged into one, keeping all their PO links.
+        - Product no longer required: removed, or - if it already has PO
+          lines - kept with Required/Order Qty 0.
         """
         self.ensure_one()
         Line = self.env['requirement.report.line'].sudo()
@@ -322,32 +323,23 @@ class RequirementReportWizard(models.TransientModel):
         vals_list = []
         for prod, req_qty in qty_by_product.items():
             lines = by_product.pop(prod, Line)
-            ordered_lines = lines.filtered(lambda l: l._is_ordered())
-            open_lines = lines - ordered_lines
-            remaining = float_round(req_qty - sum(ordered_lines.mapped('ordered_qty')), precision_digits=precision)
-
-            if float_compare(remaining, 0.0, precision_digits=precision) <= 0:
-                open_lines.unlink()  # everything required is already on a PO
-                continue
-            if open_lines:
-                line = open_lines[0]
-                vals = {'required_qty': remaining}
-                if line.ordered_qty == line.required_qty:
-                    vals['ordered_qty'] = remaining
-                line.write(vals)
-                open_lines[1:].unlink()
+            if lines:
+                keeper = lines.sorted(lambda l: (not l.purchase_line_ids, l.id))[:1]
+                duplicates = lines - keeper
+                merged = bool(duplicates)
+                if duplicates:
+                    keeper.purchase_line_ids |= duplicates.purchase_line_ids
+                    duplicates.unlink()
+                vals = {'required_qty': req_qty}
+                required_changed = float_compare(keeper.required_qty, req_qty, precision_digits=precision) != 0
+                if merged or required_changed:
+                    vals['ordered_qty'] = req_qty
+                keeper.write(vals)
                 continue
 
-            # New product, or extra quantity on top of what's already ordered
-            # (then reuse the vendor/price of the previous order).
-            previous = ordered_lines[-1:] if ordered_lines else False
-            if previous and previous.vendor_id:
-                vendor, price = previous.vendor_id, previous.price_unit
-            else:
-                sellers = prod.seller_ids or prod.product_tmpl_id.seller_ids
-                vendor = sellers[0].partner_id if sellers else False
-                price = sellers[0].price if (sellers and sellers[0].price) else prod.standard_price
-            req_qty = remaining
+            sellers = prod.seller_ids or prod.product_tmpl_id.seller_ids
+            vendor = sellers[0].partner_id if sellers else False
+            price = sellers[0].price if (sellers and sellers[0].price) else prod.standard_price
             vals_list.append({
                 'filter_key': key,
                 'delivery_date_from': self.delivery_date_from,
@@ -362,9 +354,10 @@ class RequirementReportWizard(models.TransientModel):
         if vals_list:
             Line.create(vals_list)
 
-        # Products no longer required: drop their lines unless already ordered.
-        stale = Line.browse([l.id for lines in by_product.values() for l in lines if not l._is_ordered()])
-        stale.unlink()
+        # Products no longer required.
+        leftovers = Line.browse([l.id for lines in by_product.values() for l in lines])
+        leftovers.filtered(lambda l: not l.purchase_line_ids).unlink()
+        leftovers.filtered(lambda l: l.purchase_line_ids).write({'required_qty': 0.0, 'ordered_qty': 0.0})
         return key
 
     def action_view_lines(self):
@@ -454,7 +447,7 @@ class RequirementReportLine(models.Model):
         readonly=True
     )
     ordered_qty = fields.Float(
-        string='Ordered Qty',
+        string='Order Qty',
         digits='Product Unit of Measure',
         default=0.0
     )
@@ -491,10 +484,36 @@ class RequirementReportLine(models.Model):
         digits='Product Price'
     )
 
+    purchase_line_ids = fields.Many2many(
+        'purchase.order.line',
+        'requirement_report_line_po_line_rel',
+        'requirement_line_id',
+        'purchase_line_id',
+        string='Purchase Order Lines',
+        readonly=True,
+        copy=False,
+        help="Every PO line created or updated for this requirement.",
+    )
+    purchased_qty = fields.Float(
+        string='Purchased Qty',
+        digits='Product Unit of Measure',
+        compute='_compute_purchase_quantities',
+        store=True,
+        help="Quantity already on (non-cancelled) Purchase Orders.",
+    )
+    balance_qty = fields.Float(
+        string='Balance',
+        digits='Product Unit of Measure',
+        compute='_compute_purchase_quantities',
+        store=True,
+        help="Order Qty still to put on a Purchase Order (negative: more is on POs than needed).",
+    )
     purchase_order_id = fields.Many2one(
         'purchase.order',
         string='Purchase Order',
-        readonly=True
+        compute='_compute_purchase_quantities',
+        store=True,
+        help="Latest Purchase Order of this line.",
     )
     order_status = fields.Selection(
         selection=[
@@ -531,10 +550,36 @@ class RequirementReportLine(models.Model):
         kwargs['auto_unfold'] = True
         return super(RequirementReportLine, self.with_context(max_number_opened_groups=1000))._open_groups(**kwargs)
 
-    def _is_ordered(self):
-        """Line already on a Purchase Order that isn't cancelled."""
-        self.ensure_one()
-        return bool(self.purchase_order_id) and self.purchase_order_id.state != 'cancel'
+    @api.depends('ordered_qty', 'purchase_line_ids.product_qty', 'purchase_line_ids.product_uom_id',
+                 'purchase_line_ids.state', 'purchase_line_ids.order_id')
+    def _compute_purchase_quantities(self):
+        for line in self:
+            active = line._active_purchase_lines()
+            line.purchased_qty = sum(line._po_qty_in_line_uom(pl) for pl in active)
+            line.balance_qty = line.ordered_qty - line.purchased_qty
+            line.purchase_order_id = active.sorted('id')[-1:].order_id if active else False
+
+    def _active_purchase_lines(self):
+        return self.purchase_line_ids.filtered(lambda pl: pl.state != 'cancel' and pl.order_id.state != 'cancel')
+
+    def _po_qty_in_line_uom(self, po_line):
+        """PO line quantity expressed in this line's (product) unit."""
+        if po_line.product_uom_id and self.uom_id and po_line.product_uom_id != self.uom_id:
+            return po_line.product_uom_id._compute_quantity(po_line.product_qty, self.uom_id)
+        return po_line.product_qty
+
+    def _to_po_uom(self, qty, po_uom):
+        if po_uom and self.uom_id and po_uom != self.uom_id:
+            return self.uom_id._compute_quantity(qty, po_uom)
+        return qty
+
+    def _editable_purchase_lines(self):
+        """This line's PO lines on a still-editable RFQ of its current vendor."""
+        return self._active_purchase_lines().filtered(
+            lambda pl: pl.order_id.state in ('draft', 'sent')
+            and not pl.order_id.locked
+            and pl.order_id.partner_id == self.vendor_id
+        ).sorted('id')
 
     @api.depends('purchase_order_id', 'purchase_order_id.state')
     def _compute_order_status(self):
@@ -553,6 +598,17 @@ class RequirementReportLine(models.Model):
                 self.price_unit = self.product_id.standard_price or 0.0
 
     def action_create_rfq(self):
+        """Puts each line's Balance (Order Qty - Purchased Qty) on a
+        Purchase Order, never re-ordering what is already on one. New
+        Purchase Orders are left as RFQs (not confirmed):
+
+        - Balance > 0 and the line's PO for this vendor is still an RFQ:
+          that PO line's quantity is increased.
+        - Balance > 0 otherwise (e.g. the PO is already confirmed): a new
+          RFQ is created for the balance only.
+        - Balance < 0 (the requirement went down): the line's RFQ PO lines
+          are reduced; confirmed PO lines are not changed.
+        """
         lines = self
         if not lines:
             active_ids = self.env.context.get('active_ids')
@@ -564,12 +620,13 @@ class RequirementReportLine(models.Model):
         if not lines:
             raise UserError(_("No requirement report lines found to create RFQ."))
 
-        # Lines already on an active Purchase Order are never ordered again.
-        lines = lines.filtered(lambda l: not l._is_ordered())
-        if not lines:
-            raise UserError(_("The selected line(s) already have a Purchase Order."))
+        precision = self.env['decimal.precision'].precision_get('Product Unit of Measure')
+        to_increase = lines.filtered(lambda l: float_compare(l.balance_qty, 0.0, precision_digits=precision) > 0)
+        to_decrease = lines.filtered(lambda l: float_compare(l.balance_qty, 0.0, precision_digits=precision) < 0)
+        if not to_increase and not to_decrease:
+            raise UserError(_("Nothing to order: the selected line(s) are fully covered by their Purchase Orders."))
 
-        missing_vendor_lines = lines.filtered(lambda l: not l.vendor_id)
+        missing_vendor_lines = to_increase.filtered(lambda l: not l.vendor_id)
         if missing_vendor_lines:
             missing_products = sorted(list({l.product_id.display_name for l in missing_vendor_lines}))
             msg = _(
@@ -579,77 +636,82 @@ class RequirementReportLine(models.Model):
             ) % "\n".join(f"• {p}" for p in missing_products)
             raise UserError(msg)
 
-        lines_by_vendor = {}
-        for line in lines:
-            if line.ordered_qty <= 0:
-                continue
-            vendor = line.vendor_id
-            if vendor not in lines_by_vendor:
-                lines_by_vendor[vendor] = []
-            lines_by_vendor[vendor].append(line)
+        touched_pos = self.env['purchase.order']
 
-        if not lines_by_vendor:
-            raise UserError(_("All selected lines have zero ordered quantity. No RFQs to create."))
+        # Requirement went down: take it off the RFQ lines (newest first).
+        for line in to_decrease:
+            remaining = -line.balance_qty
+            for po_line in reversed(line._editable_purchase_lines()):
+                if float_compare(remaining, 0.0, precision_digits=precision) <= 0:
+                    break
+                on_line = line._po_qty_in_line_uom(po_line)
+                take = min(remaining, on_line)
+                touched_pos |= po_line.order_id
+                if float_compare(take, on_line, precision_digits=precision) >= 0:
+                    po_line.unlink()
+                else:
+                    po_line.product_qty = line._to_po_uom(on_line - take, po_line.product_uom_id)
+                remaining -= take
+
+        # Requirement went up: top up an open RFQ, else a new PO for the balance.
+        new_by_vendor = {}
+        for line in to_increase:
+            open_po_line = line._editable_purchase_lines()[-1:]
+            if open_po_line:
+                open_po_line.product_qty += line._to_po_uom(line.balance_qty, open_po_line.product_uom_id)
+                touched_pos |= open_po_line.order_id
+            else:
+                new_by_vendor.setdefault(line.vendor_id, []).append(line)
 
         PurchaseOrder = self.env['purchase.order']
         PurchaseOrderLine = self.env['purchase.order.line']
-        created_pos = self.env['purchase.order']
-
         company_id = self.env.company.id
-
-        for vendor, v_lines in lines_by_vendor.items():
+        for vendor, v_lines in new_by_vendor.items():
             origin_str = _("Requirement Report Lines")
             first = v_lines[0]
             if first.delivery_date_from and first.delivery_date_to:
                 origin_str = f"Requirement: {first.delivery_date_from.strftime('%d/%m/%Y')} - {first.delivery_date_to.strftime('%d/%m/%Y')}"
 
-            po_vals = {
+            po = PurchaseOrder.create({
                 'partner_id': vendor.id,
                 'company_id': company_id,
                 'origin': origin_str,
                 'date_order': fields.Datetime.now(),
-            }
-            po = PurchaseOrder.create(po_vals)
-
+            })
             for l in v_lines:
                 prod = l.product_id
                 uom = getattr(prod, 'uom_po_id', False) or prod.uom_id or l.uom_id
-                price = l.price_unit or prod.standard_price or 0.0
-
-                po_line_vals = {
+                po_line = PurchaseOrderLine.create({
                     'order_id': po.id,
                     'product_id': prod.id,
                     'name': prod.display_name or prod.name,
-                    'product_qty': l.ordered_qty,
+                    'product_qty': l._to_po_uom(l.balance_qty, uom),
                     'product_uom_id': uom.id if uom else False,
-                    'price_unit': price,
+                    'price_unit': l.price_unit or prod.standard_price or 0.0,
                     'date_planned': fields.Datetime.now(),
-                }
-                PurchaseOrderLine.create(po_line_vals)
-                l.purchase_order_id = po.id
+                })
+                l.purchase_line_ids |= po_line
 
-            # Confirm Purchase Order to change status state from draft (RFQ) -> purchase (Purchase Order)
-            po.button_confirm()
-            created_pos |= po
+            touched_pos |= po
 
-        if len(created_pos) == 1:
+        touched_pos = touched_pos.exists()
+        if len(touched_pos) == 1:
             return {
                 'name': _('Purchase Order'),
                 'type': 'ir.actions.act_window',
                 'res_model': 'purchase.order',
                 'view_mode': 'form',
-                'res_id': created_pos.id,
+                'res_id': touched_pos.id,
                 'target': 'current',
             }
-        else:
-            return {
-                'name': _('Created Purchase Orders'),
-                'type': 'ir.actions.act_window',
-                'res_model': 'purchase.order',
-                'view_mode': 'list,form',
-                'domain': [('id', 'in', created_pos.ids)],
-                'target': 'current',
-            }
+        return {
+            'name': _('Purchase Orders'),
+            'type': 'ir.actions.act_window',
+            'res_model': 'purchase.order',
+            'view_mode': 'list,form',
+            'domain': [('id', 'in', touched_pos.ids)],
+            'target': 'current',
+        }
 
     def action_open_product_vendors(self):
         """Opens the line's product in a pop-up showing only its Purchase tab
@@ -668,7 +730,7 @@ class RequirementReportLine(models.Model):
 
     def action_view_purchase_order(self):
         """Opens the linked Purchase Order(s)."""
-        po_ids = self.mapped('purchase_order_id').ids
+        po_ids = self._active_purchase_lines().order_id.ids or self.mapped('purchase_order_id').ids
         if not po_ids:
             raise UserError(_("No Purchase Order is linked to the selected line(s)."))
 
