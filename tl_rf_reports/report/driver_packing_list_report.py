@@ -598,7 +598,12 @@ class ReportDriverPackingList(models.AbstractModel):
             for c_key, c_val in sorted(
                 b_data['categories_map'].items(), key=lambda item: self._get_category_sort_key(item[1]['categ_name'])
             ):
-                sorted_prods = sorted(c_val['products'].values(), key=self._get_sort_key)
+                # Normal and late (incl. negative/reduction) rows net per
+                # product; skip products whose changes cancel out to 0.
+                sorted_prods = [
+                    p for p in sorted(c_val['products'].values(), key=self._get_sort_key)
+                    if round(p['box_qty'], 2) != 0
+                ]
                 for p in sorted_prods:
                     qty_val = p['box_qty']
                     p['qty_display'] = str(int(round(qty_val))) if float(qty_val).is_integer() else f"{qty_val:.2f}"

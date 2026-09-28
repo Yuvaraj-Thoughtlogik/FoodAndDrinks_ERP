@@ -5,6 +5,7 @@ import io
 from odoo import api, fields, models
 from odoo.tools import _
 from odoo.exceptions import UserError, ValidationError
+from odoo.tools import float_compare, float_round
 
 
 class RequirementReportWizard(models.TransientModel):
@@ -73,12 +74,6 @@ class RequirementReportWizard(models.TransientModel):
         default=_default_categ_ids,
         help="Fresh is selected by default. Add or remove categories as required; "
              "leave empty to include all categories."
-    )
-
-    line_ids = fields.One2many(
-        'requirement.report.line',
-        'wizard_id',
-        string='Requirement Lines'
     )
 
     @api.constrains('delivery_date_from', 'delivery_date_to')
@@ -251,14 +246,23 @@ class RequirementReportWizard(models.TransientModel):
             combined_pdf, f"Requirement_Report_Combined_{self.delivery_date_from.strftime('%Y%m%d')}.pdf"
         )
 
-    def _generate_requirement_lines(self):
-        """Rebuilds this wizard's requirement lines: one line per stock item
-        (BOM components in place of the finished product, exactly like the
-        PDF), with the required qty summed across all matching sale order
-        lines and the vendor/price taken from the product's first seller."""
+    def _get_filter_key(self):
+        """Identifies one set of requirement lines: the same dates, channel,
+        depots and categories always map to the same saved lines."""
         self.ensure_one()
-        self.sudo().line_ids.unlink()
+        return '|'.join([
+            fields.Date.to_string(self.delivery_date_from),
+            fields.Date.to_string(self.delivery_date_to),
+            self.delivery_channel or '',
+            'd:' + ','.join(str(i) for i in sorted(self.depot_ids.ids)),
+            'c:' + ','.join(str(i) for i in sorted(self.categ_ids.ids)),
+        ])
 
+    def _compute_required_quantities(self):
+        """{product: required qty} for the wizard's filters - one entry per
+        stock item (BOM components in place of the finished product, exactly
+        like the PDF), summed across all matching sale order lines."""
+        self.ensure_one()
         lines = self.env['sale.order.line'].search(self._get_line_domain(), order='product_id, id asc')
         if not lines:
             if self.delivery_channel == 'both':
@@ -285,38 +289,99 @@ class RequirementReportWizard(models.TransientModel):
                 line.product_id, line.product_uom_qty, boms_by_product
             ):
                 qty_by_product[item_product] = qty_by_product.get(item_product, 0.0) + item_qty
+        return qty_by_product
+
+    def _sync_requirement_lines(self):
+        """Creates or refreshes the saved requirement lines for the wizard's
+        filters instead of generating a new set on every View Lines, so a
+        Purchase Order can't be created twice for the same requirement.
+
+        - Line already on an active Purchase Order: kept as it is (it shows
+          what was actually ordered).
+        - Still to order = current required qty - qty already on active
+          POs. When positive it is shown on one open line (e.g. the sale
+          order went from 7.5 to 9.5 after the PO: a new 2.0 line), so the
+          product's Required Qty total matches the sale orders and only the
+          extra quantity can be ordered. Ordered Qty follows it unless the
+          user changed it; the vendor/price picked by the user are kept.
+        - Nothing left to order (or product no longer required): open lines
+          are removed.
+        """
+        self.ensure_one()
+        Line = self.env['requirement.report.line'].sudo()
+        key = self._get_filter_key()
+        qty_by_product = self._compute_required_quantities()
+        precision = self.env['decimal.precision'].precision_get('Product Unit of Measure')
+
+        existing = Line.search([('filter_key', '=', key)])
+        by_product = {}
+        for line in existing:
+            by_product.setdefault(line.product_id, Line)
+            by_product[line.product_id] |= line
 
         vals_list = []
-        for prod, req_qty in sorted(qty_by_product.items(), key=lambda item: (item[0].name or '').lower()):
-            sellers = prod.seller_ids or prod.product_tmpl_id.seller_ids
-            vendor = sellers[0].partner_id if sellers else False
-            price = sellers[0].price if (sellers and sellers[0].price) else prod.standard_price
+        for prod, req_qty in qty_by_product.items():
+            lines = by_product.pop(prod, Line)
+            ordered_lines = lines.filtered(lambda l: l._is_ordered())
+            open_lines = lines - ordered_lines
+            remaining = float_round(req_qty - sum(ordered_lines.mapped('ordered_qty')), precision_digits=precision)
+
+            if float_compare(remaining, 0.0, precision_digits=precision) <= 0:
+                open_lines.unlink()  # everything required is already on a PO
+                continue
+            if open_lines:
+                line = open_lines[0]
+                vals = {'required_qty': remaining}
+                if line.ordered_qty == line.required_qty:
+                    vals['ordered_qty'] = remaining
+                line.write(vals)
+                open_lines[1:].unlink()
+                continue
+
+            # New product, or extra quantity on top of what's already ordered
+            # (then reuse the vendor/price of the previous order).
+            previous = ordered_lines[-1:] if ordered_lines else False
+            if previous and previous.vendor_id:
+                vendor, price = previous.vendor_id, previous.price_unit
+            else:
+                sellers = prod.seller_ids or prod.product_tmpl_id.seller_ids
+                vendor = sellers[0].partner_id if sellers else False
+                price = sellers[0].price if (sellers and sellers[0].price) else prod.standard_price
+            req_qty = remaining
             vals_list.append({
-                'wizard_id': self.id,
+                'filter_key': key,
+                'delivery_date_from': self.delivery_date_from,
+                'delivery_date_to': self.delivery_date_to,
+                'delivery_channel': self.delivery_channel,
                 'product_id': prod.id,
                 'required_qty': req_qty,
                 'ordered_qty': req_qty,
                 'vendor_id': vendor.id if vendor else False,
                 'price_unit': price or 0.0,
             })
-
         if vals_list:
-            self.env['requirement.report.line'].sudo().create(vals_list)
+            Line.create(vals_list)
+
+        # Products no longer required: drop their lines unless already ordered.
+        stale = Line.browse([l.id for lines in by_product.values() for l in lines if not l._is_ordered()])
+        stale.unlink()
+        return key
 
     def action_view_lines(self):
-        """Opens the consolidated requirement lines (per stock item, with
-        vendor, price and Create PO) for the wizard's filters."""
+        """Opens the saved requirement lines (per stock item, with vendor,
+        price and Create PO) for the wizard's filters, creating/refreshing
+        them first - see _sync_requirement_lines()."""
         self.ensure_one()
-        self._generate_requirement_lines()
+        key = self._sync_requirement_lines()
 
         return {
             'name': _('Requirement Report Lines'),
             'type': 'ir.actions.act_window',
             'res_model': 'requirement.report.line',
             'view_mode': 'list,form',
-            'domain': [('wizard_id', '=', self.id)],
+            'domain': [('filter_key', '=', key)],
             'context': {
-                'default_wizard_id': self.id,
+                'requirement_filter_key': key,
                 'search_default_group_by_vendor': 1,
                 'search_default_group_by_category': 1,
             },
@@ -324,16 +389,31 @@ class RequirementReportWizard(models.TransientModel):
         }
 
 
-class RequirementReportLine(models.TransientModel):
+class RequirementReportLine(models.Model):
+    """Saved purchase requirement line. Lines are kept (not regenerated)
+    per set of Requirement Report filters - see filter_key - so View Lines
+    always reopens the same lines and a Purchase Order is only created once."""
     _name = 'requirement.report.line'
     _description = 'Requirement Report Line'
-    _order = 'vendor_id, product_id'
+    _order = 'delivery_date_from desc, vendor_id, product_id'
 
-    wizard_id = fields.Many2one(
-        'requirement.report.wizard',
-        string='Wizard',
-        ondelete='cascade',
-        index=True
+    filter_key = fields.Char(
+        string='Filter Key',
+        required=True,
+        index=True,
+        readonly=True,
+        help="Delivery dates, channel, depots and categories these lines were built for.",
+    )
+    delivery_date_from = fields.Date(string='Delivery Date From', readonly=True)
+    delivery_date_to = fields.Date(string='Delivery Date To', readonly=True)
+    delivery_channel = fields.Selection(
+        selection=[
+            ('regal_van', 'Regal Van Delivery'),
+            ('courier', 'Courier Delivery'),
+            ('both', 'Both'),
+        ],
+        string='Delivery Channel',
+        readonly=True,
     )
     product_id = fields.Many2one(
         'product.product',
@@ -451,6 +531,11 @@ class RequirementReportLine(models.TransientModel):
         kwargs['auto_unfold'] = True
         return super(RequirementReportLine, self.with_context(max_number_opened_groups=1000))._open_groups(**kwargs)
 
+    def _is_ordered(self):
+        """Line already on a Purchase Order that isn't cancelled."""
+        self.ensure_one()
+        return bool(self.purchase_order_id) and self.purchase_order_id.state != 'cancel'
+
     @api.depends('purchase_order_id', 'purchase_order_id.state')
     def _compute_order_status(self):
         for line in self:
@@ -473,15 +558,16 @@ class RequirementReportLine(models.TransientModel):
             active_ids = self.env.context.get('active_ids')
             if active_ids:
                 lines = self.browse(active_ids)
-            elif self.env.context.get('default_wizard_id'):
-                lines = self.search([('wizard_id', '=', self.env.context.get('default_wizard_id'))])
-            else:
-                wizard_ids = self.mapped('wizard_id')
-                if wizard_ids:
-                    lines = wizard_ids[0].line_ids
+            elif self.env.context.get('requirement_filter_key'):
+                lines = self.search([('filter_key', '=', self.env.context['requirement_filter_key'])])
 
         if not lines:
             raise UserError(_("No requirement report lines found to create RFQ."))
+
+        # Lines already on an active Purchase Order are never ordered again.
+        lines = lines.filtered(lambda l: not l._is_ordered())
+        if not lines:
+            raise UserError(_("The selected line(s) already have a Purchase Order."))
 
         missing_vendor_lines = lines.filtered(lambda l: not l.vendor_id)
         if missing_vendor_lines:
@@ -513,9 +599,9 @@ class RequirementReportLine(models.TransientModel):
 
         for vendor, v_lines in lines_by_vendor.items():
             origin_str = _("Requirement Report Lines")
-            wiz = v_lines[0].wizard_id if v_lines else False
-            if wiz and wiz.delivery_date_from and wiz.delivery_date_to:
-                origin_str = f"Requirement: {wiz.delivery_date_from.strftime('%d/%m/%Y')} - {wiz.delivery_date_to.strftime('%d/%m/%Y')}"
+            first = v_lines[0]
+            if first.delivery_date_from and first.delivery_date_to:
+                origin_str = f"Requirement: {first.delivery_date_from.strftime('%d/%m/%Y')} - {first.delivery_date_to.strftime('%d/%m/%Y')}"
 
             po_vals = {
                 'partner_id': vendor.id,

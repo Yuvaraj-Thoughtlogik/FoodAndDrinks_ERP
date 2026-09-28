@@ -130,9 +130,41 @@ class StockFreshBoxWizard(models.TransientModel):
 
     def _build_wizard_line_vals(self, line, base_vals, uom, normal_qty, late_qty, has_bom):
         """Builds the wizard line dict(s) for a given qty/uom: 1kg boxes when
-        has_bom and uom is weight-based, otherwise whole "Full Bulk" line(s)."""
+        has_bom and uom is weight-based, otherwise whole "Full Bulk" line(s).
+
+        A negative late_qty (the confirmed quantity was reduced after the
+        order was locked, e.g. confirmed 2 -> now 1 = delta -1) produces
+        negative late line(s): "Full Bulk" -1, or negative 1kg boxes for the
+        weight to remove. They are recorded in the Pack Box history (the late
+        Packing List shows them as "Remove X") but never become MOs."""
         vals_list = []
         is_kg_uom = self._is_weight_uom(uom)
+
+        if late_qty < 0:
+            vals_list.extend(self._build_wizard_line_vals(line, base_vals, uom, normal_qty, 0.0, has_bom))
+            if has_bom and is_kg_uom:
+                remove_weight = self._get_line_effective_weight(line, -late_qty)
+                n_boxes = math.ceil(remove_weight) if remove_weight > 0 else 0
+                remaining_weight = remove_weight
+                for box_no in range(1, n_boxes + 1):
+                    box_weight = min(remaining_weight, 1.0)
+                    remaining_weight = max(0.0, remaining_weight - box_weight)
+                    line_dict = base_vals.copy()
+                    line_dict.update({
+                        'box_number': f"Box {box_no}/{n_boxes}",
+                        'box_weight': -round(box_weight, 3),
+                        'is_late_order': True,
+                    })
+                    vals_list.append(line_dict)
+            else:
+                line_dict = base_vals.copy()
+                line_dict.update({
+                    'box_number': "Full Bulk",
+                    'box_weight': round(late_qty, 3),
+                    'is_late_order': True,
+                })
+                vals_list.append(line_dict)
+            return vals_list
 
         if has_bom and is_kg_uom:
             total_qty = normal_qty + late_qty
@@ -359,14 +391,17 @@ class StockFreshBoxWizard(models.TransientModel):
         unique_products = self.line_ids.mapped('product_id')
         boms_per_product = mrp_bom_obj._bom_find(unique_products)
 
-        # Accepts lines that have a BoM AND are either KG UOM OR in the Chilled category
+        # Accepts lines that have a BoM AND are either KG UOM OR in the Chilled category.
+        # Negative (quantity-reduction) late lines never become MOs - they are
+        # only recorded in the history for the late Packing List.
         lines_to_generate_mo = self.line_ids.filtered(
-            lambda l: boms_per_product.get(l.product_id) and (
+            lambda l: l.box_weight > 0 and boms_per_product.get(l.product_id) and (
                 self._is_weight_uom(l.uom_id) or self._is_chilled_category(l.product_id)
             )
         )
+        has_reductions = bool(self.line_ids.filtered(lambda l: l.box_weight < 0))
 
-        if not lines_to_generate_mo:
+        if not lines_to_generate_mo and not has_reductions:
             raise UserError(_("No items with a valid BoM (KG Weight or Chilled Category) were found to generate MOs."))
 
         domain = [

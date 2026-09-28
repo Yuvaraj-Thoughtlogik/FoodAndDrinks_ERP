@@ -520,21 +520,22 @@ class ReportDeliveryNoteRoundVan(DeliveryNoteReportMixin, models.AbstractModel):
         ).sorted('id')
 
     def _build_b2b_attachments(self, drop, width):
-        """B2B customer: the Sales Order's Invoice, then the Driver Copy of
-        the same Delivery Order, each starting on its own page.
-        Delivery Order -> Sales Order -> Invoice; Delivery Order -> Driver Copy."""
+        """B2B customer: the Driver Copy and the Customer Copy of the Delivery
+        Order, then the Sales Order's Invoice(s), each starting on its own page.
+        Delivery Order -> Driver/Customer Copy; Delivery Order -> Sales Order -> Invoice."""
         order = self.env['sale.order'].browse(drop['order_id'])
         flowables = []
+        if drop.get('picking_id'):
+            picking = self.env['stock.picking'].browse(drop['picking_id'])
+            copy_report = self.env['report.tl_rf_reports.report_driver_copy']
+            flowables += copy_report._build_driver_copy_flowables(picking, width, copy_type='driver')
+            flowables.append(PageBreak())
+            flowables += copy_report._build_driver_copy_flowables(picking, width, copy_type='customer')
         invoice_report = self.env['report.tl_rf_reports.report_invoice_regal']
         for invoice in self._get_b2b_invoices(order):
             if flowables:
                 flowables.append(PageBreak())
             flowables += invoice_report.with_company(invoice.company_id)._build_invoice_flowables(invoice, width)
-        if drop.get('picking_id'):
-            picking = self.env['stock.picking'].browse(drop['picking_id'])
-            if flowables:
-                flowables.append(PageBreak())
-            flowables += self.env['report.tl_rf_reports.report_driver_copy']._build_driver_copy_flowables(picking, width)
         return flowables
 
     def _build_drop_flowables(

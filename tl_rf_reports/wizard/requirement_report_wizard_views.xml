@@ -73,6 +73,9 @@
                         class="btn-primary" display="always" icon="fa-shopping-cart" />
                 </header>
                 <field name="vendor_ids" column_invisible="True" />
+                <field name="delivery_date_from" optional="hide" />
+                <field name="delivery_date_to" optional="hide" />
+                <field name="delivery_channel" optional="hide" />
                 <field name="product_id" readonly="1" />
                 <field name="product_code" optional="show" readonly="1" />
                 <field name="categ_id" readonly="1" />

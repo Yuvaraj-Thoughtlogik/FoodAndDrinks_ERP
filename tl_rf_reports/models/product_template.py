@@ -22,4 +22,8 @@ class ProductTemplate(models.Model):
                     'vendor_id': sellers[0].partner_id.id,
                     'price_unit': sellers[0].price or product.standard_price or 0.0,
                 })
-        return {'type': 'ir.actions.act_window_close'}
+        # Reload the whole Requirement Lines list, not just the one record:
+        # the line may move to another Vendor group, and a plain dialog close
+        # would leave the old group (e.g. "No Vendor (0)") and a stale copy
+        # of the row on screen until a manual refresh.
+        return {'type': 'ir.actions.client', 'tag': 'soft_reload'}
