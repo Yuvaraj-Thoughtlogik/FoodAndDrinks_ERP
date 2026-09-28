@@ -17,21 +17,25 @@
 
                     <!-- Street -->
                     <field name="street"
+                           required="1"
                            placeholder="Door No..."
                            class="o_address_street"/>
 
                     <!-- Street 2 -->
                     <field name="street2"
+                           required="1"
                            placeholder="Street..."
                            class="o_address_street"/>
 
                     <!-- City -->
                     <field name="city"
+                           required="1"
                            placeholder="City"
                            class="o_address_city"/>
 
                     <!-- State -->
                     <field name="state_id"
+                           required="1"
                            placeholder="State"
                            class="o_address_state_id"
                            options="{'no_open': True, 'no_quick_create': True}"
@@ -43,6 +47,7 @@
 
                     <!-- Country -->
                     <field name="country_id"
+                           required="1"
                            placeholder="Country"
                            class="o_address_country_id"
                            options="{
@@ -63,6 +68,7 @@
 
                         <!-- ZIP / POSTCODE -->
                         <field name="zip"
+                               required="1"
                                placeholder="ZIP / Postcode"
                                class="o_address_zip me-1"
                                style="

@@ -41,11 +41,6 @@
                 <attribute name="required">1</attribute>
             </field>
 
-            <!-- Make Address (Street) Required -->
-            <field name="street" position="attributes">
-                <attribute name="required">1</attribute>
-            </field>
-
         </field>
     </record>
 </odoo>
