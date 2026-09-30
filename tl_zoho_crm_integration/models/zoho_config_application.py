@@ -24,6 +24,10 @@ class ZohoApplication(models.Model):
             },
         }
 
+    def action_check_live_status(self):
+        self.ensure_one()
+        return self.env['zoho.live.status'].create([{'zoho_config_app_id': self.id}]).action_refresh()
+
     def sync_crm_from_cron(self):
         self.ensure_one()
         self.env['zoho.config'].check_ready_to_sync()

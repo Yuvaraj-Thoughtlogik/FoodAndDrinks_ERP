@@ -91,6 +91,7 @@
                                                 <field name="cron_id"/>
                                                 <field name="notify_channel_id" invisible="not notify_channel_id"/>
                                                 <field name="notify_expiry" invisible="not notify_channel_id"/>
+                                                <field name="notify_last_received" invisible="not notify_channel_id"/>
                                             </group>
                                         </group>
 

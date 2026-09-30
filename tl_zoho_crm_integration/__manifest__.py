@@ -12,6 +12,7 @@
         'security/ir.model.access.csv',
         'views/config_application_views.xml',
         'wizard/import_module_wizard.xml',
+        'wizard/live_status_wizard.xml',
         'data/zoho_config_module_names.xml',
         'data/zoho_crm_v8_scopes.xml',
         'views/example_model_views.xml',

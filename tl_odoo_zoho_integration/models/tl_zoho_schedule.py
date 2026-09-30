@@ -36,6 +36,7 @@ class ZohoConfigSchedule(models.Model):
     notify_channel_id = fields.Char(string="Notification Channel", readonly=True, copy=False, index=True)
     notify_token = fields.Char(string="Notification Token", readonly=True, copy=False, groups='base.group_system')
     notify_expiry = fields.Datetime(string="Notification Expiry", readonly=True, copy=False)
+    notify_last_received = fields.Datetime(string="Last Notification", readonly=True, copy=False)
 
     def unlink(self):
         crons = self.cron_id

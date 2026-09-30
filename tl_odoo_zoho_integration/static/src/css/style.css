@@ -49,7 +49,7 @@ article.zoho_app_kanban:hover {
 }
     .notify-msg {
         display: flex;
-        align-items: flex-end;
+        align-items: center;
         justify-content: center;
         gap: 10px;
         margin: 10px 0;
@@ -83,6 +83,7 @@ article.zoho_app_kanban:hover {
 
     /* subtle pulse icon */
     .notify-icon {
+        flex-shrink: 0;
         font-size: 18px;
         animation: pulseIcon 1.4s infinite;
     }

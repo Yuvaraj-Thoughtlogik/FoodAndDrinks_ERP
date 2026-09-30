@@ -5,3 +5,4 @@ access_zoho_import_module_name_user,access_zoho_import_module_name_user,model_zo
 
 access_zoho_example_model,access_zoho_example_model,model_zoho_example_model,base.group_user,1,1,1,1
 access_zoho_example_model_line,access_zoho_example_model_line,model_zoho_example_model_line,base.group_user,1,1,1,1
+access_zoho_live_status,access_zoho_live_status,model_zoho_live_status,base.group_user,1,1,1,1

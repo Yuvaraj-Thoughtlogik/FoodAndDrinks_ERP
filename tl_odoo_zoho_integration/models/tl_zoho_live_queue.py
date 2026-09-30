@@ -87,8 +87,10 @@ class ZohoLiveQueue(models.Model):
         schedule = channel_id and self.env['zoho.config.schedule'].sudo().search(
             [('notify_channel_id', '=', channel_id)], limit=1)
         if not schedule or not consteq(str(payload.get('token') or ''), schedule.notify_token or ''):
-            _logger.warning("[ZOHO NOTIFY] Rejected notification for unknown channel/token %s", channel_id)
+            if channel_id:  # an empty channel is the reachability test of the Live Status check
+                _logger.warning("[ZOHO NOTIFY] Rejected notification for unknown channel/token %s", channel_id)
             return False
+        schedule.notify_last_received = fields.Datetime.now()
         operation = payload.get('operation')
         zoho_ids = [str(zoho_id) for zoho_id in payload.get('ids') or [] if zoho_id]
         if operation in ('insert', 'update') and zoho_ids:
