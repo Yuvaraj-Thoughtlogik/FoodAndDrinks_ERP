@@ -90,6 +90,23 @@ class DeliveryNoteReportMixin(object):
         match = re.search(r'(#.+?#)', line_desc)
         return match.group(1).strip() if match else ""
 
+    def _special_note(self, sale_lines):
+        """The Special Notes (special_requirements_notes_id) of one or more
+        sale order lines, de-duplicated, as one string."""
+        notes = []
+        for sale_line in sale_lines or []:
+            note = (sale_line.special_requirements_notes_id.name or '').strip()
+            if note and note not in notes:
+                notes.append(note)
+        return ', '.join(notes)
+
+    def _append_special_note(self, text, special_note):
+        """`text` followed by the line's Special Note as '# note #' (same
+        '#...#' convention as the notes typed in the line description)."""
+        if not special_note or re.search(rf"#\s*{re.escape(special_note)}\s*#", text or ''):
+            return text
+        return f"{text} # {special_note} #".strip()
+
     def _format_line_item(self, line):
         qty = self._format_qty(getattr(line, 'product_uom_qty', 0))
         uom_name = (line.product_uom_id.name or '').strip().lower() if getattr(line, 'product_uom_id', False) and line.product_uom_id else ''

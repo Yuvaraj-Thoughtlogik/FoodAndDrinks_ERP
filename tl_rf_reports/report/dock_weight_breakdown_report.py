@@ -131,6 +131,92 @@ class ReportDockWeightBreakdown(models.AbstractModel):
         pname = (product.name or '') if product else ''
         return self._extract_unit_weight_from_vals(uom_name, weight, gnw, mw, pname)
 
+    # Levels of Bill of Materials exploded for the ReportLab path: the sold
+    # product's BoM (level 1), then the BoM of any of its components (level
+    # 2). Components found at the last level are shown as-is even if they
+    # have a BoM of their own.
+    _BOM_EXPLODE_DEPTH = 2
+
+    def _explode_components(self, product, uom, company_id, cache, level=1):
+        """Components printed for `product` sold in `uom`, as a list of
+        (component product, component uom, ratio) where the component
+        quantity is ratio * sold quantity. A product without a BoM (or past
+        the last level) is returned as its own single component, ratio 1.
+        Results are memoised in `cache` - the same products are sold on
+        many order lines."""
+        key = (product.id, uom.id, company_id, level)
+        if key in cache:
+            return cache[key]
+
+        result = [(product, uom, 1.0)]
+        if level <= self._BOM_EXPLODE_DEPTH:
+            bom = self.env['mrp.bom']._bom_find(product, company_id=company_id)[product]
+            if bom and bom.product_qty:
+                # Sold qty of 1 `uom` expressed as a number of BoM batches.
+                batches = uom._compute_quantity(
+                    1.0, bom.product_uom_id, round=False, raise_if_failure=False,
+                ) / bom.product_qty
+                exploded = []
+                for bom_line in bom.bom_line_ids:
+                    if bom_line._skip_bom_line(product):
+                        continue
+                    line_ratio = bom_line.product_qty * batches
+                    for comp, comp_uom, sub_ratio in self._explode_components(
+                        bom_line.product_id, bom_line.product_uom_id, company_id, cache, level + 1,
+                    ):
+                        exploded.append((comp, comp_uom, line_ratio * sub_ratio))
+                if exploded:
+                    result = exploded
+
+        cache[key] = result
+        return result
+
+    def _line_weight_entries(self, line, categ_ids, is_late, cache):
+        """Weight rows one sale order line contributes to the report: one
+        per BoM component (up to _BOM_EXPLODE_DEPTH levels), or the line's
+        own product when it has no BoM. Returns a list of
+        (product, weight, delta_weight) - delta_weight is the weight of the
+        late quantity change, only computed for late reports. The wizard's
+        category filter is applied to the printed (component) product, as
+        that is what the category pages group by."""
+        qty = float(line.product_uom_qty or 0.0)
+        delta_qty = float(line.late_qty_delta or 0.0) if is_late else 0.0
+        line_uom = line.product_uom_id or line.product_id.uom_id
+        company_id = line.company_id.id or self.env.company.id
+
+        entries = []
+        for comp, comp_uom, ratio in self._explode_components(line.product_id, line_uom, company_id, cache):
+            if categ_ids and comp.categ_id.id not in categ_ids:
+                continue
+            is_sold_product = comp == line.product_id and ratio == 1.0
+            unit_weight = self._extract_unit_weight_from_vals(
+                comp_uom.name or '' if comp_uom else '',
+                comp.weight or comp.product_tmpl_id.weight,
+                (line.gross_net_weight if is_sold_product else False) or comp.product_tmpl_id.gross_net_weight,
+                line.min_weight if is_sold_product else getattr(comp.product_tmpl_id, 'min_weight', False),
+                comp.name,
+            )
+            comp_qty = qty * ratio
+            comp_delta = delta_qty * ratio
+            weight = (unit_weight * comp_qty) if unit_weight > 0 else comp_qty
+            delta_weight = (unit_weight * comp_delta) if unit_weight > 0 else comp_delta
+            entries.append((comp, weight, delta_weight))
+        return entries
+
+    @staticmethod
+    def _add_weight_entry(products_map, product, weight, delta_weight):
+        prod_info = products_map.setdefault(product.id, {
+            'product_name': product.name or '',
+            'total_weight': 0.0,
+            'reduced_weight': 0.0,
+            'increased_weight': 0.0,
+        })
+        prod_info['total_weight'] += weight
+        if delta_weight < 0:
+            prod_info['reduced_weight'] += -delta_weight
+        elif delta_weight > 0:
+            prod_info['increased_weight'] += delta_weight
+
     @api.model
     def _get_report_values(self, docids, data=None):
         docs = self.env['batch.report.wizard'].browse(docids)
@@ -487,57 +573,26 @@ class ReportDockWeightBreakdown(models.AbstractModel):
         is_late = wizard._is_late_report()
         categ_ids = wizard._get_filter_category_ids()
         categories_map = {}
+        bom_cache = {}
         for order in orders:
             lines = order.order_line.filtered(
                 lambda l: not l.display_type and l.product_id and l.product_uom_qty > 0
                 and wizard._line_matches_late(l)
-                and wizard._line_matches_category(l, categ_ids)
             )
             for line in lines:
-                product = line.product_id
-                categ = product.categ_id
-                categ_name = (categ.name or _('Fresh')).strip()
-                # Group by display name, not database id: two different
-                # category records that happen to render the same text
-                # (e.g. per-company duplicates) must not split into two pages.
-                categ_key = categ_name.lower()
-
-                if categ_key not in categories_map:
-                    categories_map[categ_key] = {
+                # Each line prints as its BoM components (2 levels), or as
+                # the sold product itself when it has no BoM.
+                for product, weight, delta_weight in self._line_weight_entries(line, categ_ids, is_late, bom_cache):
+                    categ_name = (product.categ_id.name or _('Fresh')).strip()
+                    # Group by display name, not database id: two different
+                    # category records that happen to render the same text
+                    # (e.g. per-company duplicates) must not split into two pages.
+                    categ_key = categ_name.lower()
+                    categ_map = categories_map.setdefault(categ_key, {
                         'categ_name': categ_name,
                         'products': {},
-                    }
-
-                prod_key = product.id
-                if prod_key not in categories_map[categ_key]['products']:
-                    uom = line.product_uom_id or product.product_tmpl_id.uom_id
-                    unit_weight = self._extract_unit_weight_from_vals(
-                        uom.name or '' if uom else '',
-                        product.weight or product.product_tmpl_id.weight,
-                        line.gross_net_weight or product.product_tmpl_id.gross_net_weight,
-                        line.min_weight,
-                        product.name,
-                    )
-                    categories_map[categ_key]['products'][prod_key] = {
-                        'product_name': product.name or '',
-                        'unit_weight': unit_weight,
-                        'total_weight': 0.0,
-                        'reduced_weight': 0.0,
-                        'increased_weight': 0.0,
-                    }
-
-                qty = float(line.product_uom_qty or 0.0)
-                prod_info = categories_map[categ_key]['products'][prod_key]
-                line_weight = (prod_info['unit_weight'] * qty) if prod_info['unit_weight'] > 0 else qty
-                prod_info['total_weight'] += line_weight
-
-                if is_late:
-                    delta_qty = float(line.late_qty_delta or 0.0)
-                    delta_weight = (prod_info['unit_weight'] * delta_qty) if prod_info['unit_weight'] > 0 else delta_qty
-                    if delta_weight < 0:
-                        prod_info['reduced_weight'] += -delta_weight
-                    elif delta_weight > 0:
-                        prod_info['increased_weight'] += delta_weight
+                    })
+                    self._add_weight_entry(categ_map['products'], product, weight, delta_weight)
 
         category_pages = []
         for c_key, c_val in sorted(categories_map.items(), key=lambda item: _category_sort_key(item[1]['categ_name'])):
@@ -732,12 +787,17 @@ class ReportDockWeightBreakdown(models.AbstractModel):
                 depot_lines.append((depot, line))
 
         depots_map = {}
+        bom_cache = {}
         for depot, line in depot_lines:
             if not (
                 not line.display_type and line.product_id and line.product_uom_qty > 0
                 and wizard._line_matches_late(line)
-                and wizard._line_matches_category(line, categ_ids)
             ):
+                continue
+            # Each line prints as its BoM components (2 levels), or as the
+            # sold product itself when it has no BoM.
+            entries = self._line_weight_entries(line, categ_ids, is_late, bom_cache)
+            if not entries:
                 continue
 
             depot_name = depot.name or _('Grimsby')
@@ -748,44 +808,14 @@ class ReportDockWeightBreakdown(models.AbstractModel):
             if depot_key not in depots_map:
                 depots_map[depot_key] = {'depot_name': depot_name, 'categories': {}}
 
-            product = line.product_id
-            categ = product.categ_id
-            categ_name = (categ.name or _('FRESH')).upper()
-            categ_key = categ_name.lower()
-
-            if categ_key not in depots_map[depot_key]['categories']:
-                depots_map[depot_key]['categories'][categ_key] = {'categ_name': categ_name, 'products': {}}
-
-            prod_key = product.id
-            if prod_key not in depots_map[depot_key]['categories'][categ_key]['products']:
-                uom = line.product_uom_id or product.product_tmpl_id.uom_id
-                unit_weight = self._extract_unit_weight_from_vals(
-                    uom.name or '' if uom else '',
-                    product.weight or product.product_tmpl_id.weight,
-                    line.gross_net_weight or product.product_tmpl_id.gross_net_weight,
-                    line.min_weight,
-                    product.name,
-                )
-                depots_map[depot_key]['categories'][categ_key]['products'][prod_key] = {
-                    'product_name': product.name or '',
-                    'unit_weight': unit_weight,
-                    'total_weight': 0.0,
-                    'reduced_weight': 0.0,
-                    'increased_weight': 0.0,
-                }
-
-            qty = float(line.product_uom_qty or 0.0)
-            prod_info = depots_map[depot_key]['categories'][categ_key]['products'][prod_key]
-            line_weight = (prod_info['unit_weight'] * qty) if prod_info['unit_weight'] > 0 else qty
-            prod_info['total_weight'] += line_weight
-
-            if is_late:
-                delta_qty = float(line.late_qty_delta or 0.0)
-                delta_weight = (prod_info['unit_weight'] * delta_qty) if prod_info['unit_weight'] > 0 else delta_qty
-                if delta_weight < 0:
-                    prod_info['reduced_weight'] += -delta_weight
-                elif delta_weight > 0:
-                    prod_info['increased_weight'] += delta_weight
+            for product, weight, delta_weight in entries:
+                categ_name = (product.categ_id.name or _('FRESH')).upper()
+                categ_key = categ_name.lower()
+                categ_map = depots_map[depot_key]['categories'].setdefault(categ_key, {
+                    'categ_name': categ_name,
+                    'products': {},
+                })
+                self._add_weight_entry(categ_map['products'], product, weight, delta_weight)
 
         combo_pages = []
         for d_key, d_val in sorted(depots_map.items(), key=lambda item: item[1]['depot_name']):

@@ -191,9 +191,19 @@ class ReportDeliveryNoteRoundVan(DeliveryNoteReportMixin, models.AbstractModel):
 
         cust_str = self._format_customer_name(main_partner)
         addr_str = self._format_address(ship_partner)
-        tel_str = getattr(ship_partner, 'phone', False) or getattr(ship_partner, 'mobile', False) or getattr(main_partner, 'mobile', False) or getattr(main_partner, 'phone', False) or ''
+        # Tel = contact's Tel Number (landline), Mob = contact's Phone; from
+        # the delivery address, else the customer.
+        tel = ship_partner.tel_number or main_partner.tel_number or ''
+        mob = ship_partner.phone or main_partner.phone or ''
+        tel_str = '\n'.join(filter(None, [tel and f"Tel: {tel}", mob and f"Mob: {mob}"]))
 
-        items = [f"{self._format_qty(line.product_uom_qty)} x {line.product_id.name or ''}" for line in delivery_lines]
+        # Special Note of each line printed after the product as '#note#'.
+        items = [
+            self._append_special_note(
+                f"{self._format_qty(line.product_uom_qty)} x {line.product_id.name or ''}", self._special_note(line),
+            )
+            for line in delivery_lines
+        ]
 
         order_no = order.client_order_ref or order.name or ''
         note_str = self._clean_text(order.note)
@@ -547,7 +557,7 @@ class ReportDeliveryNoteRoundVan(DeliveryNoteReportMixin, models.AbstractModel):
             [[
                 Paragraph(xml_escape(drop['cust']), cust_style),
                 Paragraph(xml_escape(drop['addr']), addr_style),
-                Paragraph(xml_escape(drop['tel']), tel_style),
+                Paragraph(xml_escape(drop['tel']).replace('\n', '<br/>'), tel_style),
             ]],
             colWidths=[printable_width * 0.28, printable_width * 0.54, printable_width * 0.18],
         )

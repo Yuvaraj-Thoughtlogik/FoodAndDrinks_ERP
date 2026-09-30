@@ -4,7 +4,7 @@ import io
 from xml.sax.saxutils import escape as xml_escape
 
 from reportlab.lib import colors
-from reportlab.lib.enums import TA_LEFT, TA_RIGHT
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
@@ -49,6 +49,13 @@ class ReportRegalInvoice(models.AbstractModel):
         orders = move.invoice_line_ids.sale_line_ids.order_id
         order_date = next((o.delivery_date for o in orders if getattr(o, 'delivery_date', False)), False)
         return order_date or getattr(move, 'delivery_date', False) or False
+
+    def _payment_term(self, move):
+        """Payment term name from the invoice's Sales Order(s), else the
+        invoice's own payment term."""
+        orders = move.invoice_line_ids.sale_line_ids.order_id
+        term = next((o.payment_term_id for o in orders if o.payment_term_id), False) or move.invoice_payment_term_id
+        return term.name if term else ''
 
     def _partner_lines(self, partner):
         state = partner.state_id.name if partner.state_id else ''
@@ -186,6 +193,13 @@ class ReportRegalInvoice(models.AbstractModel):
         ]]
         for line in move.invoice_line_ids.filtered(lambda l: l.display_type == 'product'):
             description = line.product_id.name if line.product_id else (line.name or '')
+            # Special Note(s) of the sale order line(s) this invoice line came from.
+            special_note = ', '.join(dict.fromkeys(
+                sl.special_requirements_notes_id.name.strip()
+                for sl in line.sale_line_ids if (sl.special_requirements_notes_id.name or '').strip()
+            ))
+            if special_note:
+                description = f"{description} # {special_note} #"
             rows.append([
                 Paragraph(f"{line.quantity:.2f}", td_left),
                 Paragraph(_esc(description), td_left),
@@ -226,6 +240,23 @@ class ReportRegalInvoice(models.AbstractModel):
             ('LINEBELOW', (1, 1), (1, 1), 0.5, colors.black),
         ]))
         flow += [Spacer(1, 2 * mm), totals]
+
+        # --- Payment terms (boxed, centred) ---
+        payment_term = self._payment_term(move)
+        if payment_term:
+            terms = Table(
+                [[Paragraph(f"Terms: {_esc(payment_term)}", ParagraphStyle(
+                    'RFInvTerms', parent=td_left, alignment=TA_CENTER,
+                ))]],
+                colWidths=[width * 0.45],
+                hAlign='CENTER',
+            )
+            terms.setStyle(TableStyle([
+                ('BOX', (0, 0), (-1, -1), 0.75, colors.black),
+                ('TOPPADDING', (0, 0), (-1, -1), 2),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+            ]))
+            flow += [Spacer(1, 10 * mm), terms]
         return flow
 
     def generate_pdf(self, moves, proforma=False):

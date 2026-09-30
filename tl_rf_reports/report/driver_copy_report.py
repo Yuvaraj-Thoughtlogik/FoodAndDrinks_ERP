@@ -58,7 +58,7 @@ class ReportDriverCopy(DeliveryNoteReportMixin, models.AbstractModel):
         return f"{name} {hash_note}".strip()
 
     def _get_driver_copy_lines(self, picking):
-        """(product code, qty, description) rows, one per Sales Order line
+        """(product code, qty, description, special note) rows, one per Sales Order line
         on this delivery - like the invoice. A Kit is shown as the sold kit
         product, not the component moves it explodes into. Quantity is the
         sale line's ordered quantity. Moves not linked to a sale line (added
@@ -76,12 +76,14 @@ class ReportDriverCopy(DeliveryNoteReportMixin, models.AbstractModel):
                     sale_line.product_id.default_code or '',
                     sale_line.product_uom_qty,
                     self._line_description(sale_line.product_id, sale_line, sale_line.name),
+                    self._special_note(sale_line),
                 ))
             else:
                 rows.append((
                     move.product_id.default_code or '',
                     move.product_uom_qty,
                     self._line_description(move.product_id, fallback=move.description_picking),
+                    '',
                 ))
         return rows
 
@@ -187,8 +189,9 @@ class ReportDriverCopy(DeliveryNoteReportMixin, models.AbstractModel):
             [Paragraph(self._address_html(invoice_partner), address), Paragraph(self._address_html(delivery_partner), address)],
         ]
         if is_driver:
-            phone = (partner.phone if partner else '') or ''
-            mobile = (getattr(partner, 'mobile', '') if partner else '') or ''
+            # tel = contact's Tel Number (landline), mob = contact's Phone.
+            phone = (partner.tel_number if partner else '') or ''
+            mobile = (partner.phone if partner else '') or ''
             address_rows.append([Paragraph(f"tel: ({_esc(phone)})", value_center),
                                  Paragraph(f"mob: ({_esc(mobile)})", value_center)])
         addresses = Table(address_rows, colWidths=[inner * 0.5, inner * 0.5])
@@ -199,11 +202,13 @@ class ReportDriverCopy(DeliveryNoteReportMixin, models.AbstractModel):
         sections.append([addresses, Spacer(1, 3 * mm)])
 
         # --- Lines (chunked so a very long order can still split pages) ---
+        # A line's Special Note (sale line special_requirements_notes_id) is
+        # printed after its description as '#note#'.
         line_rows = [[
             Paragraph(_esc(code), value),
             Paragraph(f"{qty:.2f}", value_center),
-            Paragraph(_esc(description), value),
-        ] for code, qty, description in self._get_driver_copy_lines(picking)]
+            Paragraph(_esc(self._append_special_note(description, special_note)), value),
+        ] for code, qty, description, special_note in self._get_driver_copy_lines(picking)]
         header = [Paragraph(u('Product Code:'), th), Paragraph(u('Qty Ordered:'), th_center), Paragraph(u('Description:'), th)]
         chunks = [line_rows[i:i + self.LINES_PER_CHUNK] for i in range(0, len(line_rows), self.LINES_PER_CHUNK)] or [[]]
         for idx, chunk in enumerate(chunks):

@@ -4,6 +4,10 @@ from odoo import fields, models
 class ResPartner(models.Model):
     _inherit = "res.partner"
 
+    # Landline, printed as "tel" on the Regal Fish reports; the standard
+    # Phone field is printed as the mobile ("mob") number.
+    tel_number = fields.Char(string="Tel Number")
+
     customer_source_id = fields.Many2one(
         "utm.source",
         string="Customer Source",

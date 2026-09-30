@@ -411,9 +411,9 @@
         <field name="arch" type="xml">
 
             <!-- Hide Payment Terms (payment_term_id) -->
-            <xpath expr="//field[@name='payment_term_id']" position="attributes">
-                <attribute name="invisible">1</attribute>
-            </xpath>
+<!--            <xpath expr="//field[@name='payment_term_id']" position="attributes">-->
+<!--                <attribute name="invisible">1</attribute>-->
+<!--            </xpath>-->
 
             <!-- Hide Last Ring Date -->
             <xpath expr="//field[@name='last_ring_date']" position="attributes">
