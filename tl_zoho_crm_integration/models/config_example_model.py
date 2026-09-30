@@ -39,7 +39,6 @@ class ZohoExampleModel(models.Model):
             'checkbox': True,
             'count': 2,
             'price': 122.9,
-            'file_name': 'False',
             'line_ids':[
                 (0,0,{
                     'name': f'Odoo Test {count + 1} Line 1',

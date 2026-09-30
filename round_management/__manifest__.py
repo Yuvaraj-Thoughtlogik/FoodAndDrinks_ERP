@@ -12,6 +12,7 @@
         'sale',
         'stock',
         'sale_stock',
+        'delivery',
         'fleet',
         'hr',
         'tl_rf_contact',

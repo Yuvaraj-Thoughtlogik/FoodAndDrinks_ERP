@@ -420,14 +420,21 @@
                 <attribute name="invisible">1</attribute>
             </xpath>
 
-            <!-- Hide Shipping Weight -->
+        </field>
+    </record>
+
+    <record id="view_order_form_inherit_hide_shipping_weight" model="ir.ui.view">
+        <field name="name">sale.order.form.inherit.hide.shipping.weight</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="delivery.view_order_form_with_carrier"/>
+        <field name="arch" type="xml">
+
+            <!-- Hide Shipping Weight (added by the delivery module) -->
             <xpath expr="//field[@name='shipping_weight']" position="attributes">
                 <attribute name="invisible">1</attribute>
             </xpath>
 
-           
-
         </field>
     </record>
-    
+
 </odoo>

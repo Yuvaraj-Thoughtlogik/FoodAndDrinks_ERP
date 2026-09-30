@@ -1,18 +1,4 @@
-from odoo import models, fields, api, _
-import json
-from datetime import date, datetime
-import logging
-
-_logger = logging.getLogger(__name__)
-
-
-def _safe_json(obj):
-    """Convert non-serializable objects to serializable form."""
-    if isinstance(obj, (datetime, date)):
-        return obj.isoformat()
-    elif hasattr(obj, 'id') and hasattr(obj, 'name'):  # likely a recordset
-        return {'id': obj.id, 'name': obj.name}
-    return str(obj)  # fallback for anything else
+from odoo import models, fields
 
 
 class SyncTestCase(models.TransientModel):
@@ -71,6 +57,4 @@ class SyncTestCase(models.TransientModel):
             'res_id': self.id,
             'view_mode': 'form',
             'target': 'new',
-
         }
-

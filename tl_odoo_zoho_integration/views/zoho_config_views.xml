@@ -41,7 +41,6 @@
                                     <field name="cr_refresh_token" readonly="1"/>
                                     <field name="cr_token_expiry" readonly="1"/>
                                     <field name="addon_ids" widget="many2many_tags" string="Available Applications"/>
-                                    <button name="print_test" type="object">Test</button>
                                 </group>
                             </group>
                         </page>

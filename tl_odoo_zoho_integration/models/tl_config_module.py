@@ -1,82 +1,25 @@
-import logging,re,base64
-from dateutil import parser as date_parser
-import pytz
-import datetime ,psycopg2
+import logging
+import re
+
+import psycopg2
+
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError, ValidationError
-from datetime import date, datetime
 
-def _safe_json(obj):
-    """Convert non-serializable objects to serializable form."""
-    if isinstance(obj, (datetime, date)):
-        return obj.isoformat()
-    elif hasattr(obj, 'id') and hasattr(obj, 'name'):  # likely a recordset
-        return {'id': obj.id, 'name': obj.name}
-    return str(obj)  # fallback for anything else
-
-
+from ..utils import IGNORED_REQUIRED_FIELDS, label_to_key, slugify
 
 _logger = logging.getLogger(__name__)
 
-# from cr_odoo_zoho_sync import ZohoConfig
-IGNORED_REQUIRED_FIELDS = {
-    'product.template': ['product_variant_ids'],
-    'sale.order': ['order_line', 'partner_invoice_id', 'partner_shipping_id'],
-    'purchase.order': ['order_line', 'currency_id'],
-    'account.move': ['invoice_line_ids', 'journal_id', 'currency_id'],
-    'stock.picking': ['move_ids_without_package', 'location_id', 'location_dest_id'],
-    'stock.move': ['location_id', 'location_dest_id'],
-    # Add more models as needed
-}
-
-def label_to_key(val):
-    return re.sub(r'\s+', '_', val.strip().lower())
-
-def key_to_label(key):
-    key = re.sub(r'_+', ' ', key)            # Replace multiple underscores with space
-    return key.title()
-
-def parse_datetime_flexibly(val):
-    """
-    Attempt to parse a flexible datetime string or datetime object.
-    Converts timezone-aware datetimes to naive UTC.
-
-    Args:
-        val (str | datetime.datetime): The input datetime string or object.
-
-    Returns:
-        (datetime | None, str | None): Parsed naive datetime or None, with an error message if failed.
-    """
-    if not val:
-        return None, "Datetime input is empty or None."
-
-    # If already a datetime object
-    if isinstance(val, datetime):
-        if val.tzinfo:
-            val = val.astimezone(pytz.UTC).replace(tzinfo=None)
-        return val, None
-
-    # If input is a string, try to parse it
-    if isinstance(val, str):
-        try:
-            dt = date_parser.parse(val)
-            if dt.tzinfo:
-                dt = dt.astimezone(pytz.UTC).replace(tzinfo=None)
-            return dt, None
-        except Exception as e:
-            return None, f"Datetime parsing error: {str(e)}"
-
-    return None, f"Unsupported datetime input type: {type(val).__name__}"
 
 class ZohoConfigModule(models.Model):
     _name = 'zoho.config.module'
     _description = "Zoho Sync Modules"
     _order = 'sequence'
 
-    _sql_constraints = [
-        ('unique_module_per_application', 'unique(name, zoho_config_app_id)',
-         'Each Module name must be unique per Zoho Application.'),
-    ]
+    _unique_module_per_application = models.Constraint(
+        'unique(name, zoho_config_app_id)',
+        'Each Module name must be unique per Zoho Application.',
+    )
 
     name = fields.Char(string="Zoho Module Name", required=True)
     sequence = fields.Integer(string="Sequence", default = 10)
@@ -121,86 +64,59 @@ class ZohoConfigModule(models.Model):
     @api.depends('odoo_model')
     def _compute_required_fields(self):
         for rec in self:
-            try:
-                if rec.odoo_model:
-                    model = self.env[rec.odoo_model_name]
-                    required = self.get_required_fields(model)
+            required = []
+            if rec.odoo_model_name in self.env:
+                try:
                     ignored = IGNORED_REQUIRED_FIELDS.get(rec.odoo_model_name, [])
-                    rec.required_fields = [rf for rf in required if rf not in ignored]
-                else:
-                    rec.required_fields = []
-            except Exception:
-                rec.required_fields = []
+                    required = [rf for rf in self.get_required_fields(self.env[rec.odoo_model_name])
+                                if rf not in ignored]
+                except Exception:
+                    required = []
+            rec.required_fields = required
 
     @api.depends('odoo_model')
     def _compute_odoo_model_name(self):
         for rec in self:
-            rec.odoo_model_name = rec.odoo_model.model if rec.odoo_model else ""
+            rec.odoo_model_name = rec.odoo_model.model or ""
 
-    @api.depends('zoho_config_app_id','name')
+    @api.depends('zoho_config_app_id', 'name')
     def _compute_zoho_id_field(self):
         for rec in self:
-            field_name =''
-            if rec.zoho_config_app_id and rec.name:
-                field_name = f"x_{rec.zoho_config_app_id.name.strip().replace(' ','_').lower()}_{rec.name.strip().replace(' ','_').lower()}_id"
-
-            rec.zoho_id_field = field_name or ''
+            rec.zoho_id_field = (f"x_{slugify(rec.zoho_config_app_id.name)}_{slugify(rec.name)}_id"
+                                 if rec.zoho_config_app_id and rec.name else '')
 
     @api.depends('fields_ids', 'fields_ids.create_date')
     def _compute_view_id(self):
         for rec in self:
-            if not rec.create_date:
-                if rec.view_id:
-                    rec.view_id.unlink()
-                continue
-            if rec.fields_ids and any(not field.create_date for field in rec.fields_ids):
-                if rec.view_id:
-                    rec.view_id.unlink()
-                continue
-
-            # Remove old view if present
+            # The generated view is rebuilt from scratch; it is only (re)created once
+            # the module and all its field maps are saved.
             if rec.view_id:
                 rec.view_id.unlink()
                 rec.view_id = False
-
-            # Generate new view
-            view = rec._generate_inherited_view()
-            if view:
-                rec.view_id = view
+            if not rec.create_date or any(not field.create_date for field in rec.fields_ids):
+                continue
+            rec.view_id = rec._generate_inherited_view() or False
 
     @api.model_create_multi
     def create(self, vals_list):
         records = super().create(vals_list)
         for rec in records:
-            existing_field, inherited_view = rec.create_or_get_dynamic_field(rec.zoho_app_name,
-                                                                              rec.odoo_model_name)
-            rec.test_case_field_id=existing_field.id
-            rec.test_case_view_id=inherited_view.id
+            test_field, test_view = rec.create_or_get_dynamic_field(rec.zoho_app_name, rec.odoo_model_name)
+            rec.test_case_field_id = test_field
+            rec.test_case_view_id = test_view
         return records
 
     def write(self, vals):
         if 'odoo_model' in vals or 'zoho_config_app_id' in vals:
-            raise ValidationError("You cannot change the main values once it has been set.")
-        res = super().write(vals)
-        return res
+            raise ValidationError(_("You cannot change the main values once it has been set."))
+        return super().write(vals)
 
     def unlink(self):
-        View = self.env['ir.ui.view'].sudo()
-        Field = self.env['ir.model.fields'].sudo()
-
-        view_ids = []
-        test_field_ids = []
-        field_ids = []
-
-        for rec in self:
-            if rec.test_case_view_id:
-                view_ids.append(rec.test_case_view_id.id)
-            if rec.test_case_field_id:
-                test_field_ids.append(rec.test_case_field_id.id)
-
+        test_views = self.test_case_view_id.sudo()
+        test_fields = self.test_case_field_id.sudo()
         res = super().unlink()
-        View.browse(view_ids).unlink()
-        Field.browse(test_field_ids).unlink()
+        test_views.unlink()
+        test_fields.unlink()
         return res
 
     def create_or_get_dynamic_field(self, zoho_app_name, model_name):
@@ -208,10 +124,9 @@ class ZohoConfigModule(models.Model):
         Field = self.env['ir.model.fields'].sudo()
         View = self.env['ir.ui.view'].sudo()
 
-        model = Model.search([('model', '=', 'zoho.config.testcase.wizard')], limit=1)
+        model = Model._get('zoho.config.testcase.wizard')
         model_name_safe = model_name.strip().replace('.', '_').lower()
-        zoho_app_name_safe = zoho_app_name.strip().replace(' ', '_').lower()
-        field_name = f'x_{zoho_app_name_safe}_testcase_{model_name_safe}_id'
+        field_name = f'x_{slugify(zoho_app_name)}_testcase_{model_name_safe}_id'
 
         base_view = View.search([
             ('model', '=', 'zoho.config.testcase.wizard'),
@@ -220,8 +135,8 @@ class ZohoConfigModule(models.Model):
         ], limit=1)
 
         if not base_view:
-            _logger.info(f"🛠️ Base view for zoho.config.testcase.wizard not found: {field_name}")
-            return None, None
+            _logger.info("Base view for zoho.config.testcase.wizard not found: %s", field_name)
+            return Field, View
 
         existing_field = Field.search([
             ('name', '=', field_name),
@@ -238,7 +153,7 @@ class ZohoConfigModule(models.Model):
                 'relation': model_name,
                 'state': 'manual',
             })
-            _logger.info(f"✅ Created field: {field_name}")
+            _logger.info("Created field: %s", field_name)
 
         inherited_view = View.search([
             ('inherit_id', '=', base_view.id),
@@ -248,7 +163,7 @@ class ZohoConfigModule(models.Model):
         default_domain = [
             (field_map.odoo_field_name, '=',
              field_map.default_value if field_map.field_type != 'boolean'
-             else field_map.default_value.lower() == 'true')
+             else (field_map.default_value or '').lower() == 'true')
             for field_map in self.fields_ids if field_map.is_default
         ]
 
@@ -271,7 +186,7 @@ class ZohoConfigModule(models.Model):
                 'inherit_id': base_view.id,
                 'arch_base': arch,
             })
-            _logger.info(f"🛠️ Created new inherited view with field: {field_name}")
+            _logger.info("Created new inherited view with field: %s", field_name)
 
         return existing_field, inherited_view
 
@@ -290,59 +205,34 @@ class ZohoConfigModule(models.Model):
         if not base_view:
             return None
 
-        new_fields = self.fields_ids.filtered(lambda f: f.is_new_field)
-        # if not new_fields:
-        #     return None
+        new_fields = self.fields_ids.filtered('is_new_field')
         page_label = f"{self.zoho_config_app_id.name.strip().replace('_',' ')} {self.name.strip().replace('_',' ')} Details"
 
         # Add a custom field for the Zoho ID
-        self._add_custom_field(self.odoo_model_name, self.zoho_id_field, 'char',  f"Zoho ID")
+        self._add_custom_field(self.odoo_model_name, self.zoho_id_field, 'char', "Zoho ID")
 
-        # Separate fields into two groups excluding one2many fields
-        field_list = [field for field in list(new_fields) if field.field_type != "one2many"]
+        # Split simple fields over two columns; one2many fields get their own group below
+        field_list = new_fields.filtered(lambda f: f.field_type != "one2many")
         half = (len(field_list) + 1) // 2
         group_1_fields = field_list[:half]
         group_2_fields = field_list[half:]
+        one2many_fields = new_fields - field_list
 
-        # Separate one2many fields into their own group
-        one2many_fields = [field for field in list(new_fields) if field.field_type == "one2many"]
+        widgets = {'many2many': 'many2many_tags', 'binary': 'binary'}
 
         def generate_field_lines(fields_list):
             xml_output = []
-
             for field in fields_list:
-                field_name = field.odoo_field_name
-                widget = ""
-
-                # Determine widget based on field type
-                if field.field_type == "many2many":
-                    widget = "many2many_tags"
-                elif field.field_type == "binary":
-                    widget = "binary"
-
-                # Start the XML field element
-                field_xml = f"<field name='{field_name}'"
-
-                # Add widget if applicable
-                if widget:
-                    field_xml += f" widget='{widget}'"
-
-                # Close the field tag
-                field_xml += "/>"
-
-                # Handle 'one2many' field type and its subfields
                 if field.field_type == "one2many":
-                    field_xml = f"<group><field name='{field_name}'>\n    <list>\n"
-                    if field.subform_field_ids:
-                        subfields_xml = generate_field_lines(field.subform_field_ids)
-                        field_xml += f"{subfields_xml}\n"
-                    field_xml += f"    </list>\n</field></group>"
-
-                xml_output.append(field_xml)
-
-            # Return the complete XML
+                    subfields_xml = generate_field_lines(field.subform_field_ids)
+                    xml_output.append(
+                        f"<group><field name='{field.odoo_field_name}'>\n    <list>\n{subfields_xml}\n"
+                        f"    </list>\n</field></group>")
+                elif widget := widgets.get(field.field_type):
+                    xml_output.append(f"<field name='{field.odoo_field_name}' widget='{widget}'/>")
+                else:
+                    xml_output.append(f"<field name='{field.odoo_field_name}'/>")
             return "\n".join(xml_output)
-
 
         invisible_query = []
         for field_map in self.fields_ids.filtered("is_default"):
@@ -407,30 +297,17 @@ class ZohoConfigModule(models.Model):
 
     def action_create_view(self):
         for rec in self:
-            view_id = rec._generate_inherited_view()
-            if view_id:
+            if view_id := rec._generate_inherited_view():
                 rec.view_id = view_id
-        return{
-            'type':'ir.actions.client',
-            'tag':'reload'
-        }
+        return {'type': 'ir.actions.client', 'tag': 'reload'}
 
     def action_active_view(self):
-        for rec in self:
-            # print(rec.view_id)
-            rec.view_id.active = True
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'reload'
-        }
+        self.view_id.active = True
+        return {'type': 'ir.actions.client', 'tag': 'reload'}
 
     def action_inactive_view(self):
-        for rec in self:
-            rec.view_id.active = False
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'reload'
-        }
+        self.view_id.active = False
+        return {'type': 'ir.actions.client', 'tag': 'reload'}
 
     def action_view_fields_map(self):
         self.ensure_one()
@@ -501,36 +378,19 @@ class ZohoConfigModule(models.Model):
                 'name': value_label,
                 'sequence': 99
             })
-            _logger.info(f"Added new selection value '{value_label}' to field {field_name} on model {model_name}")
+            _logger.info("Added new selection value '%s' to field %s on model %s", value_label, field_name, model_name)
         return exists
 
     def get_required_fields(self, model):
-        required_fields = []
-        Model = model
-
-        # Step 1: Find all required fields that aren't computed or related
-        for fname, field in Model._fields.items():
-            if not field.required or field.compute or field.related:
-                continue
-            required_fields.append(fname)
-
-        # Step 2: Filter out those with hardcoded Python defaults
-        required_no_default = []
-        for fname in required_fields:
-            field = Model._fields[fname]
-            has_python_default = field.default is not None
-
-            if has_python_default:
-                continue  # skip, because default is assigned
-
-            # check if default_get provides a value
-            default_vals = Model.with_context({}).default_get([fname])
-            if fname in default_vals:
-                continue  # skip, default will be auto-set
-
-            required_no_default.append(fname)
-
-        return required_no_default
+        """Required, non-computed fields of ``model`` that get no default value."""
+        candidates = [
+            fname for fname, field in model._fields.items()
+            if field.required and not field.compute and not field.related and field.default is None
+        ]
+        if not candidates:
+            return []
+        defaults = model.with_context({}).default_get(candidates)
+        return [fname for fname in candidates if fname not in defaults]
 
     def get_selection_key_or_value(self, model_name, field_name, value, check_as='label'):
         """
@@ -565,133 +425,87 @@ class ZohoConfigModule(models.Model):
 
         return None, f"Invalid 'check_as' value: {check_as} (must be 'key' or 'label')"
 
+    @api.model
+    def _get_name_field(self, model):
+        """Field used as record name when matching/creating related records."""
+        name_field = next((f for f in ('name', 'x_name') if f in model._fields), None)
+        return name_field or next((f.name for f in model._fields.values() if f.type == 'char'), None)
+
     def _get_or_create_zoho_related_record(self, model_name, val, field_info, all_vals=None):
-        if all_vals is None:
-            all_vals = {}
-
-        def raise_or_none(message):
-            return None,message
-
+        """Resolve a Zoho lookup value to an Odoo record id: ``(id | None, error | None)``."""
         if not val:
-            return None,'Empty Value'
-        try:
-            RelModel = self.env[model_name]
-        except Exception as e:
-            return raise_or_none(f"Invalid model '{model_name}' for field {field_info.odoo_field_name}: {e}")
+            return None, 'Empty Value'
+        if model_name not in self.env:
+            return None, f"Invalid model '{model_name}' for field {field_info.odoo_field_name}"
+        RelModel = self.env[model_name]
 
-        if model_name in ['res.users']:
+        if model_name == 'res.users':
             if not isinstance(val, dict):
-                return raise_or_none(f"Invalid value for model '{model_name}': expected dict, got {type(val).__name__}")
-
+                return None, f"Invalid value for model '{model_name}': expected dict, got {type(val).__name__}"
             name = (val.get('name') or '').strip()
             email = (val.get('email') or '').strip()
-
-            if name and email:
-                user = self.env['res.users'].sudo().search([
-                    ('name', '=', name),
-                    ('login', '=', email)
-                ], limit=1)
-
-                if user:
-                    return user.id, None
-                return raise_or_none(f"User not found with name='{name}' and email='{email}'")
-            else:
-                return raise_or_none("Invalid user data: missing name or email")
+            if not (name and email):
+                return None, "Invalid user data: missing name or email"
+            user = RelModel.sudo().search([('name', '=', name), ('login', '=', email)], limit=1)
+            if user:
+                return user.id, None
+            return None, f"User not found with name='{name}' and email='{email}'"
 
         if model_name.startswith('ir.'):
-            return raise_or_none(f"Cannot create or update records in system model '{model_name}'")
-        print(field_info.zoho_id_field_name)
-        print(field_info.zoho_id_field_label)
+            return None, f"Cannot create or update records in system model '{model_name}'"
 
-        if model_name in ['res.country', 'res.country.state']:
+        if model_name in ('res.country', 'res.country.state'):
             name = val.get('name') if isinstance(val, dict) else str(val).strip()
             if not name:
-                return raise_or_none(f"Missing name for model '{model_name}'")
+                return None, f"Missing name for model '{model_name}'"
             match = RelModel.search([('name', '=', name)], limit=1)
             if match:
-                return match.id,None
-            return raise_or_none(f"No match in {model_name} for name '{name}'")
-        zoho_id= None
-        name=None
+                return match.id, None
+            return None, f"No match in {model_name} for name '{name}'"
+
+        zoho_id, name = '', None
         if isinstance(val, dict):
             zoho_id = str(val.get('id') or '').strip()
-            name = val.get('name') or val.get('full_name') or val.get('email') or val.get('label') or 'Unknown'
-            name = str(name).strip()
+            name = str(val.get('name') or val.get('full_name') or val.get('email') or val.get('label') or 'Unknown').strip()
         elif isinstance(val, str):
-            zoho_id = ''
-            name = str(val).strip()
-
+            name = val.strip()
         if not name:
-            return raise_or_none(f"No valid name found for model '{model_name}'")
+            return None, f"No valid name found for model '{model_name}'"
 
-        name_field = next((f for f in ['name', 'x_name'] if f in RelModel._fields), None)
+        name_field = self._get_name_field(RelModel)
         if not name_field:
-            name_field = next((f.name for f in RelModel._fields.values() if f.type == 'char'), None)
-        if not name_field:
-            return raise_or_none(f"No char field found in model '{model_name}'")
+            return None, f"No char field found in model '{model_name}'"
 
+        zoho_id_field = field_info.zoho_id_field_name
         if zoho_id:
-            if field_info.zoho_id_field_name not in RelModel._fields:
-                self._add_custom_field(model_name, field_info.zoho_id_field_name, 'char', 'Zoho ID')
-            existing = RelModel.search([(field_info.zoho_id_field_name, '=', zoho_id)], limit=1)
-            if existing:
-                return existing.id,None
-
-        elif name:
-            existing_by_name = RelModel.search([(name_field, '=', name)], limit=1)
-            if existing_by_name:
-                return existing_by_name.id,None
-
+            if zoho_id_field not in RelModel._fields:
+                self._add_custom_field(model_name, zoho_id_field, 'char', 'Zoho ID')
+            existing = RelModel.search([(zoho_id_field, '=', zoho_id)], limit=1)
+        else:
+            existing = RelModel.search([(name_field, '=', name)], limit=1)
+        if existing:
+            return existing.id, None
 
         create_vals = {name_field: name}
         if zoho_id:
-            create_vals[field_info.zoho_id_field_name] = zoho_id
-        print("many2one",RelModel,create_vals)
+            create_vals[zoho_id_field] = zoho_id
         try:
             with self.env.cr.savepoint():
                 new_record = RelModel.create([create_vals])
-
-                if model_name == 'product.template':
-                    product_model = self.env['product.product']
-                    # print(field_info.zoho_id_field_name,field_info.zoho_id_field_label)
-                    if field_info.zoho_id_field_name not in product_model._fields:
-                        self._add_custom_field('product.product', field_info.zoho_id_field_name, 'char', "Zoho ID")
-                    variant = new_record.product_variant_id
-                    if variant:
-                        try:
-                            with self.env.cr.savepoint():
-                                variant.write({field_info.zoho_id_field_name: zoho_id})
-                        except psycopg2.Error as postgres_e:
-                            return self.format_postgres_error(postgres_e), None
-                        except Exception as e:
-                            return str(e),None
-
-                if model_name == 'product.product':
-                    template_model = self.env['product.template']
-                    print(field_info.zoho_id_field_name, field_info.zoho_id_field_label)
-
-                    if field_info.zoho_id_field_name not in template_model._fields:
-                        self._add_custom_field('product.template', field_info.zoho_id_field_name, 'char', "Zoho ID")
-
-                    template = new_record.product_tmpl_id
-                    if template:
-                        print("have")
-                        try:
-                            with self.env.cr.savepoint():
-                                template.write({field_info.zoho_id_field_name: zoho_id})
-                        except psycopg2.Error as postgres_e:
-                            return self.format_postgres_error(postgres_e), None
-                        except Exception as e:
-                            return str(e),None
-                _logger.info(f"[ZOHO] Created new {model_name} record: {name_field} = {name}")
-
-                return new_record.id,None
-
-
+                # Keep the Zoho ID on both sides of the product template/variant pair.
+                if zoho_id and model_name in ('product.template', 'product.product'):
+                    other_model = 'product.product' if model_name == 'product.template' else 'product.template'
+                    if zoho_id_field not in self.env[other_model]._fields:
+                        self._add_custom_field(other_model, zoho_id_field, 'char', "Zoho ID")
+                    other = (new_record.product_variant_id if model_name == 'product.template'
+                             else new_record.product_tmpl_id)
+                    other.write({zoho_id_field: zoho_id})
+            _logger.info("[ZOHO] Created new %s record: %s = %s", model_name, name_field, name)
+            return new_record.id, None
         except psycopg2.Error as postgres_e:
-            return raise_or_none(self.format_postgres_error(postgres_e))
+            return None, self.format_postgres_error(postgres_e)
         except Exception as e:
-            return raise_or_none(f"Failed to create {model_name} with {name_field}={name}: {self.format_postgres_error(e)}")
+            return None, f"Failed to create {model_name} with {name_field}={name}: {self.format_postgres_error(e)}"
 
     def format_postgres_error(self, error):
         """
