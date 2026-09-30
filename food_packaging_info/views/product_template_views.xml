@@ -16,6 +16,7 @@
                     <field name="stk_type_id" />
                     <field name="cut_id" options="{'no_create_edit': False}" />
                     <field name="origin_country" placeholder="e.g. Salmon / FARMED in Norway" />
+                    <field name="catch_area" placeholder="e.g. FAO 27 North East Atlantic" />
                 </xpath>
 
             </field>
@@ -151,8 +152,8 @@
           <field name="inherit_id" ref="product.product_template_only_form_view"/>
           <field name="arch" type="xml">
 
-              <!-- Insert Yield field right below Origin -->
-              <xpath expr="//field[@name='origin_country']" position="after">
+              <!-- Insert Yield field right below Origin / Catch Area -->
+              <xpath expr="//field[@name='catch_area']" position="after">
                   <field name="yield_info"/>
               </xpath>
 
