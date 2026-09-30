@@ -229,9 +229,12 @@ class ProductionLabelReportChilledFrontSleeve(models.AbstractModel):
             cache=fit_cache, cache_key=label_cache_key(label),
         )
 
-    def generate_pdf(self, wizard):
+    def generate_pdf(self, wizard, label_lines=None):
         """Returns the finished Chilled Front Sleeve Label PDF bytes."""
-        label_lines = wizard._get_chilled_front_sleeve_label_data()
+        # label_lines is optional: the Production Label wizard passes it (None
+        # for non-Fresh labels), and the Product Label wizard does not.
+        if label_lines is None:
+            label_lines = wizard._get_chilled_front_sleeve_label_data()
         if not label_lines:
             return None
 

@@ -420,14 +420,17 @@ class ProductionLabelReportPlain(models.AbstractModel):
             cache=fit_cache, cache_key=label_cache_key(label),
         )
 
-    def generate_pdf(self, wizard):
+    def generate_pdf(self, wizard, label_lines=None):
         """Returns the finished Plain Label PDF (bytes), or None if there
         is nothing to print. One physical label per page at the 100mm x 130mm
         size with the approved green-bordered Plain Label design. However
         long the product's ingredients/cooking-instructions/nutrition text
         turns out to be, the label is shrunk to fit on that one page rather
         than overflowing onto a second page (see _build_fitted_story)."""
-        label_lines = wizard._get_plain_label_data()
+        # label_lines is optional: the Production Label wizard passes it (None
+        # for non-Fresh labels), and the Product Label wizard does not.
+        if label_lines is None:
+            label_lines = wizard._get_plain_label_data()
         if not label_lines:
             return None
 

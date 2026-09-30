@@ -188,11 +188,14 @@ class ProductionLabelReportPlainFrozen(models.AbstractModel):
 
         return story
 
-    def generate_pdf(self, wizard):
+    def generate_pdf(self, wizard, label_lines=None):
         """Returns the finished Plain Frozen Label PDF (bytes), or None if there
         is nothing to print. One physical label per page at the 100mm x 130mm
         size. Long content is shrunk to fit that one page."""
-        label_lines = wizard._get_plain_frozen_label_data()
+        # label_lines is optional: the Production Label wizard passes it (None
+        # for non-Fresh labels), and the Product Label wizard does not.
+        if label_lines is None:
+            label_lines = wizard._get_plain_frozen_label_data()
         if not label_lines:
             return None
 
