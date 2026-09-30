@@ -8,6 +8,8 @@ from odoo.exceptions import ValidationError, UserError
 
 from odoo.addons.tl_odoo_zoho_integration.utils import safe_json
 
+from .tl_zoho_config import NOTIFICATIONS_SCOPE
+
 _logger = logging.getLogger(__name__)
 
 FREQUENCY_MAP = {
@@ -203,11 +205,17 @@ class ZohoConfigSchedule(models.Model):
         """
         self.ensure_one()
         schedule = self.sudo()
-        notify_url = self.env['zoho.config']._get_ready_config()._get_notify_url()
+        config = self.env['zoho.config']._get_ready_config()
+        notify_url = config._get_notify_url()
         if not notify_url:
             if schedule.notify_channel_id:
                 schedule._disable_live_notification()
             return False
+        if NOTIFICATIONS_SCOPE not in config.scope_ids.mapped('name'):
+            raise UserError(
+                f"Live sync from Zoho needs the '{NOTIFICATIONS_SCOPE}' scope. Add it to the Zoho "
+                "configuration and regenerate the credentials, or clear the public URL to only check "
+                "Zoho periodically.")
 
         expiry = fields.Datetime.now() + timedelta(days=NOTIFY_CHANNEL_DAYS)
         channel_id = schedule.notify_channel_id or f"{schedule.id}{secrets.randbelow(10 ** 9):09d}"

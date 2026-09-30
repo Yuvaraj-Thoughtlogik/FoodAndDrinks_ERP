@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- base_data.xml is noupdate: add scopes introduced later to existing configurations on upgrade. -->
+    <function model="zoho.config" name="_ensure_crm_scopes"/>
+</odoo>

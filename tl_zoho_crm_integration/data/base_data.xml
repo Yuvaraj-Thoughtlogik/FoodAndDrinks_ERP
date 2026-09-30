@@ -14,6 +14,7 @@
                    (4, ref('tl_zoho_crm_integration.zoho_scope_zohocrm_modules_all')),
                    (4, ref('tl_zoho_crm_integration.zoho_scope_zohocrm_files_read')),
                    (4, ref('tl_zoho_crm_integration.zoho_scope_zohocrm_files_create')),
+                   (4, ref('tl_zoho_crm_integration.zoho_scope_zohocrm_notifications_all')),
                ]"
             />
         </record>

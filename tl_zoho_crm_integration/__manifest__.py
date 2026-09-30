@@ -17,6 +17,7 @@
         'views/example_model_views.xml',
         'data/base_data.xml',
         'data/zoho_notify_cron.xml',
+        'data/zoho_config_scope_update.xml',
         # 'data/example_model_fields.xml',
     ],
     'installable': True,
