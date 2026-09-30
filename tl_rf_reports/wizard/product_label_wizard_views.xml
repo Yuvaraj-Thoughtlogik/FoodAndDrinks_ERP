@@ -33,6 +33,15 @@
                     <group string="Label Format" invisible="category_name != 'Fresh'">
                         <field name="fresh_label_type" widget="radio" nolabel="1"/>
                     </group>
+
+                    <!-- Dates printed on the label - shown only for the formats that print them -->
+                    <group string="Label Dates"
+                           invisible="not ((category_name == 'Frozen' and frozen_label_type in ('frozen_label', 'plain_label', 'plain_frozen_label')) or (category_name == 'Chilled' and chilled_label_type == 'front_sleeve_label') or category_name == 'Fresh')">
+                        <field name="production_date"
+                               invisible="not ((category_name == 'Frozen' and frozen_label_type in ('frozen_label', 'plain_label')) or (category_name == 'Chilled' and chilled_label_type == 'front_sleeve_label') or category_name == 'Fresh')"/>
+                        <field name="freeze_date"
+                               invisible="not (category_name == 'Frozen' and frozen_label_type == 'plain_frozen_label')"/>
+                    </group>
                 </sheet>
                 <footer>
                     <button name="action_print_label" string="Print Label" type="object"
