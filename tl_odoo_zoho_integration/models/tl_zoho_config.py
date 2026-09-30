@@ -60,9 +60,11 @@ class ZohoConfig(models.Model):
     regenerate_required = fields.Boolean(string="Regenerate Required")
     notify_base_url = fields.Char(
         string="Public URL (Notifications)",
+        default=lambda self: self._default_notify_base_url(),
         help="Public HTTPS address of this Odoo (e.g. https://erp.example.com), used by Zoho to send "
-             "instant change notifications for 'Live' sync. Leave empty when Odoo is not reachable from "
-             "the internet: Zoho is then checked for changes periodically instead.")
+             "instant change notifications for 'Live' sync. Defaults to the web.base.url parameter when it "
+             "is HTTPS. Leave empty when Odoo is not reachable from the internet: Zoho is then checked for "
+             "changes periodically instead.")
     addon_ids = fields.Many2many(comodel_name='ir.module.module', string='Applications', compute='compute_addon_ids')
 
     def write(self, vals):
@@ -188,6 +190,18 @@ class ZohoConfig(models.Model):
             raise UserError(_(
                 "Region or scopes have changed. New authorization is required. Please regenerate your credentials."))
         return config
+
+    @api.model
+    def _default_notify_base_url(self):
+        """This Odoo's web.base.url, when it can be used for Zoho notifications (HTTPS only)."""
+        base_url = (self.env['ir.config_parameter'].sudo().get_param('web.base.url') or '').strip().rstrip('/')
+        return base_url if base_url.startswith('https://') else False
+
+    @api.model
+    def _fill_default_notify_base_url(self):
+        """On upgrade: set the public URL of configurations created before it existed."""
+        if default := self._default_notify_base_url():
+            self.search([('notify_base_url', '=', False)]).write({'notify_base_url': default})
 
     def _get_notify_url(self):
         """URL Zoho posts change notifications to, or False when notifications cannot be used."""

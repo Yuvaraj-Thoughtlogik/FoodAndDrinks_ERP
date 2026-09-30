@@ -20,6 +20,7 @@
         'views/actions.xml',
         'data/zoho_config_region_data.xml',
         'data/zoho_live_cron.xml',
+        'data/zoho_config_update.xml',
     ],
     'assets': {
         'web.assets_backend': [
