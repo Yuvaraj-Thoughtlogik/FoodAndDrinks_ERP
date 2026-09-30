@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 import base64
 
+from datetime import timedelta
+
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError, ValidationError
 
@@ -11,8 +13,9 @@ class ProductLabelWizard(models.TransientModel):
 
     Inherits production.label.wizard (prototype inheritance) only to reuse its
     label-format fields. Every label is built from the selected products'
-    own fields - no Sales Order, MO, production date or date calculation.
-    The same ReportLab reports print them, so the design is identical.
+    own fields - no Sales Order or MO. The Production Date and Freeze Date
+    are entered on the wizard (they are not product fields). The same
+    ReportLab reports print them, so the design is identical.
     """
     _name = 'product.label.wizard'
     _inherit = 'production.label.wizard'
@@ -43,6 +46,22 @@ class ProductLabelWizard(models.TransientModel):
     allowed_category_ids = fields.Many2many(
         'product.category',
         compute='_compute_allowed_category_ids',
+    )
+
+    # Dates printed on the labels. They are not stored on the product
+    # master, so the user enters them here. Empty -> the row stays blank.
+    production_date = fields.Date(
+        string='Production Date',
+        default=fields.Date.context_today,
+        help="Printed as the Production Date on the Frozen Label, Plain Label "
+             "and Chilled Front Sleeve Label. Use By = Production Date + the "
+             "product's expiry days (also for the Fresh Label).",
+    )
+    freeze_date = fields.Date(
+        string='Freeze Date',
+        default=fields.Date.context_today,
+        help="Printed as the Freeze Date on the Plain Frozen Label. "
+             "Best Before End = Freeze Date + the product's expiry days.",
     )
 
     # ------------------------------------------------------------------
@@ -143,30 +162,54 @@ class ProductLabelWizard(models.TransientModel):
         ]
         return ', '.join(part for part in parts if part)
 
-    def _get_expiry_display(self, product):
-        """Expiry from the product template's Expiration Date field
-        (expiration_time, Inventory tab), printed as days, e.g. '2 Days'.
-        Empty when the product has no expiry set - the row is then hidden."""
+    def _production_date_display(self):
+        """Production Date from the wizard, e.g. '15 September, 2026'
+        (same format as the Production Label wizard)."""
+        self.ensure_one()
+        return self.production_date.strftime('%d %B, %Y') if self.production_date else ''
+
+    def _freeze_date_display(self):
+        """Freeze Date from the wizard, e.g. '15.09.2026'
+        (same format as the Production Label wizard)."""
+        self.ensure_one()
+        return self.freeze_date.strftime('%d.%m.%Y') if self.freeze_date else ''
+
+    def _get_expiry_days(self, product):
+        """Expiry days from the product template's Expiration Date field
+        (expiration_time, Inventory tab). 0 when the product does not use
+        expiry dates or has no days set."""
         # Read from product.template safely: the field may not exist on
         # product.product (or at all if the expiry module is not installed).
         template = product.product_tmpl_id
         days = 0
         if 'expiration_time' in template._fields:
             days = template.expiration_time or 0
-        # Only print when the product uses expiry dates and has days set.
         if 'use_expiration_date' in template._fields and not template.use_expiration_date:
             days = 0
-        if not days:
+        return days
+
+    def _get_expiry_display(self, product, base_date, date_format):
+        """Use By / Best Before date = base_date + the product's expiry days,
+        e.g. Production Date 15 Sep 2026 + 2 days -> '17 September, 2026'.
+        Empty when the product has no expiry or the wizard date is empty -
+        the row is then printed blank."""
+        days = self._get_expiry_days(product)
+        if not days or not base_date:
             return ''
-        return _("%s Day", days) if days == 1 else _("%s Days", days)
+        return (base_date + timedelta(days=days)).strftime(date_format)
+
+    def _use_by_display(self, product, date_format='%d %B, %Y'):
+        """Use By from the wizard's Production Date."""
+        self.ensure_one()
+        return self._get_expiry_display(product, self.production_date, date_format)
 
     # ------------------------------------------------------------------
     # Product-based data (overrides of the parent's SO / MO methods).
-    # Every label is built ONLY from product fields. The MO / SO builder
-    # methods of production.label.wizard are NOT called, so no production
-    # date, MO date or date calculation is used anywhere. The only "date"
-    # printed is the product's expiry days (e.g. "Use By: 2 Days"), and
-    # only when the product has an expiry set.
+    # Every label is built from product fields plus the wizard's
+    # Production Date / Freeze Date. The MO / SO builder methods of
+    # production.label.wizard are NOT called. Use By = Production Date +
+    # the product's expiry days; Best Before End (Plain Frozen) = Freeze
+    # Date + expiry days. Blank when the product has no expiry set.
     # ------------------------------------------------------------------
     def _get_matching_orders(self):
         return self.env['sale.order']
@@ -198,7 +241,7 @@ class ProductLabelWizard(models.TransientModel):
         self.ensure_one()
         label_lines = []
         for product in self._get_label_products():
-            expiry = self._get_expiry_display(product)
+            expiry = self._use_by_display(product)  # e.g. '17 September, 2026'
 
             # Origin: country (+ FAO area), else catch method (+ FAO), else fish info
             origin = self._product_field(product, 'origin_country')
@@ -238,13 +281,13 @@ class ProductLabelWizard(models.TransientModel):
                 'origin_country': origin or '',
                 'product_barcode': product.barcode or '',
                 'product_default_code': product.default_code or '',
-                'use_by_display': expiry,
+                'use_by_display': self._use_by_display(product, '%d %B %Y'),
                 'latin_name': self._latin_name(product),
                 'origin_display': origin_display,
                 'label_description': description,
                 'weight_range': weight_range,
                 'allergens_display': self._allergens(product),
-                'production_date_display': '',
+                'production_date_display': self._production_date_display(),
                 'frozen_use_by_display': expiry,
             })
         return self._apply_copies(label_lines)
@@ -267,7 +310,8 @@ class ProductLabelWizard(models.TransientModel):
                 'origin_country': self._product_field(product, 'origin_country') or '',
                 'product_barcode': product.barcode or '',
                 'product_default_code': product.default_code or '',
-                'use_by_display': self._get_expiry_display(product),
+                # Fresh Use By = Production Date + expiry days, e.g. '17 September 2026'
+                'use_by_display': self._use_by_display(product, '%d %B %Y'),
             })
         return self._apply_copies(label_lines)
 
@@ -287,8 +331,9 @@ class ProductLabelWizard(models.TransientModel):
                 # Fixed legal text (not a product field)
                 'storage_instructions': "Store at below -18°C.  Once defrosted do not refreeze",
                 'catch_area': self._product_catch_area(product),
-                'freeze_date_display': '',
-                'best_before_display': self._get_expiry_display(product),
+                'freeze_date_display': self._freeze_date_display(),
+                # Best Before End = Freeze Date + expiry days, e.g. 'September 2028'
+                'best_before_display': self._get_expiry_display(product, self.freeze_date, '%B %Y'),
                 'company_address': self._company_address(),
             })
         return self._apply_copies(lines)
@@ -326,8 +371,8 @@ class ProductLabelWizard(models.TransientModel):
                 'storage_notice': "Store at or below 5°C.",
                 'freezing_notice': "Use by date shown on label or if freezing we recommend freezing on day of purchase.",
                 'catch_info': fish_info.split('\n')[0].strip() if fish_info else '',
-                'production_date_display': '',
-                'use_by_display': self._get_expiry_display(product),
+                'production_date_display': self._production_date_display(),
+                'use_by_display': self._use_by_display(product),
                 'min_weight_display': f"Min Weight: {weight}" if weight else '',
                 'nutrition_html': self._product_field(product, 'nutritional_info_html'),
                 'company_address': self._company_address(),
@@ -344,8 +389,8 @@ class ProductLabelWizard(models.TransientModel):
                 'product_name': (product.name or '').strip(),
                 'cooking_instructions': self._product_field(product, 'cooking_instructions') or cooking_html,
                 'cooking_instructions_html': cooking_html,
-                'production_date_display': '',
-                'use_by_display': self._get_expiry_display(product),
+                'production_date_display': self._production_date_display(),
+                'use_by_display': self._use_by_display(product),
             })
         return self._apply_copies(lines)
 
