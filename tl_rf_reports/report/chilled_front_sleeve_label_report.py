@@ -38,6 +38,8 @@ from reportlab.platypus import (
 
 from odoo import api, models
 
+from .label_fit import LabelDocTemplate, build_fitted_label, label_cache_key
+
 # --- Chilled Front Sleeve Label page size: 100mm x 60mm standard thermal roll size. ---
 PAGE_WIDTH = 100 * mm
 PAGE_HEIGHT = 60 * mm
@@ -73,7 +75,9 @@ class ProductionLabelReportChilledFrontSleeve(models.AbstractModel):
     _description = 'Production Label Report Data - Chilled Front Sleeve'
     _inherit = 'report.tl_rf_reports.report_production_label_document_courier'
 
-    MIN_FONT_SCALE = 0.70
+    # Lowest font scale tried when reflowing long content. Below this the
+    # label is shrunk as a block, so it still stays on one page.
+    MIN_FONT_SCALE = 0.4
 
     @api.model
     def _get_report_values(self, docids, data=None):
@@ -213,26 +217,17 @@ class ProductionLabelReportChilledFrontSleeve(models.AbstractModel):
             total_height += flowable_height
         return total_height
 
-    def _build_fitted_story(self, label, index, total_labels):
-        """Builds story for one label, scaling down if needed to fit exactly one 100x60mm label."""
-        scale = 1.0
-        story = self._chilled_front_sleeve_flowables(
-            label, index, total_labels, self._chilled_front_sleeve_styles(scale), scale
-        )
-
-        for _ in range(6):
-            height = self._measure_story_height(story, PRINTABLE_WIDTH)
-            if height <= PRINTABLE_HEIGHT:
-                return story
-            if scale <= self.MIN_FONT_SCALE:
-                return story
-            ratio = PRINTABLE_HEIGHT / height
-            scale = max(self.MIN_FONT_SCALE, scale * ratio * 0.98)
-            story = self._chilled_front_sleeve_flowables(
+    def _build_fitted_story(self, label, index, total_labels, fit_cache=None):
+        """Builds the story for one label. Fonts shrink as far as needed so
+        the label ALWAYS fits on exactly one 100x60mm page."""
+        def build(scale):
+            return self._chilled_front_sleeve_flowables(
                 label, index, total_labels, self._chilled_front_sleeve_styles(scale), scale
             )
-
-        return story
+        return build_fitted_label(
+            build, PRINTABLE_WIDTH, PRINTABLE_HEIGHT, self.MIN_FONT_SCALE,
+            cache=fit_cache, cache_key=label_cache_key(label),
+        )
 
     def generate_pdf(self, wizard):
         """Returns the finished Chilled Front Sleeve Label PDF bytes."""
@@ -242,7 +237,7 @@ class ProductionLabelReportChilledFrontSleeve(models.AbstractModel):
 
         total_labels = len(label_lines)
         buffer = io.BytesIO()
-        doc = SimpleDocTemplate(
+        doc = LabelDocTemplate(
             buffer,
             pagesize=(PAGE_WIDTH, PAGE_HEIGHT),
             leftMargin=LABEL_MARGIN,
@@ -252,10 +247,11 @@ class ProductionLabelReportChilledFrontSleeve(models.AbstractModel):
         )
 
         story = []
+        fit_cache = {}
         for index, label in enumerate(label_lines):
             if index:
                 story.append(PageBreak())
-            story.extend(self._build_fitted_story(label, index, total_labels))
+            story.extend(self._build_fitted_story(label, index, total_labels, fit_cache))
 
         doc.title = 'Chilled Front Sleeve Labels'  # PDF metadata - shown by browser PDF viewers
         doc.author = self.env.company.name or ''
