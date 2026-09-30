@@ -1,3 +1,5 @@
+import psycopg2
+
 from odoo import models, fields, api
 
 
@@ -91,6 +93,22 @@ class ZohoConfigSchedule(models.Model):
             'domain': [('config_schedule_id', '=', self.id)],
             'target': 'current'
         }
+
+    def _try_lock(self):
+        """Lock these schedules until the end of the transaction, so that two syncs of the same
+        module (Sync Now, its cron, the live queue) never write the same records concurrently.
+
+        :return: False when another transaction is already syncing one of them
+        """
+        if not self:
+            return True
+        try:
+            with self.env.cr.savepoint(flush=False):
+                self.env.cr.execute("SELECT id FROM zoho_config_schedule WHERE id IN %s FOR NO KEY UPDATE NOWAIT",
+                                    [tuple(self.ids)])
+        except psycopg2.errors.LockNotAvailable:
+            return False
+        return True
 
     def _live_push(self, record_ids):
         """Push the given Odoo records to Zoho right away; implemented by the connector addons.

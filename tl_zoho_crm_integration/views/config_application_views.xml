@@ -19,13 +19,14 @@
                         confirm="Do you want to set up this scheduled synchronization?"
                         string="Schedule Sync"/>
 
-                <button class="btn btn-secondary"
-                        name="action_check_live_status"
-                        invisible="sync_frequency != 'live' or addon_name != 'tl_zoho_crm_integration'"
+            </xpath>
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_check_live_status"
                         type="object"
+                        class="btn-secondary"
+                        string="Live Status"
                         icon="fa-heartbeat"
-                        string="Check Live Status"/>
-
+                        invisible="sync_frequency != 'live' or addon_name != 'tl_zoho_crm_integration'"/>
             </xpath>
             <xpath expr="//sheet/group[1]" position="inside">
                 <group invisible="not schedule_ids or addon_name != 'tl_zoho_crm_integration'">

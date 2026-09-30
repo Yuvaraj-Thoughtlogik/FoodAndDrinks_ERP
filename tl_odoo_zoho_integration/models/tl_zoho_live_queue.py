@@ -12,6 +12,9 @@ _logger = logging.getLogger(__name__)
 
 MAX_ATTEMPTS = 3
 DONE_RETENTION_DAYS = 7
+# A Zoho change not newer than our own last push of that record (plus clock skew) is the
+# echo of that push, e.g. the notification Zoho sends after Odoo created the record there.
+ECHO_MARGIN = timedelta(seconds=5)
 
 
 class ZohoLiveQueue(models.Model):
@@ -41,6 +44,8 @@ class ZohoLiveQueue(models.Model):
                              string="State", default='pending', required=True, index=True)
     attempts = fields.Integer(string="Attempts")
     error = fields.Text(string="Error")
+    # Real time Zoho accepted the push (write_date is the transaction start, too early for long runs).
+    pushed_at = fields.Datetime(string="Pushed At", readonly=True)
 
     # ------------------------------------------------------------------
     # Enqueue
@@ -54,7 +59,12 @@ class ZohoLiveQueue(models.Model):
         """
         if not records or self.env.context.get('zoho_live_skip') or records.env.context.get('zoho_live_skip'):
             return
-        self._enqueue(self.env['zoho.config.schedule'].browse(schedule_id), 'push', 'res_id', records.ids)
+        # Runs inside the user's save: a sync problem must never block saving the record.
+        try:
+            with self.env.cr.savepoint():
+                self._enqueue(self.env['zoho.config.schedule'].browse(schedule_id), 'push', 'res_id', records.ids)
+        except Exception:
+            _logger.exception("[ZOHO LIVE] Could not queue %s %s for Zoho", records._name, records.ids)
 
     @api.model
     def _enqueue(self, schedule, direction, key, values):
@@ -99,6 +109,45 @@ class ZohoLiveQueue(models.Model):
         return True
 
     # ------------------------------------------------------------------
+    # Echo detection
+    # ------------------------------------------------------------------
+    @api.model
+    def _remember_pushes(self, module, pushed):
+        """Record pushes made outside the queue (Sync Now, periodic sync) as done push rows,
+        so that their echo coming back from Zoho is recognised.
+
+        :param pushed: ``[{'odoo_id': ..., 'zoho_id': ...}]`` as returned by ``sync_odoo_to_zoho``
+        """
+        schedule = self.env['zoho.config.schedule'].sudo().search([('module_id', '=', module.id)], limit=1)
+        pushed = [entry for entry in pushed if entry.get('zoho_id')]
+        pushed_at = fields.Datetime.now()
+        if schedule and pushed:
+            self.sudo().create([{
+                'schedule_id': schedule.id,
+                'direction': 'push',
+                'state': 'done',
+                'res_model': module.odoo_model_name,
+                'res_id': entry.get('odoo_id'),
+                'zoho_id': str(entry['zoho_id']),
+                'pushed_at': pushed_at,
+            } for entry in pushed])
+
+    @api.model
+    def _last_push_times(self, module, zoho_ids):
+        """``{zoho_id: datetime}`` of the last push to Zoho of each of ``zoho_ids``."""
+        if not zoho_ids:
+            return {}
+        groups = self.sudo()._read_group(
+            [('schedule_id.module_id', '=', module.id), ('direction', '=', 'push'),
+             ('state', '=', 'done'), ('zoho_id', 'in', list(zoho_ids)), ('pushed_at', '!=', False)],
+            ['zoho_id'], ['pushed_at:max'])
+        return {zoho_id: pushed_at for zoho_id, pushed_at in groups}
+
+    @api.model
+    def _is_echo(self, pushed_at, modified_time):
+        return bool(pushed_at and modified_time and modified_time <= pushed_at + ECHO_MARGIN)
+
+    # ------------------------------------------------------------------
     # Process
     # ------------------------------------------------------------------
     @api.model
@@ -114,9 +163,17 @@ class ZohoLiveQueue(models.Model):
         for row in rows:
             rows_by_batch[row.schedule_id, row.direction] |= row
 
+        busy = False
         for (schedule, direction), batch_rows in rows_by_batch.items():
+            if not schedule._try_lock():
+                # Being synced by Sync Now / its cron right now: keep the rows for the next run.
+                busy = True
+                continue
             batch_rows._sync(schedule, direction)
             self.env['ir.cron']._commit_progress(len(batch_rows))
+        if busy:
+            self.env.ref('tl_odoo_zoho_integration.ir_cron_zoho_live_push').sudo()._trigger(
+                fields.Datetime.now() + timedelta(minutes=1))
 
     def _sync(self, schedule, direction):
         """Sync the records of these rows (all of ``schedule`` and ``direction``) and log the run."""
@@ -129,6 +186,7 @@ class ZohoLiveQueue(models.Model):
             _logger.exception("[ZOHO LIVE] %s failed for %s", direction, schedule.name)
             self._mark_failed(str(e))
             return
+        synced_at = fields.Datetime.now()
 
         def row_key(entry):
             if not isinstance(entry, dict):
@@ -143,7 +201,13 @@ class ZohoLiveQueue(models.Model):
         global_errors = [error for error in errors if not row_key(error)]
         synced = {row_key(entry) for entry in response.get('created', []) + response.get('updated', [])}
 
+        if push:
+            # Keep the Zoho id of each pushed record to recognise its echo (see _last_push_times).
+            zoho_by_odoo_id = {entry.get('odoo_id'): entry.get('zoho_id')
+                               for entry in response.get('created', []) + response.get('updated', [])}
         for row in self:
+            if push and zoho_by_odoo_id.get(row.res_id):
+                row.write({'zoho_id': str(zoho_by_odoo_id[row.res_id]), 'pushed_at': synced_at})
             if row[key] in errors_by_key:
                 row._mark_failed(errors_by_key[row[key]])
             elif global_errors and row[key] not in synced:
@@ -159,6 +223,8 @@ class ZohoLiveQueue(models.Model):
             'failed': len(self.filtered(lambda r: r.state == 'failed')),
         }
         failed = counts['failed']
+        if not push and not (failed or counts['created'] or counts['updated']):
+            return  # only echoes of our own pushes / unchanged records: nothing worth a log entry
         status = ('failed' if failed and not (counts['created'] or counts['updated'] or counts['unchanged'])
                   else 'partial' if failed else 'success')
         if push:

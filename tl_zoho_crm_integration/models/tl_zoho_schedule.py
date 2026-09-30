@@ -40,6 +40,9 @@ class ZohoConfigSchedule(models.Model):
 
     def sync_crm_from_cron(self, include_push=True):
         """:param include_push: also push Odoo -> Zoho (False for 'Live' schedules, whose pushes are queued)"""
+        if not self._try_lock():
+            raise UserError(f"{self.name} is already being synchronized (scheduled or live sync). "
+                            "Please try again in a moment.")
         module = self.module_id
         module_name = module.name
         odoo_name = module.odoo_model_name
@@ -103,6 +106,9 @@ class ZohoConfigSchedule(models.Model):
         schedule = self.browse(schedule_id)
         if not schedule.exists():
             _logger.warning("Zoho Config ID %s not found", schedule_id)
+            return
+        if not schedule._try_lock():
+            _logger.info("Skipping scheduled Zoho sync of %s: it is already being synchronized", schedule.name)
             return
         _logger.info("Running Zoho sync via scheduled action for %s", schedule.name)
         schedule.sync_crm_from_cron(include_push=schedule.sync_frequency != 'live')

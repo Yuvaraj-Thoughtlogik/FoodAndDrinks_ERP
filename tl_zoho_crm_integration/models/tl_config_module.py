@@ -340,6 +340,8 @@ class ZohoConfigModule(models.Model):
 
             # One search for all existing records instead of one per Zoho record
             zoho_ids = [str(rec['id']) for rec in records if rec.get('id')]
+            Queue = self.env['zoho.live.queue']
+            last_push_times = Queue._last_push_times(self, zoho_ids)
             existing_by_zoho_id = {
                 rec[zoho_id_field]: rec
                 for rec in odoo_model.search([(zoho_id_field, 'in', zoho_ids)])
@@ -354,6 +356,10 @@ class ZohoConfigModule(models.Model):
                     modified_time = parse_datetime_flexibly(rec.get('Modified_Time'))[0]
                     if existing and last_sync and modified_time and modified_time < last_sync:
                         unchanged.append({'zoho_id': zoho_record_id, 'status': 'unchanged'})
+                        continue
+                    if existing and Queue._is_echo(last_push_times.get(zoho_record_id), modified_time):
+                        unchanged.append({'zoho_id': zoho_record_id, 'status': 'unchanged',
+                                          'reason': 'Only changed in Zoho by our own push'})
                         continue
 
                     if needs_detail:
@@ -505,7 +511,19 @@ class ZohoConfigModule(models.Model):
             zoho_id = res.get('details', {}).get('id')
             if res.get('status') == 'success':
                 if is_create:
-                    rec.write({zoho_id_field: zoho_id or ""})
+                    # Own savepoint: a failed write (e.g. the record is being edited concurrently)
+                    # must not abort the whole sync transaction.
+                    try:
+                        with self.env.cr.savepoint():
+                            rec.write({zoho_id_field: zoho_id or ""})
+                    except Exception as e:
+                        _logger.warning("[ZOHO SYNC] Created %s in Zoho but could not store its Zoho ID on "
+                                        "%s: %s", zoho_id, rec, e)
+                        errors.append({"odoo_id": rec.id, "zoho_id": zoho_id, "status": "failed",
+                                       "type": type(e).__name__,
+                                       "error": f"Created in Zoho as {zoho_id} but the Zoho ID could not be "
+                                                f"stored in Odoo: {e}"})
+                        continue
                 created_or_updated.append({"odoo_id": rec.id, "zoho_id": zoho_id, "status": "success"})
             else:
                 errors.append({"odoo_id": rec.id, "zoho_id": zoho_id, "status": "failed", "error": res})
@@ -609,10 +627,21 @@ class ZohoConfigModule(models.Model):
                     continue
                 for one2many in one2many_fields:
                     zoho_lines = [line.get("id") for line in record_data.get(one2many.name) or []]
-                    for row_index, subform in enumerate(rec[one2many.odoo_field_name]):
-                        subform.write({
-                            one2many.zoho_id_field_name: zoho_lines[row_index] if row_index < len(zoho_lines) else ""
-                        })
+                    try:
+                        with self.env.cr.savepoint():
+                            for row_index, subform in enumerate(rec[one2many.odoo_field_name]):
+                                subform.write({
+                                    one2many.zoho_id_field_name:
+                                        zoho_lines[row_index] if row_index < len(zoho_lines) else ""
+                                })
+                    except Exception as e:
+                        _logger.warning("[ZOHO SYNC] Could not store Zoho subform ids on %s: %s", rec, e)
+                        errors.append({"odoo_id": rec.id, 'type': type(e).__name__,
+                                       "error": f"Zoho subform line ids could not be stored: {e}"})
+
+        if not record_ids and not for_test:
+            # Live pushes are remembered by the queue itself.
+            self.env['zoho.live.queue']._remember_pushes(self, created + updated)
 
         status = "success" if created or updated or unchanged else 'failed'
         return self._sync_result(status, request_msg, created, updated, errors, unchanged)
