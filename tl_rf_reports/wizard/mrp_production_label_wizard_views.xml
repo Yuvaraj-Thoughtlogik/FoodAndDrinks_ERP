@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_mrp_production_label_wizard_form" model="ir.ui.view">
+        <field name="name">mrp.production.label.wizard.form</field>
+        <field name="model">mrp.production.label.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Production Label">
+                <sheet>
+                    <field name="production_ids" invisible="1"/>
+                    <field name="allowed_category_ids" invisible="1"/>
+                    <field name="category_name" invisible="1"/>
+
+                    <group>
+                        <group>
+                            <field name="copies" required="1"/>
+                        </group>
+                    </group>
+
+                    <group string="Categories">
+                        <field name="category_id" required="1"
+                               domain="[('id', 'in', allowed_category_ids)]"
+                               options="{'no_create': True}"/>
+                    </group>
+
+                    <group string="Label Format" invisible="category_name != 'Frozen'">
+                        <field name="frozen_label_type" widget="radio" nolabel="1"/>
+                    </group>
+
+                    <group string="Label Template" invisible="category_name != 'Chilled'">
+                        <field name="chilled_label_type" widget="radio" nolabel="1"/>
+                    </group>
+
+                    <group string="Label Format" invisible="category_name != 'Fresh'">
+                        <field name="fresh_label_type" widget="radio" nolabel="1"/>
+                        <field name="delivery_channel" widget="radio"/>
+                    </group>
+                </sheet>
+                <footer>
+                    <button name="action_print_label" string="Print Label" type="object"
+                            class="btn-primary" icon="fa-tag" data-hotkey="l"/>
+                    <button string="Cancel" class="btn-secondary" special="cancel" data-hotkey="x"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <!-- Actions > Production Label on the Manufacturing Order list view only -->
+    <record id="action_mrp_production_label_wizard" model="ir.actions.act_window">
+        <field name="name">Production Label</field>
+        <field name="res_model">mrp.production.label.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+        <field name="view_id" ref="view_mrp_production_label_wizard_form"/>
+        <field name="binding_model_id" ref="mrp.model_mrp_production"/>
+        <field name="binding_view_types">list</field>
+    </record>
+</odoo>

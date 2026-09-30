@@ -9,3 +9,4 @@ from . import prediction_report_wizard
 from . import active_batch_report_wizard
 from . import round_batch_activity_wizard
 from . import product_label_wizard
+from . import mrp_production_label_wizard

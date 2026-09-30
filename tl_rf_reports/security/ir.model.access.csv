@@ -10,3 +10,4 @@ access_requirement_report_line,requirement.report.line,model_requirement_report_
 access_active_batch_report_wizard,active.batch.report.wizard,model_active_batch_report_wizard,base.group_user,1,1,1,1
 access_round_batch_activity_wizard,round.batch.activity.wizard,model_round_batch_activity_wizard,base.group_user,1,1,1,1
 access_product_label_wizard,access.product.label.wizard,model_product_label_wizard,base.group_user,1,1,1,1
+access_mrp_production_label_wizard,access.mrp.production.label.wizard,model_mrp_production_label_wizard,mrp.group_mrp_user,1,1,1,1

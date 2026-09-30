@@ -39,6 +39,7 @@
         'wizard/active_batch_report_wizard_views.xml',
         'wizard/round_batch_activity_wizard_views.xml',
         'wizard/product_label_wizard_views.xml',
+        'wizard/mrp_production_label_wizard_views.xml',
         'report/dock_weight_breakdown_report_views.xml',
         'report/packing_list_report_views.xml',
         'report/requirement_report_views.xml',
