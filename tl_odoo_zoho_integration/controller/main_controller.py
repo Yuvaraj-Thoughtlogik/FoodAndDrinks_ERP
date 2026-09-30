@@ -1,3 +1,5 @@
+import json
+
 from odoo import http
 from odoo.http import request
 
@@ -25,3 +27,15 @@ class ZohoController(http.Controller):
             )
         except Exception as e:
             return f"Authorization failed: {str(e)}"
+
+    @http.route('/zoho/notify', type='http', auth='public', methods=['POST'], csrf=False, save_session=False)
+    def zoho_notify(self, **kwargs):
+        """Zoho CRM notification endpoint: queue the changed records and answer at once,
+        the records themselves are fetched from Zoho by the live sync cron."""
+        try:
+            payload = json.loads(request.httprequest.get_data() or b'{}')
+        except ValueError:
+            return request.make_response('Invalid payload', status=400)
+        if not isinstance(payload, dict) or not request.env['zoho.live.queue'].sudo()._receive_notification(payload):
+            return request.make_response('Unknown channel', status=403)
+        return request.make_response('OK')

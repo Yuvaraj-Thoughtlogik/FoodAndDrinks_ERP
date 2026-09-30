@@ -4,6 +4,7 @@ FREQUENCY_LABELS = {
     '1_hour': "every hour",
     '2_hour': "every 2 hours",
     'once_a_day': "once a day",
+    'live': "instantly whenever a record is created or edited",
 }
 
 
@@ -36,6 +37,14 @@ class ZohoApplication(models.Model):
             schedule.create_crm_scheduled_action()
 
         frequency_label = FREQUENCY_LABELS.get(self.sync_frequency, self.sync_frequency)
+        if self.sync_frequency == 'live' and self.zoho_to_odoo:
+            interval_label = dict(self._fields['live_pull_interval'].selection)[self.live_pull_interval].lower()
+            if all(self.schedule_ids.sudo().mapped('notify_channel_id')):
+                frequency_label += (f".\nZoho changes arrive instantly through Zoho notifications, "
+                                    f"and Zoho is also checked {interval_label}")
+            else:
+                frequency_label += (f".\nZoho changes are checked {interval_label} "
+                                    f"(set a public URL in the Zoho configuration to receive them instantly)")
         self.write({
             'cron_ids': [fields.Command.link(cron.id) for cron in self.schedule_ids.cron_id],
             're_schedule': False,

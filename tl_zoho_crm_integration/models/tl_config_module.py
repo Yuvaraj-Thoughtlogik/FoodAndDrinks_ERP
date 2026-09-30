@@ -34,13 +34,17 @@ class ZohoConfigModule(models.Model):
         return config.zoho_request(method, f"crm/{CRM_API_VERSION}/{endpoint}", **kwargs)
 
     def get_data_from_zoho(self, zoho_module, fields_batch, last_sync=None):
+        """Fetch all records of ``zoho_module``, or only those modified since ``last_sync``."""
         field_list = list(fields_batch)
         record_map = {}
+        headers = {}
+        if last_sync:
+            headers['If-Modified-Since'] = fields.Datetime.to_datetime(last_sync).strftime('%Y-%m-%dT%H:%M:%S+00:00')
         for i in range(0, len(field_list), FIELDS_PER_REQUEST):
             params = {'fields': ",".join(field_list[i:i + FIELDS_PER_REQUEST])}
             while True:
-                response = self._crm_request('GET', zoho_module, params=params)
-                if response.status_code == 204:  # no records
+                response = self._crm_request('GET', zoho_module, params=params, headers=headers)
+                if response.status_code in (204, 304):  # no records / none modified since last_sync
                     break
                 if response.status_code != 200:
                     raise UserError(f"Zoho API Error: {response.status_code} - {response.text}")
@@ -289,13 +293,19 @@ class ZohoConfigModule(models.Model):
         entry['error'] = str(error)
         return entry
 
-    def sync_zoho_to_odoo(self, last_sync=None, for_test=None):
+    def sync_zoho_to_odoo(self, last_sync=None, for_test=None, zoho_ids=None):
+        """Pull Zoho records into Odoo: records with a known Zoho ID are updated, others created.
+
+        :param last_sync: only fetch records modified in Zoho since then
+        :param zoho_ids: only pull these records (live sync, from Zoho notifications)
+        """
         self.ensure_one()
         created, updated, errors, unchanged = [], [], [], []
         request = []
 
         try:
-            odoo_model = self.env[self.odoo_model.model]
+            # Records written by the pull must not be pushed back by 'Live' schedules.
+            odoo_model = self.env[self.odoo_model.model].with_context(zoho_live_skip=True)
             zoho_id_field = self.zoho_id_field
             if zoho_id_field not in odoo_model._fields:
                 self._add_custom_field(odoo_model._name, zoho_id_field, 'char', "Zoho ID")
@@ -310,15 +320,22 @@ class ZohoConfigModule(models.Model):
                     })
                     return self._sync_result("failed", request, created, updated, errors)
                 records = [record]
+            elif zoho_ids:
+                records = []
+                for zoho_id in zoho_ids:
+                    try:
+                        records.append(self.get_record_detail_from_zoho(self.name, zoho_id))
+                    except Exception as e:
+                        errors.append({'zoho_id': str(zoho_id), 'fetch_error': str(e)})
             else:
                 # '_default_field' maps are Odoo-side filters, not Zoho fields. Modified_Time is
                 # needed to skip records unchanged since ``last_sync``.
                 zoho_fields = self.fields_ids.filtered(lambda fm: not fm.is_default).mapped('name')
                 records = self.get_data_from_zoho(self.name, list(dict.fromkeys(zoho_fields + ['Modified_Time'])),
-                                                  self.last_one_way_sync)
+                                                  last_sync)
 
             # Subform values are only returned by the record detail endpoint.
-            needs_detail = not for_test and any(
+            needs_detail = not for_test and not zoho_ids and any(
                 ftype in ('many2many', 'one2many') for ftype in self.fields_ids.mapped('field_type'))
 
             # One search for all existing records instead of one per Zoho record
@@ -493,7 +510,20 @@ class ZohoConfigModule(models.Model):
             else:
                 errors.append({"odoo_id": rec.id, "zoho_id": zoho_id, "status": "failed", "error": res})
 
-    def sync_odoo_to_zoho(self, last_sync=None, for_test=None):
+    def _get_default_domain(self):
+        """Odoo-side filter of the records belonging to this module ('_default_field' maps)."""
+        return [
+            (field_map.odoo_field_name, '=',
+             field_map.default_value if field_map.field_type != 'boolean'
+             else (field_map.default_value or "").lower() == "true")
+            for field_map in self.fields_ids if field_map.is_default
+        ]
+
+    def sync_odoo_to_zoho(self, last_sync=None, for_test=None, record_ids=None):
+        """Push Odoo records to Zoho: records with an existing Zoho ID are updated, others created.
+
+        :param record_ids: only push these records, even if unchanged since ``last_sync`` (live sync)
+        """
         self.ensure_one()
         create_batch, update_batch = {}, {}
         created, updated, errors, unchanged = [], [], [], []
@@ -503,18 +533,17 @@ class ZohoConfigModule(models.Model):
             errors.append(f"Odoo model not set for module {self.name}")
             return self._sync_result('failed', {}, [], [], errors)
 
-        odoo_model = self.env[self.odoo_model.model]
+        # The Zoho ID write-back must not re-trigger 'Live' schedules.
+        odoo_model = self.env[self.odoo_model.model].with_context(zoho_live_skip=True)
         zoho_id_field = self.zoho_id_field
         if zoho_id_field not in odoo_model._fields:
             self._add_custom_field(odoo_model._name, zoho_id_field, 'char', 'Zoho ID')
 
-        domain = [('id', '=', for_test)] if for_test and isinstance(for_test, int) else []
-        domain += [
-            (field_map.odoo_field_name, '=',
-             field_map.default_value if field_map.field_type != 'boolean'
-             else (field_map.default_value or "").lower() == "true")
-            for field_map in self.fields_ids if field_map.is_default
-        ]
+        if record_ids:
+            domain = [('id', 'in', record_ids)]
+        else:
+            domain = [('id', '=', for_test)] if for_test and isinstance(for_test, int) else []
+        domain += self._get_default_domain()
         records = odoo_model.search(domain)
         if not records:
             errors.append(f"No records found to sync {odoo_model._name}")
@@ -530,7 +559,7 @@ class ZohoConfigModule(models.Model):
             try:
                 is_update = self._check_zoho_id_exists(self.name, rec_zoho_id, exists_cache)
                 # Skip before preparing values: that step uploads files and queries Zoho.
-                if is_update and rec.write_date and last_sync and rec.write_date < last_sync:
+                if is_update and not record_ids and rec.write_date and last_sync and rec.write_date < last_sync:
                     unchanged.append({'odoo_id': rec.id, 'zoho_id': rec_zoho_id})
                     continue
 

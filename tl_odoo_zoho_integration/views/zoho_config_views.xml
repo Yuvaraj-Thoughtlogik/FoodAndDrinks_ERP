@@ -17,6 +17,7 @@
                             <field name="cr_client_id"/>
                             <field name="cr_client_secret"/>
                             <field name="cr_redirect_uri"/>
+                            <field name="notify_base_url" placeholder="https://erp.example.com"/>
                         </group>
                         <group>
                             <field name="config_region_id"/>

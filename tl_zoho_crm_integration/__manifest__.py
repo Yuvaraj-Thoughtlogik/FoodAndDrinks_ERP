@@ -7,7 +7,7 @@
     'author': 'Thoughtlogik',
     'website': 'www.thoughtlogik.com',
     'license': 'LGPL-3',
-    'depends': ['tl_odoo_zoho_integration'],
+    'depends': ['tl_odoo_zoho_integration', 'base_automation'],
     'data': [
         'security/ir.model.access.csv',
         'views/config_application_views.xml',
@@ -16,6 +16,7 @@
         'data/zoho_crm_v8_scopes.xml',
         'views/example_model_views.xml',
         'data/base_data.xml',
+        'data/zoho_notify_cron.xml',
         # 'data/example_model_fields.xml',
     ],
     'installable': True,

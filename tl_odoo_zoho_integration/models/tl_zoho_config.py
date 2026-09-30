@@ -58,6 +58,11 @@ class ZohoConfig(models.Model):
     api_domain = fields.Char(related='config_region_id.base_url', store=True)
     zoho_app_ids = fields.Many2many(comodel_name='zoho.config.application', string="Active Zoho Applications")
     regenerate_required = fields.Boolean(string="Regenerate Required")
+    notify_base_url = fields.Char(
+        string="Public URL (Notifications)",
+        help="Public HTTPS address of this Odoo (e.g. https://erp.example.com), used by Zoho to send "
+             "instant change notifications for 'Live' sync. Leave empty when Odoo is not reachable from "
+             "the internet: Zoho is then checked for changes periodically instead.")
     addon_ids = fields.Many2many(comodel_name='ir.module.module', string='Applications', compute='compute_addon_ids')
 
     def write(self, vals):
@@ -183,6 +188,18 @@ class ZohoConfig(models.Model):
             raise UserError(_(
                 "Region or scopes have changed. New authorization is required. Please regenerate your credentials."))
         return config
+
+    def _get_notify_url(self):
+        """URL Zoho posts change notifications to, or False when notifications cannot be used."""
+        self.ensure_one()
+        base_url = (self.notify_base_url or '').strip().rstrip('/')
+        return f"{base_url}/zoho/notify" if base_url.startswith('https://') else False
+
+    @api.constrains('notify_base_url')
+    def _check_notify_base_url(self):
+        for rec in self:
+            if rec.notify_base_url and not rec.notify_base_url.strip().startswith('https://'):
+                raise ValidationError(_("The public URL for Zoho notifications must start with https://"))
 
     def check_ready_to_sync(self):
         self._get_ready_config()

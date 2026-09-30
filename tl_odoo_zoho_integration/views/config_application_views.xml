@@ -51,6 +51,7 @@
                                 <label for="odoo_to_zoho"/>
                             </div>
                             <field name="sync_frequency"/>
+                            <field name="live_pull_interval" invisible="sync_frequency != 'live' or not zoho_to_odoo"/>
                         </group>
                     </group>
 
@@ -88,6 +89,8 @@
                                                 </div>
                                                 <field name="sync_frequency"/>
                                                 <field name="cron_id"/>
+                                                <field name="notify_channel_id" invisible="not notify_channel_id"/>
+                                                <field name="notify_expiry" invisible="not notify_channel_id"/>
                                             </group>
                                         </group>
 

@@ -16,8 +16,14 @@ class ZohoApplication(models.Model):
     icon = fields.Char(string='Icon', related='addon_id.icon')
     sync_type = fields.Selection([('1way_sync', 'One-way Sync'), ('2way_sync', 'Two-way Sync')], string="Sync type",
                                  default='1way_sync')
-    sync_frequency = fields.Selection([('1_hour', 'Every Hour'), ('2_hour', 'Every 2 Hours'), ('once_a_day', 'Once a Day')],
+    sync_frequency = fields.Selection([('1_hour', 'Every Hour'), ('2_hour', 'Every 2 Hours'), ('once_a_day', 'Once a Day'),
+                                       ('live', 'Live (Instant)')],
                                       string="Sync Frequency", default='once_a_day', required=True)
+    live_pull_interval = fields.Selection(
+        [('5', 'Every 5 Minutes'), ('15', 'Every 15 Minutes'), ('30', 'Every 30 Minutes'), ('60', 'Every Hour')],
+        string="Zoho Check Interval", default='15', required=True,
+        help="With Live sync, how often Zoho is checked for changed records. This is the only way Zoho changes "
+             "reach Odoo when no public URL is set for Zoho notifications, and a safety net otherwise.")
     zoho_to_odoo = fields.Boolean(string='Zoho to Odoo', default=True)
     odoo_to_zoho = fields.Boolean(string='Odoo to Zoho')
 
@@ -40,6 +46,9 @@ class ZohoApplication(models.Model):
                 sync = "One-way Sync: Zoho → Odoo"
             else:
                 sync = "One-way Sync: Odoo → Zoho"
+            if rec.sync_frequency == 'live':
+                rec.description = f"{sync} instantly on every change"
+                continue
             every = 'every' if rec.sync_frequency != 'once_a_day' else ''
             rec.description = f"{sync} for {every} {freq_labels.get(rec.sync_frequency, '')} "
 
@@ -61,7 +70,7 @@ class ZohoApplication(models.Model):
                     added_ids.append(command[2]['module_id'])
             self.env['zoho.config.schedule'].browse(removed_ids).module_id.view_id.active = False
             self.env['zoho.config.module'].browse(added_ids).view_id.active = True
-        if 'sync_frequency' in vals or 'schedule_ids' in vals:
+        if any(key in vals for key in ('sync_frequency', 'schedule_ids', 'live_pull_interval')):
             vals['re_schedule'] = True
         return super().write(vals)
 

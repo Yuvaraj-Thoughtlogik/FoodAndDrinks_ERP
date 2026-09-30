@@ -20,7 +20,8 @@ class ZohoConfigSchedule(models.Model):
         [
             ('1_hour', 'One Hour'),
             ('2_hour', 'Two Hour'),
-            ('once_a_day', 'Once a Day')
+            ('once_a_day', 'Once a Day'),
+            ('live', 'Live (Instant)'),
         ],
         string="Sync Frequency",
         compute='_compute_sync_frequency',
@@ -31,6 +32,10 @@ class ZohoConfigSchedule(models.Model):
     two_way_last_sync = fields.Datetime(string="Last Two-way Sync Time")
     last_sync = fields.Datetime(string="Last Sync")
     cron_id = fields.Many2one(comodel_name='ir.cron', string='Cron')
+    # Zoho notification channel used by 'Live' schedules to receive Zoho -> Odoo changes.
+    notify_channel_id = fields.Char(string="Notification Channel", readonly=True, copy=False, index=True)
+    notify_token = fields.Char(string="Notification Token", readonly=True, copy=False, groups='base.group_system')
+    notify_expiry = fields.Datetime(string="Notification Expiry", readonly=True, copy=False)
 
     def unlink(self):
         crons = self.cron_id
@@ -85,6 +90,20 @@ class ZohoConfigSchedule(models.Model):
             'domain': [('config_schedule_id', '=', self.id)],
             'target': 'current'
         }
+
+    def _live_push(self, record_ids):
+        """Push the given Odoo records to Zoho right away; implemented by the connector addons.
+
+        :return: the sync result dict (see ``zoho.config.module._sync_result``)
+        """
+        return {}
+
+    def _live_pull(self, zoho_ids):
+        """Pull the given Zoho records into Odoo right away; implemented by the connector addons.
+
+        :return: the sync result dict (see ``zoho.config.module._sync_result``)
+        """
+        return {}
 
     def create_log(self, modules, status, request, response, odoo_ids, zoho_ids, message):
         return self.env['zoho.config.logs'].create([{

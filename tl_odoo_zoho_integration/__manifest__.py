@@ -7,7 +7,7 @@
     'author': 'Thoughtlogik',
     'website': 'www.thoughtlogik.com',
     'license': 'LGPL-3',
-    'depends': ['base','web'],
+    'depends': ['base', 'web', 'base_automation'],
     'data': [
         'security/ir.model.access.csv',
         'views/view_success_message.xml',
@@ -19,6 +19,7 @@
         'wizard/test_case_wizard_view.xml',
         'views/actions.xml',
         'data/zoho_config_region_data.xml',
+        'data/zoho_live_cron.xml',
     ],
     'assets': {
         'web.assets_backend': [
