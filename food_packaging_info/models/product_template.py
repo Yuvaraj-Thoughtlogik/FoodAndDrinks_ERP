@@ -73,6 +73,10 @@ class ProductTemplate(models.Model):
         string="Origin",
         help="Country of origin. Example: Salmon (Salmo salar)/FARMED in Norway"
     )
+    catch_area = fields.Char(
+        string="Catch Area",
+        help="Area where the fish was caught. Example: FAO 27 North East Atlantic"
+    )
 
     stk_purchase_analysis = fields.Char(
         string='Purchase Analysis',
