@@ -16,7 +16,7 @@
                     <field name="stk_type_id" />
                     <field name="cut_id" options="{'no_create_edit': False}" />
                     <field name="origin_country" placeholder="e.g. Salmon / FARMED in Norway" />
-                    <field name="catch_area" placeholder="e.g. FAO 27 North East Atlantic" />
+                    <field name="catch_area"  />
                 </xpath>
 
             </field>
