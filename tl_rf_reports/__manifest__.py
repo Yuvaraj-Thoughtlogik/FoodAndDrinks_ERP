@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     'name': "Regal Fish Reports",
-    'version': '19.0.1.0.0',
+    'version': '19.0.1.0.2',
     'summary': "Dock Weight Breakdown Report and Analytics for Regal Fish",
     'description': """
         Regal Fish Reports Module
@@ -20,6 +20,7 @@
         'base',
         'web',
         'sale',
+        'account',
         'stock',
         'purchase',
         'mrp',
@@ -37,6 +38,8 @@
         'wizard/prediction_report_wizard_views.xml',
         'wizard/active_batch_report_wizard_views.xml',
         'wizard/round_batch_activity_wizard_views.xml',
+        'wizard/product_label_wizard_views.xml',
+        'wizard/mrp_production_label_wizard_views.xml',
         'report/dock_weight_breakdown_report_views.xml',
         'report/packing_list_report_views.xml',
         'report/requirement_report_views.xml',
@@ -51,6 +54,7 @@
         'report/driver_packing_list_report.xml',
         'report/purchase_order_report_actions.xml',
         'report/purchase_order_report_templates.xml',
+        'report/driver_copy_report_views.xml',
         'report/frozen_label_report_views.xml',
         'report/plain_frozen_label_report_views.xml',
         'report/plain_label_report_views.xml',
@@ -66,7 +70,6 @@
     'assets': {
         'web.assets_backend': [
             'tl_rf_reports/static/src/scss/horizontal_checkboxes.scss',
-            'tl_rf_reports/static/src/js/print_and_open_lines.js',
         ],
     },
     'installable': True,

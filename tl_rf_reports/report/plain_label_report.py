@@ -40,6 +40,8 @@ from reportlab.platypus import (
 
 from odoo import api, models
 
+from .label_fit import build_fitted_label, label_cache_key
+
 # --- Plain Label page size: 100mm x 130mm Portrait standard thermal roll size. ---
 PAGE_WIDTH = 100 * mm
 PAGE_HEIGHT = 130 * mm
@@ -51,17 +53,17 @@ PRINTABLE_HEIGHT = PAGE_HEIGHT - (2 * (LABEL_MARGIN + INNER_PADDING))
 GREEN_COLOR = colors.HexColor('#008000')
 
 
-def _label_circle_flowable():
+def _label_circle_flowable(scale=1.0):
     """Draws the official UK health mark oval stamp: 'GB / GG476'"""
-    w, h = 18 * mm, 12 * mm
+    w, h = 18 * mm * scale, 12 * mm * scale
     d = Drawing(w, h)
     d.add(Ellipse(
         w / 2, h / 2,
-        (w / 2) - 0.4 * mm, (h / 2) - 0.4 * mm,
-        strokeWidth=1.0, strokeColor=colors.black, fillColor=None,
+        (w / 2) - 0.4 * mm * scale, (h / 2) - 0.4 * mm * scale,
+        strokeWidth=max(0.6, 1.0 * scale), strokeColor=colors.black, fillColor=None,
     ))
-    d.add(String(w / 2, (h / 2) + 0.8 * mm, "GB", fontName='Helvetica-Bold', fontSize=8, textAnchor='middle'))
-    d.add(String(w / 2, (h / 2) - 2.8 * mm, "GG476", fontName='Helvetica-Bold', fontSize=8, textAnchor='middle'))
+    d.add(String(w / 2, (h / 2) + 0.8 * mm * scale, "GB", fontName='Helvetica-Bold', fontSize=8 * scale, textAnchor='middle'))
+    d.add(String(w / 2, (h / 2) - 2.8 * mm * scale, "GG476", fontName='Helvetica-Bold', fontSize=8 * scale, textAnchor='middle'))
     return d
 
 
@@ -179,8 +181,8 @@ class ProductionLabelReportPlain(models.AbstractModel):
     _description = 'Production Label Report Data - Plain Label (Frozen)'
     _inherit = 'report.tl_rf_reports.report_production_label_document_courier'
 
-    def _label_circle_flowable(self):
-        return _label_circle_flowable()
+    def _label_circle_flowable(self, scale=1.0):
+        return _label_circle_flowable(scale)
 
     def _format_html_to_reportlab(self, html_text):
         return _format_html_to_reportlab(html_text)
@@ -191,7 +193,7 @@ class ProductionLabelReportPlain(models.AbstractModel):
     # Font sizes below this fraction of their original size are not tried -
     # text would become illegible on a printed thermal label before that
     # point, so this is the floor for the auto-shrink-to-fit logic.
-    MIN_FONT_SCALE = 0.55
+    MIN_FONT_SCALE = 0.4
 
     def _plain_label_styles(self, scale=1.0):
         """Builds the label's paragraph styles. `scale` multiplies every
@@ -359,11 +361,11 @@ class ProductionLabelReportPlain(models.AbstractModel):
             nutrition_flowables.append(Paragraph(line_text, style))
 
         # Right Column: GB GG476 Oval Stamp
-        oval_flow = _label_circle_flowable()
+        oval_flow = _label_circle_flowable(scale)
 
         # Build bottom 3-column table
-        left_col_w = 26.0 * mm
-        right_col_w = 19.0 * mm
+        left_col_w = 26.0 * mm * max(scale, 0.75)
+        right_col_w = 19.0 * mm * scale
         mid_col_w = PRINTABLE_WIDTH - (left_col_w + right_col_w)
 
         bottom_table = Table(
@@ -403,41 +405,32 @@ class ProductionLabelReportPlain(models.AbstractModel):
             total_height += flowable_height
         return total_height
 
-    def _build_fitted_story(self, label, index, total_labels):
-        """Builds the flowables for one label, shrinking the font scale
-        (and proportionally the spacing) as many times as needed so the
-        whole label - however long the ingredients/cooking instructions
-        text turns out to be - fits within one physical page instead of
-        spilling onto a second page. Every label is exactly one page;
-        nothing is ever cut off mid-content, it is just rendered smaller."""
-        scale = 1.0
-        story = self._plain_label_flowables(label, index, total_labels, self._plain_label_styles(scale), scale)
+    def _build_fitted_story(self, label, index, total_labels, fit_cache=None):
+        """Builds the flowables for one label. Finds the largest font scale
+        (spacing and stamp scale with it) at which the whole label fits the
+        fixed 100mm x 130mm page. If the content is still too long at
+        MIN_FONT_SCALE, it is shrunk as a block. Every label is exactly one
+        page and nothing is cut off."""
+        def build(scale):
+            return self._plain_label_flowables(
+                label, index, total_labels, self._plain_label_styles(scale), scale
+            )
+        return build_fitted_label(
+            build, PRINTABLE_WIDTH, PRINTABLE_HEIGHT, self.MIN_FONT_SCALE,
+            cache=fit_cache, cache_key=label_cache_key(label),
+        )
 
-        for _ in range(8):
-            height = self._measure_story_height(story, PRINTABLE_WIDTH)
-            if height <= PRINTABLE_HEIGHT:
-                return story
-            if scale <= self.MIN_FONT_SCALE:
-                # Already at the smallest size we're willing to print at;
-                # this is the best fit available.
-                return story
-            # Shrinking text isn't perfectly linear (fewer/shorter wrapped
-            # lines as well as smaller line height), so re-measure after
-            # each shrink rather than computing the final scale in one go.
-            ratio = PRINTABLE_HEIGHT / height
-            scale = max(self.MIN_FONT_SCALE, scale * ratio * 0.98)
-            story = self._plain_label_flowables(label, index, total_labels, self._plain_label_styles(scale), scale)
-
-        return story
-
-    def generate_pdf(self, wizard):
+    def generate_pdf(self, wizard, label_lines=None):
         """Returns the finished Plain Label PDF (bytes), or None if there
         is nothing to print. One physical label per page at the 100mm x 130mm
         size with the approved green-bordered Plain Label design. However
         long the product's ingredients/cooking-instructions/nutrition text
         turns out to be, the label is shrunk to fit on that one page rather
         than overflowing onto a second page (see _build_fitted_story)."""
-        label_lines = wizard._get_plain_label_data()
+        # label_lines is optional: the Production Label wizard passes it (None
+        # for non-Fresh labels), and the Product Label wizard does not.
+        if label_lines is None:
+            label_lines = wizard._get_plain_label_data()
         if not label_lines:
             return None
 
@@ -456,11 +449,14 @@ class ProductionLabelReportPlain(models.AbstractModel):
             return _PlainLabelCanvas(*args, **kwargs)
 
         story = []
+        fit_cache = {}
         for index, label in enumerate(label_lines):
             if index:
                 story.append(PageBreak())
-            story.extend(self._build_fitted_story(label, index, total_labels))
+            story.extend(self._build_fitted_story(label, index, total_labels, fit_cache))
 
+        doc.title = 'Plain Labels'  # PDF metadata - shown by browser PDF viewers
+        doc.author = self.env.company.name or ''
         doc.build(story, canvasmaker=_make_canvas)
         pdf_value = buffer.getvalue()
         buffer.close()

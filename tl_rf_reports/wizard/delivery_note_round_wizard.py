@@ -16,7 +16,7 @@ class DeliveryNoteRoundWizard(models.TransientModel):
         ],
         string='Delivery Channel',
         required=True,
-        default='courier',
+        default='regal_van',
         help="Select delivery channel for the delivery note report."
     )
     delivery_date_from = fields.Date(

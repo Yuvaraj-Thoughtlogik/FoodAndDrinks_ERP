@@ -404,6 +404,8 @@ class ReportDeliveryNoteRoundCourier(DeliveryNoteReportMixin, models.AbstractMod
             c.disclaimer_text = disclaimer_text
             return c
 
+        doc.title = 'Delivery Note Round - Courier'  # PDF metadata - shown by browser PDF viewers
+        doc.author = self.env.company.name or ''
         doc.build(story, canvasmaker=_make_canvas)
         pdf_value = buffer.getvalue()
         buffer.close()

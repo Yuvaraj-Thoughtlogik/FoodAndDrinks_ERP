@@ -13,11 +13,13 @@ class BatchReportWizard(models.TransientModel):
         selection=[
             ('regal_van', 'Regal Van Delivery'),
             ('courier', 'Courier Delivery'),
+            ('both', 'Both'),
         ],
         string='Delivery Channel',
         required=True,
         default='regal_van',
-        help="Select delivery channel for the report."
+        help="Select delivery channel for the report. 'Both' merges Regal Van and Courier "
+             "lines into one Depot -> Category report, courier lines listed under their depot."
     )
     delivery_date_from = fields.Date(
         string='Delivery Date From',
@@ -59,6 +61,72 @@ class BatchReportWizard(models.TransientModel):
         default=False,
         help="When unchecked, Late Orders are excluded. When checked, Late Orders are filtered."
     )
+    report_type = fields.Selection(
+        selection=[
+            ('normal', 'Weight Breakdown Report'),
+            ('all', 'All Weight Breakdown Report'),
+            ('late', 'Late Order'),
+        ],
+        string='Report Type',
+        default='normal',
+        required=True,
+        help="Weight Breakdown: normal order lines only. All Weight Breakdown: normal and "
+             "late order lines combined. Late Order: late order lines only, with the weight "
+             "added/removed by late changes (ALT's report)."
+    )
+
+    @api.onchange('report_type')
+    def _onchange_report_type(self):
+        self.include_late_orders = self.report_type == 'late'
+
+    def _is_late_report(self):
+        """Late Order report: late lines only, ALT's layout."""
+        self.ensure_one()
+        return self.report_type == 'late'
+
+    def _line_matches_late(self, line):
+        """Late filter for one sale order line: All Weight Breakdown takes
+        every line, the other two keep only non-late / late lines."""
+        if self.report_type == 'all':
+            return True
+        return bool(line.is_late_order) == self._is_late_report()
+
+    def _late_domain(self, field='is_late_order'):
+        """Same late filter as _line_matches_late(), as a domain."""
+        self.ensure_one()
+        if self.report_type == 'all':
+            return []
+        return [(field, '=', self._is_late_report())]
+
+    @api.model
+    def _default_category_ids(self):
+        return self.env['product.category'].search([('name', '=ilike', 'Fresh')])
+
+    category_ids = fields.Many2many(
+        'product.category',
+        'batch_report_wizard_category_rel',
+        'wizard_id',
+        'category_id',
+        string='Product Categories',
+        default=_default_category_ids,
+        help="Only products in these categories (or their sub-categories) are included. "
+             "Leave empty to include all categories."
+    )
+
+    def _get_filter_category_ids(self):
+        """Selected categories plus their sub-categories, or an empty list
+        when no category is selected (= no filtering)."""
+        self.ensure_one()
+        if not self.category_ids:
+            return []
+        return self.env['product.category'].search([('id', 'child_of', self.category_ids.ids)]).ids
+
+    def _line_matches_category(self, line, categ_ids=None):
+        """True when the sale order line's product falls within the wizard's
+        category filter (always True when no category is selected)."""
+        if categ_ids is None:
+            categ_ids = self._get_filter_category_ids()
+        return not categ_ids or line.product_id.categ_id.id in categ_ids
 
     # Legacy / alias compatibility
     start_date = fields.Date(
@@ -93,193 +161,110 @@ class BatchReportWizard(models.TransientModel):
             'target': 'self',
         }
 
+    def _channel_label(self):
+        return {
+            'regal_van': _("Regal Van Delivery"),
+            'courier': _("Courier Delivery"),
+            'both': _("Regal Van or Courier Delivery"),
+        }.get(self.delivery_channel, '')
+
     def action_print_report(self):
-        """Validates eligible batches or courier orders and triggers the Dock
-        Weight Breakdown Report.
+        """Builds the Dock Weight Breakdown PDF directly with ReportLab
+        (generate_pdf() on the report model) and returns it as a download.
 
-        The PDF is now built directly with ReportLab (generate_pdf() on the
-        report model) instead of QWeb+wkhtmltopdf, so the report action is a
-        synchronous download rather than the old report_action() call - see
-        report/dock_weight_breakdown_report.py. The "print report + open the
-        underlying lines" client action wrapping (print_and_open_lines) is
-        unchanged; only the report_action piece inside it is now an
-        ir.actions.act_url download."""
+        Report Type picks which lines are included (normal / all / late -
+        see _line_matches_late()), Delivery Channel which orders: Regal Van
+        (batch-based), Courier, or Both merged into the Regal Van layout."""
         self.ensure_one()
+        self.include_late_orders = self._is_late_report()
+        date_from_str = self.delivery_date_from.strftime('%d/%m/%Y')
+        date_to_str = self.delivery_date_to.strftime('%d/%m/%Y')
 
-        if self.delivery_channel == 'courier':
-            order_domain = [
-                ('delivery_channel', '=', 'courier'),
-                ('state', 'in', ['sale', 'done']),
+        if self.delivery_channel == 'regal_van':
+            domain = [
                 ('delivery_date', '>=', self.delivery_date_from),
                 ('delivery_date', '<=', self.delivery_date_to),
-                # Late is line-based (order flagged late, line added after
-                # confirm, or line qty changed after confirm) - matching on
-                # order_line.is_late_order picks up orders with at least one
-                # qualifying line, not just orders flagged late as a whole.
-                ('order_line.is_late_order', '=', bool(self.include_late_orders)),
             ]
-
-            matching_orders = self.env['sale.order'].search(order_domain)
-            if not matching_orders:
+            if self.depot_ids:
+                domain.append(('depot_id', 'in', self.depot_ids.ids))
+            if not self.env['round.management.batch'].search_count(domain):
+                depot_names = ", ".join(self.depot_ids.mapped('name')) if self.depot_ids else ""
+                depot_label = f" for depot(s) '{depot_names}'" if depot_names else ""
                 raise UserError(_(
-                    "No confirmed Courier Delivery orders found with delivery dates between %s and %s."
-                ) % (
-                    self.delivery_date_from.strftime('%d/%m/%Y'),
-                    self.delivery_date_to.strftime('%d/%m/%Y'),
-                ))
-
-            report_model = self.env['report.tl_rf_reports.report_dock_weight_breakdown']
-            pdf_content = report_model.generate_pdf(self)
-            if not pdf_content:
-                raise UserError(_(
-                    "No confirmed Courier Delivery orders with matching product weights were found with "
-                    "delivery dates between %s and %s."
-                ) % (
-                    self.delivery_date_from.strftime('%d/%m/%Y'),
-                    self.delivery_date_to.strftime('%d/%m/%Y'),
-                ))
-            report_act = self._download_action(
-                pdf_content, f"Courier_Dock_Weight_{self.delivery_date_from.strftime('%Y%m%d')}.pdf"
-            )
-            lines_act = self.action_view_lines()
-            return {
-                'type': 'ir.actions.client',
-                'tag': 'print_and_open_lines',
-                'params': {
-                    'report_action': report_act,
-                    'lines_action': lines_act,
-                }
-            }
-
-        # Regal Van Delivery (Batch-based)
-        domain = [
-            ('delivery_date', '>=', self.delivery_date_from),
-            ('delivery_date', '<=', self.delivery_date_to),
-        ]
-        if self.depot_ids:
-            domain.append(('depot_id', 'in', self.depot_ids.ids))
-
-        batches = self.env['round.management.batch'].search(domain)
-        if not batches:
-            depot_names = ", ".join(self.depot_ids.mapped('name')) if self.depot_ids else ""
-            depot_label = f" for depot(s) '{depot_names}'" if depot_names else ""
-            raise UserError(_(
-                "No batches found with delivery dates between %s and %s%s."
-            ) % (
-                self.delivery_date_from.strftime('%d/%m/%Y'),
-                self.delivery_date_to.strftime('%d/%m/%Y'),
-                depot_label
-            ))
-
-        # Check if batches have linked sale orders
-        eligible_orders = batches.mapped('order_ids').filtered(
-            lambda so: so.state in ('sale', 'done') and getattr(so, 'delivery_channel', False) in ('regal_van', False)
-        )
-        is_late = bool(self.include_late_orders)
-        # Late is line-based (order flagged late, line added after confirm,
-        # or line qty changed after confirm) - keep orders with at least one
-        # qualifying line, not just orders flagged late as a whole.
-        eligible_orders = eligible_orders.filtered(
-            lambda so: any(
-                bool(l.is_late_order) == is_late
-                for l in so.order_line
-                if not l.display_type and l.product_id and l.product_uom_qty > 0
-            )
-        )
-
-        if not eligible_orders:
-            raise UserError(_("Eligible batches were found, but they do not contain any matching Regal Van Delivery sale orders."))
+                    "No batches found with delivery dates between %s and %s%s."
+                ) % (date_from_str, date_to_str, depot_label))
 
         report_model = self.env['report.tl_rf_reports.report_dock_weight_breakdown']
         pdf_content = report_model.generate_pdf(self)
         if not pdf_content:
             raise UserError(_(
-                "Eligible batches were found, but they do not contain any matching Regal Van Delivery "
-                "sale order lines with weight data."
-            ))
-        report_act = self._download_action(
-            pdf_content, f"Dock_Weight_Breakdown_{self.delivery_date_from.strftime('%Y%m%d')}.pdf"
+                "No confirmed %s order lines matching the selected report type, depots and "
+                "categories were found with delivery dates between %s and %s."
+            ) % (self._channel_label(), date_from_str, date_to_str))
+
+        prefix = {
+            'courier': 'Courier_Dock_Weight_',
+            'both': 'Dock_Weight_Breakdown_Combined_',
+        }.get(self.delivery_channel, 'Dock_Weight_Breakdown_')
+        if self.report_type == 'all':
+            prefix = 'All_' + prefix
+        elif self.report_type == 'late':
+            prefix = 'Late_' + prefix
+        return self._download_action(
+            pdf_content, f"{prefix}{self.delivery_date_from.strftime('%Y%m%d')}.pdf"
         )
-        lines_act = self.action_view_lines()
-        # return {
-        #     'type': 'ir.actions.client',
-        #     'tag': 'print_and_open_lines',
-        #     'params': {
-        #         'report_action': report_act,
-        #         'lines_action': lines_act,
-        #     }
-        # }
-        return report_act
 
     def action_view_lines(self):
-        """Opens the Sale Order Line list view with grouping by category (Courier) or depot and category (Regal Van)."""
+        """Opens the Sale Order Line list view matching the report's filters,
+        grouped by category (Courier) or depot and category (Regal Van/Both)."""
         self.ensure_one()
+        categ_ids = self._get_filter_category_ids()
 
-        if self.delivery_channel == 'courier':
-            domain = [
-                ('delivery_channel', '=', 'courier'),
-                ('order_id.state', 'in', ['sale', 'done']),
-                ('order_id.delivery_date', '>=', self.delivery_date_from),
-                ('order_id.delivery_date', '<=', self.delivery_date_to),
-                ('display_type', '=', False),
-                ('product_id', '!=', False),
-                ('is_late_order', '=', bool(self.include_late_orders)),
-            ]
-
-            matching_lines = self.env['sale.order.line'].search_count(domain)
-            if not matching_lines:
-                raise UserError(_(
-                    "No confirmed Courier Delivery order lines found with delivery dates between %s and %s."
-                ) % (
-                    self.delivery_date_from.strftime('%d/%m/%Y'),
-                    self.delivery_date_to.strftime('%d/%m/%Y'),
-                ))
-
-            context = {
-                'search_default_group_by_category': 1,
-            }
-            return {
-                'name': _('Courier Dock Weight - Order Lines'),
-                'type': 'ir.actions.act_window',
-                'res_model': 'sale.order.line',
-                'view_mode': 'list,form',
-                'views': [
-                    (self.env.ref('tl_rf_reports.view_sale_order_line_dock_weight_tree').id, 'list'),
-                    (False, 'form'),
-                ],
-                'search_view_id': [self.env.ref('tl_rf_reports.view_sale_order_line_dock_weight_search').id, 'search'],
-                'domain': domain,
-                'context': context,
-            }
-
-        # Regal Van Delivery (Batch & Depot based)
         domain = [
             ('order_id.state', 'in', ['sale', 'done']),
-            ('order_id.delivery_channel', 'in', ['regal_van', False]),
             ('order_id.delivery_date', '>=', self.delivery_date_from),
             ('order_id.delivery_date', '<=', self.delivery_date_to),
             ('display_type', '=', False),
             ('product_id', '!=', False),
         ]
-        if self.depot_ids:
-            domain.append(('depot_id', 'in', self.depot_ids.ids))
-        domain.append(('is_late_order', '=', bool(self.include_late_orders)))
+        if self.delivery_channel == 'courier':
+            domain.append(('order_id.delivery_channel', '=', 'courier'))
+        elif self.delivery_channel == 'both':
+            domain.append(('order_id.delivery_channel', 'in', ['regal_van', 'courier', False]))
+            if self.depot_ids:
+                # Courier lines are listed under their line depot, else the order's warehouse.
+                domain += [
+                    '|', ('depot_id', 'in', self.depot_ids.ids),
+                    '&', ('depot_id', '=', False), ('order_id.warehouse_id', 'in', self.depot_ids.ids),
+                ]
+        else:
+            domain.append(('order_id.delivery_channel', 'in', ['regal_van', False]))
+            if self.depot_ids:
+                domain.append(('depot_id', 'in', self.depot_ids.ids))
+        domain += self._late_domain()
+        if categ_ids:
+            domain.append(('product_id.categ_id', 'in', categ_ids))
 
-        matching_lines = self.env['sale.order.line'].search_count(domain)
-        if not matching_lines:
+        if not self.env['sale.order.line'].search_count(domain):
             raise UserError(_(
-                "No confirmed Regal Van Delivery order lines found with delivery dates between %s and %s."
+                "No confirmed %s order lines found with delivery dates between %s and %s."
             ) % (
+                self._channel_label(),
                 self.delivery_date_from.strftime('%d/%m/%Y'),
                 self.delivery_date_to.strftime('%d/%m/%Y'),
             ))
 
-        context = {
-            'search_default_group_by_depot': 1,
-            'search_default_group_by_category': 1,
-        }
+        if self.delivery_channel == 'courier':
+            name = _('Courier Dock Weight - Order Lines')
+            context = {'search_default_group_by_category': 1}
+        else:
+            name = _('Dock Weight Breakdown - Order Lines')
+            context = {
+                'search_default_group_by_depot': 1,
+                'search_default_group_by_category': 1,
+            }
         return {
-            'name': _('Dock Weight Breakdown - Order Lines'),
+            'name': name,
             'type': 'ir.actions.act_window',
             'res_model': 'sale.order.line',
             'view_mode': 'list,form',

@@ -300,6 +300,8 @@ class ReportCourierProductionReport(models.AbstractModel):
             c.printed_date_text = printed_date_str
             return c
 
+        doc.title = 'Courier Fresh Production Report'  # PDF metadata - shown by browser PDF viewers
+        doc.author = self.env.company.name or ''
         doc.build(story, canvasmaker=_make_canvas)
         pdf_value = buffer.getvalue()
         buffer.close()
