@@ -57,6 +57,12 @@ class ProductLabelWizard(models.TransientModel):
              "and Chilled Front Sleeve Label. Use By = Production Date + the "
              "product's expiry days (also for the Fresh Label).",
     )
+    use_by_date = fields.Date(
+        string='Use By',
+        help="Optional. Leave empty to calculate Use By as Production Date + "
+             "the product's expiry days. Enter a date to print that date "
+             "instead (Fresh, Frozen, Plain and Chilled Front Sleeve labels).",
+    )
     freeze_date = fields.Date(
         string='Freeze Date',
         default=fields.Date.context_today,
@@ -199,8 +205,12 @@ class ProductLabelWizard(models.TransientModel):
         return (base_date + timedelta(days=days)).strftime(date_format)
 
     def _use_by_display(self, product, date_format='%d %B, %Y'):
-        """Use By from the wizard's Production Date."""
+        """Use By date for the label.
+        1. Use By entered on the wizard -> printed as is (manual override).
+        2. Otherwise -> Production Date + the product's expiry days."""
         self.ensure_one()
+        if self.use_by_date:
+            return self.use_by_date.strftime(date_format)
         return self._get_expiry_display(product, self.production_date, date_format)
 
     # ------------------------------------------------------------------

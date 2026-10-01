@@ -39,6 +39,9 @@
                            invisible="not ((category_name == 'Frozen' and frozen_label_type in ('frozen_label', 'plain_label', 'plain_frozen_label')) or (category_name == 'Chilled' and chilled_label_type == 'front_sleeve_label') or category_name == 'Fresh')">
                         <field name="production_date"
                                invisible="not ((category_name == 'Frozen' and frozen_label_type in ('frozen_label', 'plain_label')) or (category_name == 'Chilled' and chilled_label_type == 'front_sleeve_label') or category_name == 'Fresh')"/>
+                        <field name="use_by_date"
+                               placeholder="Leave empty to calculate"
+                               invisible="not ((category_name == 'Frozen' and frozen_label_type in ('frozen_label', 'plain_label')) or (category_name == 'Chilled' and chilled_label_type == 'front_sleeve_label') or category_name == 'Fresh')"/>
                         <field name="freeze_date"
                                invisible="not (category_name == 'Frozen' and frozen_label_type == 'plain_frozen_label')"/>
                     </group>
