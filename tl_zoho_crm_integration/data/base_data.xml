@@ -1,12 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <data noupdate="1">
+    <data >
 <!--        <record id="zoho_config_crm_application" model="zoho.config.application">-->
 <!--            <field name="name">Zoho CRM</field>-->
 <!--            <field name="addon_name">tl_zoho_crm_integration</field>-->
 <!--        </record>-->
 
-        <record id="tl_odoo_zoho_integration.zoho_config_record" model="zoho.config">
+        <!-- forcecreate="0": skip (instead of failing the upgrade) when the configuration record was deleted. -->
+        <record id="tl_odoo_zoho_integration.zoho_config_record" model="zoho.config" forcecreate="0">
             <field name="scope_ids"
                    eval="[
                    (4, ref('tl_zoho_crm_integration.zoho_scope_zohocrm_users_all')),
