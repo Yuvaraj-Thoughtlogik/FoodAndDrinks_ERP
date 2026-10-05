@@ -1,6 +1,9 @@
 import psycopg2
 
 from odoo import models, fields, api
+from odoo.exceptions import ValidationError
+
+SYNC_SETTING_FIELDS = ('zoho_to_odoo', 'odoo_to_zoho', 'sync_frequency')
 
 
 class ZohoConfigSchedule(models.Model):
@@ -16,17 +19,17 @@ class ZohoConfigSchedule(models.Model):
                                          ondelete='cascade')
     zoho_app_name = fields.Char(related='zoho_config_app_id.name')
     odoo_model_name = fields.Char(related='module_id.odoo_model_name')
-    zoho_to_odoo = fields.Boolean(string='Zoho to Odoo', related='zoho_config_app_id.zoho_to_odoo')
-    odoo_to_zoho = fields.Boolean(string='Odoo to Zoho', related='zoho_config_app_id.odoo_to_zoho')
+    # Per-module sync settings.
+    zoho_to_odoo = fields.Boolean(string='Zoho to Odoo', default=True)
+    odoo_to_zoho = fields.Boolean(string='Odoo to Zoho')
     sync_frequency = fields.Selection(
         [
-            ('1_hour', 'One Hour'),
-            ('2_hour', 'Two Hour'),
-            ('once_a_day', 'Once a Day'),
             ('live', 'Live (Instant)'),
+            ('1_hour', 'Every Hour'),
+            ('2_hour', 'Every 2 Hours'),
+            ('once_a_day', 'Once a Day'),
         ],
-        string="Sync Frequency",
-        compute='_compute_sync_frequency',
+        string="Sync Frequency", default='once_a_day', required=True,
     )
     sync_type = fields.Selection([('one_way', 'One Way'), ('two_way', 'Two Way')], compute='_compute_sync_type', store=True)
     config_log_ids = fields.One2many(string="Logs", comodel_name='zoho.config.logs', inverse_name='config_schedule_id')
@@ -46,10 +49,16 @@ class ZohoConfigSchedule(models.Model):
         crons.sudo().unlink()
         return res
 
-    @api.depends('zoho_config_app_id.sync_frequency')
-    def _compute_sync_frequency(self):
+    def write(self, vals):
+        if any(key in vals for key in SYNC_SETTING_FIELDS):
+            self.zoho_config_app_id.re_schedule = True
+        return super().write(vals)
+
+    @api.constrains('zoho_to_odoo', 'odoo_to_zoho')
+    def _check_sync_direction(self):
         for rec in self:
-            rec.sync_frequency = rec.zoho_config_app_id.sync_frequency
+            if not rec.zoho_to_odoo and not rec.odoo_to_zoho:
+                raise ValidationError(f"Select at least one sync direction for {rec.module_id.name}.")
 
     @api.depends('module_id', 'zoho_app_name', 'zoho_to_odoo', 'odoo_to_zoho')
     def _compute_name(self):
@@ -67,7 +76,7 @@ class ZohoConfigSchedule(models.Model):
         for rec in self:
             rec.sequence = rec.module_id.sequence
 
-    @api.depends('zoho_config_app_id.zoho_to_odoo', 'zoho_config_app_id.odoo_to_zoho')
+    @api.depends('zoho_to_odoo', 'odoo_to_zoho')
     def _compute_sync_type(self):
         for rec in self:
             rec.sync_type = "two_way" if rec.zoho_to_odoo and rec.odoo_to_zoho else "one_way"

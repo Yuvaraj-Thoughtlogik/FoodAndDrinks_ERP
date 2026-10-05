@@ -40,21 +40,29 @@ class ZohoApplication(models.Model):
         for schedule in self.schedule_ids:
             schedule.create_crm_scheduled_action()
 
-        frequency_label = FREQUENCY_LABELS.get(self.sync_frequency, self.sync_frequency)
-        if self.sync_frequency == 'live' and self.zoho_to_odoo:
-            interval_label = dict(self._fields['live_pull_interval'].selection)[self.live_pull_interval].lower()
-            if all(self.schedule_ids.sudo().mapped('notify_channel_id')):
-                frequency_label += (f".\nZoho changes arrive instantly through Zoho notifications, "
-                                    f"and Zoho is also checked {interval_label}")
+        lines = []
+        for schedule in self.schedule_ids:
+            if schedule.zoho_to_odoo and schedule.odoo_to_zoho:
+                direction = "Zoho <-> Odoo"
+            elif schedule.zoho_to_odoo:
+                direction = "Zoho → Odoo"
             else:
-                frequency_label += (f".\nZoho changes are checked {interval_label} "
-                                    f"(set a public URL in the Zoho configuration to receive them instantly)")
+                direction = "Odoo → Zoho"
+            frequency = FREQUENCY_LABELS.get(schedule.sync_frequency, schedule.sync_frequency)
+            lines.append(f"- {schedule.module_id.name}: {direction}, {frequency}")
+
+        live_pull = self.schedule_ids.filtered(lambda s: s.sync_frequency == 'live' and s.zoho_to_odoo)
+        if live_pull:
+            interval_label = dict(self._fields['live_pull_interval'].selection)[self.live_pull_interval].lower()
+            if all(live_pull.sudo().mapped('notify_channel_id')):
+                lines.append(f"Live Zoho changes arrive instantly through Zoho notifications, "
+                             f"and Zoho is also checked {interval_label}.")
+            else:
+                lines.append(f"Live Zoho changes are checked {interval_label} "
+                             f"(set a public URL in the Zoho configuration to receive them instantly).")
         self.write({
             'cron_ids': [fields.Command.link(cron.id) for cron in self.schedule_ids.cron_id],
             're_schedule': False,
-            'notify_msg': (
-                f"A scheduled synchronization has been set up to run {frequency_label}. "
-                f"\nIt will synchronize the following modules: {', '.join(self.schedule_ids.module_id.mapped('name'))}."
-            ),
+            'notify_msg': "Scheduled synchronization has been set up for the following modules:\n" + "\n".join(lines),
         })
         return {'type': 'ir.actions.client', 'tag': 'reload'}

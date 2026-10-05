@@ -43,22 +43,14 @@
                     <group>
                         <group>
                             <field name="name" readonly="1"/>
-                            <label for="zoho_to_odoo"/>
-                            <div class="oe_row">
-                                <field name="zoho_to_odoo" string="Sync Type"/>
-                                <label for="zoho_to_odoo" string="Zoho to Odoo"/>
-                                <field name="odoo_to_zoho" string="Odoo to Zoho"/>
-                                <label for="odoo_to_zoho"/>
-                            </div>
-                            <field name="sync_frequency"/>
-                            <field name="live_pull_interval" invisible="sync_frequency != 'live' or not zoho_to_odoo"/>
+                            <field name="live_pull_interval" invisible="not has_live_pull"/>
                         </group>
                     </group>
 
                     <field name="notify_msg" invisible="re_schedule or not notify_msg" widget="notify_msg_widget" nolabel="1"/>
 
                     <div style="margin-bottom:30px;" class="alert alert-warning" role="alert" invisible="not re_schedule or not schedule_ids">
-                        The Sync Modules or Sync Frequency have been modified. The synchronization is still running on the old schedule. Please reschedule to apply the changes.
+                        The Sync Modules or their sync settings have been modified. The synchronization is still running on the old schedule. Please reschedule to apply the changes.
                     </div>
 
                     <notebook>
@@ -69,8 +61,10 @@
                                         <field name="sequence" widget="handle"/>
                                         <field name="module_id"/>
                                         <field name="odoo_model_name"/>
-                                        <field name="sync_type"/>
-                                        <field name="name"/>
+                                        <field name="zoho_to_odoo" widget="boolean_toggle"/>
+                                        <field name="odoo_to_zoho" widget="boolean_toggle"/>
+                                        <field name="sync_frequency"/>
+                                        <field name="name" optional="hide"/>
                                         <field name="last_sync" readonly="1"/>
                                         <button type="object" name="action_view_module" invisible="not module_id" class="btn-outline-primary shadow-sm btn-sm" string="View Module"/>
                                         <!--                                        <span style="display:block;width:5px;"></span>-->
@@ -82,9 +76,9 @@
                                                 <field name="module_id"/>
                                                 <label for="zoho_to_odoo"/>
                                                 <div class="oe_row">
-                                                    <field name="zoho_to_odoo" string="Sync Type"/>
+                                                    <field name="zoho_to_odoo"/>
                                                     <label for="zoho_to_odoo" string="Zoho to Odoo"/>
-                                                    <field name="odoo_to_zoho" string="Odoo to Zoho"/>
+                                                    <field name="odoo_to_zoho"/>
                                                     <label for="odoo_to_zoho"/>
                                                 </div>
                                                 <field name="sync_frequency"/>
@@ -112,8 +106,7 @@
         <field name="arch" type="xml">
             <list create="false" string="Zoho CRM Configuration">
                 <field name="name"/>
-                <field name="sync_type"/>
-                <field name="sync_frequency"/>
+                <field name="description"/>
             </list>
         </field>
     </record>
@@ -139,9 +132,8 @@
                         <a t-if="installed" invisible="not schedule_ids" name="action_active_all_view" type="object" role="menuitem" class="dropdown-item" >Active All Views</a>
                         <a t-if="installed" name="action_create_module" type="object" role="menuitem" class="dropdown-item" >Create Custom Module</a>
                         <a t-if="installed" name="action_deactivate_addon" type="object" role="menuitem" class="dropdown-item" >Deactivate</a>
-<!--                        <a name="unlink" type="object" role="menuitem" class="dropdown-item" >delete</a>-->
                     </t>
-                    <t t-name="card" class="zoho_app_kanban no-open">
+                    <t t-name="card" class="zoho_app_kanban">
                         <t t-set="installed" t-value="record.addon_state.raw_value == 'installed'"/>
                         <aside class="card-icon">
                             <field name="icon" widget="image_url" options="{'size': [70, 100]}"/>
@@ -180,12 +172,8 @@
                                         icon="fa-list-alt me-1"
                                         string="View Logs"
                                 />
-                                <a type="open" role="button" title="Open the Application"
-                                   class="btn btn-primary btn-sm shadow-sm">
-                                    <i  class="fa fa-folder-open me-1"/> Open
-                                </a>
                             </footer>
-                            <footer t-else="" class="card-footer d-flex gap-3" >
+                            <footer t-else="" class="card-footer d-flex gap-3 zoho_app_not_installed" >
                                 <button
                                         type="object"
                                         class="btn btn-primary btn-sm shadow-sm"

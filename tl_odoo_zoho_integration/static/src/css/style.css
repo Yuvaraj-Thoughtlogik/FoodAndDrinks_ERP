@@ -12,10 +12,15 @@
 .zoho_app_kanban .o_dropdown_kanban,.zoho_app_kanban button,.zoho_app_kanban .btn{
     pointer-events: auto !important;
 }
-.no-open{
+.no-open,
+article.zoho_app_kanban:has(.zoho_app_not_installed){
     pointer-events: none !important;
+    cursor: default;
     transform: unset !important;
     box-shadow: unset !important;
+}
+article.zoho_app_kanban {
+    cursor: pointer;
 }
 article.zoho_app_kanban:hover {
     transform: translateY(-2px);
