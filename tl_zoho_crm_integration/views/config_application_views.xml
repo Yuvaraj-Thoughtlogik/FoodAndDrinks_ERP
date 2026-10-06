@@ -26,7 +26,7 @@
                         class="btn-secondary"
                         string="Live Status"
                         icon="fa-heartbeat"
-                        invisible="sync_frequency != 'live' or addon_name != 'tl_zoho_crm_integration'"/>
+                        invisible="not has_live_schedule or addon_name != 'tl_zoho_crm_integration'"/>
             </xpath>
             <xpath expr="//sheet/group[1]" position="inside">
                 <group invisible="not schedule_ids or addon_name != 'tl_zoho_crm_integration'">

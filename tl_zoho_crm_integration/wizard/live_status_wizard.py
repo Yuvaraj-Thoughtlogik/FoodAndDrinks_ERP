@@ -50,16 +50,15 @@ class ZohoLiveStatus(models.TransientModel):
         sections = [("General", general_rows)]
         for schedule in app.schedule_ids:
             sections.append((schedule.module_id.name or schedule.name,
-                             self._check_schedule(app, schedule, watch_channels)))
+                             self._check_schedule(schedule, watch_channels)))
         return self._render(sections)
 
     def _check_general(self, app):
         """:return: ``(rows, watch_channels)``, the latter None when Zoho's channels are unknown"""
         rows = []
-        live = app.sync_frequency == 'live'
-        freq_label = dict(app._fields['sync_frequency'].selection).get(app.sync_frequency)
-        rows.append(("Sync frequency", OK if live else WARN,
-                     f"{freq_label}" if live else f"{freq_label}: live sync is not selected"))
+        live = app.schedule_ids.filtered(lambda s: s.sync_frequency == 'live')
+        rows.append(("Live modules", OK if live else WARN,
+                     ", ".join(live.module_id.mapped('name')) if live else "No module uses live sync"))
         if app.re_schedule:
             rows.append(("Schedule", WARN, "Settings changed since the last 'Schedule Sync': click it again"))
 
@@ -74,8 +73,8 @@ class ZohoLiveStatus(models.TransientModel):
         watch_channels = None
         if config:
             notify_url = config._get_notify_url()
-            if not app.zoho_to_odoo:
-                rows.append(("Zoho → Odoo", INFO, "Disabled for this application"))
+            if not any(live.mapped('zoho_to_odoo')):
+                rows.append(("Zoho → Odoo", INFO, "No live module syncs Zoho → Odoo"))
             elif not notify_url:
                 rows.append(("Public URL", WARN,
                              "Not set: Zoho changes are only checked periodically, not received instantly"))
@@ -127,12 +126,14 @@ class ZohoLiveStatus(models.TransientModel):
         channels = {str(channel.get('channel_id')): channel for channel in body.get('watch') or []}
         return channels, ("Zoho notification channels", OK, f"{len(channels)} active channel(s) on Zoho")
 
-    def _check_schedule(self, app, schedule, watch_channels):
+    def _check_schedule(self, schedule, watch_channels):
         rows = []
         now = fields.Datetime.now()
-        live = app.sync_frequency == 'live'
+        live = schedule.sync_frequency == 'live'
+        freq_label = dict(schedule._fields['sync_frequency'].selection).get(schedule.sync_frequency)
+        rows.append(("Sync frequency", OK if live else INFO, freq_label))
 
-        if app.odoo_to_zoho:
+        if schedule.odoo_to_zoho:
             rule = schedule.automation_id.with_context(active_test=False)
             if rule and rule.active:
                 rows.append(("Odoo → Zoho rule", OK, f"Automation rule '{rule.name}' active"))
@@ -141,7 +142,7 @@ class ZohoLiveStatus(models.TransientModel):
                              "No active automation rule: click 'Schedule Sync'" if live
                              else "Not live: pushed by the periodic sync"))
 
-        if app.zoho_to_odoo:
+        if schedule.zoho_to_odoo:
             channel_id = schedule.notify_channel_id
             if channel_id:
                 expired = schedule.notify_expiry and schedule.notify_expiry < now

@@ -16,16 +16,13 @@ class ZohoApplication(models.Model):
     icon = fields.Char(string='Icon', related='addon_id.icon')
     sync_type = fields.Selection([('1way_sync', 'One-way Sync'), ('2way_sync', 'Two-way Sync')], string="Sync type",
                                  default='1way_sync')
-    sync_frequency = fields.Selection([('1_hour', 'Every Hour'), ('2_hour', 'Every 2 Hours'), ('once_a_day', 'Once a Day'),
-                                       ('live', 'Live (Instant)')],
-                                      string="Sync Frequency", default='once_a_day', required=True)
     live_pull_interval = fields.Selection(
         [('5', 'Every 5 Minutes'), ('15', 'Every 15 Minutes'), ('30', 'Every 30 Minutes'), ('60', 'Every Hour')],
         string="Zoho Check Interval", default='15', required=True,
         help="With Live sync, how often Zoho is checked for changed records. This is the only way Zoho changes "
              "reach Odoo when no public URL is set for Zoho notifications, and a safety net otherwise.")
-    zoho_to_odoo = fields.Boolean(string='Zoho to Odoo', default=True)
-    odoo_to_zoho = fields.Boolean(string='Odoo to Zoho')
+    has_live_schedule = fields.Boolean(compute='_compute_has_live_schedule')
+    has_live_pull = fields.Boolean(compute='_compute_has_live_schedule')
 
     config_log_ids = fields.One2many(string="Logs", comodel_name='zoho.config.logs', inverse_name='zoho_config_app_id')
     schedule_ids = fields.One2many(comodel_name='zoho.config.schedule', string="Schedule", inverse_name='zoho_config_app_id')
@@ -36,21 +33,36 @@ class ZohoApplication(models.Model):
     re_schedule = fields.Boolean(string='Reschedule')
     notify_msg = fields.Text(string='Notify Message')
 
-    @api.depends('name', 'zoho_to_odoo', 'odoo_to_zoho', 'sync_frequency')
+    @api.model
+    def _describe_sync(self, zoho_to_odoo, odoo_to_zoho, sync_frequency):
+        freq_labels = dict(self.env['zoho.config.schedule']._fields['sync_frequency'].selection)
+        if zoho_to_odoo and odoo_to_zoho:
+            sync = "Two-way Sync: Zoho <-> Odoo"
+        elif zoho_to_odoo:
+            sync = "One-way Sync: Zoho → Odoo"
+        else:
+            sync = "One-way Sync: Odoo → Zoho"
+        if sync_frequency == 'live':
+            return f"{sync} instantly on every change"
+        return f"{sync}, {freq_labels.get(sync_frequency, '').lower()}"
+
+    @api.depends('schedule_ids.zoho_to_odoo', 'schedule_ids.odoo_to_zoho', 'schedule_ids.sync_frequency')
     def _compute_description(self):
-        freq_labels = dict(self._fields['sync_frequency'].selection)
         for rec in self:
-            if rec.zoho_to_odoo and rec.odoo_to_zoho:
-                sync = "Two-way Sync: Zoho <-> Odoo"
-            elif rec.zoho_to_odoo:
-                sync = "One-way Sync: Zoho → Odoo"
+            settings = {(s.zoho_to_odoo, s.odoo_to_zoho, s.sync_frequency) for s in rec.schedule_ids}
+            if not settings:
+                rec.description = "No modules configured for sync"
+            elif len(settings) > 1:
+                rec.description = f"Per-module sync settings across {len(rec.schedule_ids)} modules"
             else:
-                sync = "One-way Sync: Odoo → Zoho"
-            if rec.sync_frequency == 'live':
-                rec.description = f"{sync} instantly on every change"
-                continue
-            every = 'every' if rec.sync_frequency != 'once_a_day' else ''
-            rec.description = f"{sync} for {every} {freq_labels.get(rec.sync_frequency, '')} "
+                rec.description = rec._describe_sync(*settings.pop())
+
+    @api.depends('schedule_ids.sync_frequency', 'schedule_ids.zoho_to_odoo')
+    def _compute_has_live_schedule(self):
+        for rec in self:
+            live = rec.schedule_ids.filtered(lambda s: s.sync_frequency == 'live')
+            rec.has_live_schedule = bool(live)
+            rec.has_live_pull = any(live.mapped('zoho_to_odoo'))
 
     @api.onchange('schedule_ids')
     def _onchange_schedule_ids(self):
@@ -70,7 +82,7 @@ class ZohoApplication(models.Model):
                     added_ids.append(command[2]['module_id'])
             self.env['zoho.config.schedule'].browse(removed_ids).module_id.view_id.active = False
             self.env['zoho.config.module'].browse(added_ids).view_id.active = True
-        if any(key in vals for key in ('sync_frequency', 'schedule_ids', 'live_pull_interval')):
+        if any(key in vals for key in ('schedule_ids', 'live_pull_interval')):
             vals['re_schedule'] = True
         return super().write(vals)
 
