@@ -40,7 +40,7 @@ from reportlab.platypus import (
 
 from odoo import api, models
 
-from .label_fit import build_fitted_label, label_cache_key
+from .label_fit import FooterPush, build_fitted_label, label_cache_key
 
 # --- Plain Label page size: 100mm x 130mm Portrait standard thermal roll size. ---
 PAGE_WIDTH = 100 * mm
@@ -382,6 +382,7 @@ class ProductionLabelReportPlain(models.AbstractModel):
             ('TOPPADDING', (0, 0), (-1, -1), 0),
             ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
         ]))
+        story.append(FooterPush())  # pins dates / nutrition / GB stamp + address to the bottom edge
         story.append(bottom_table)
         story.append(Spacer(1, gap(1.5)))
 

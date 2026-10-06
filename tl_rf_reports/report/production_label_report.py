@@ -17,7 +17,7 @@ from odoo import models
 
 from odoo.tools.image import image_data_uri
 
-from .label_fit import LabelDocTemplate, build_fitted_label, label_cache_key
+from .label_fit import FooterPush, LabelDocTemplate, build_fitted_label, label_cache_key
 
 # Fixed physical label size - see paperformat_production_label in
 # production_label_report_views.xml (100mm x 130mm, zero margins on the
@@ -271,6 +271,7 @@ class ProductionLabelReport(models.AbstractModel):
             ('TOPPADDING', (0, 0), (-1, -1), 0),
             ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
         ]))
+        story.append(FooterPush())  # pins the GB stamp + 'x Of y' to the bottom edge
         story.append(footer_table)
 
         return story

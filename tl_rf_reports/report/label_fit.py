@@ -14,7 +14,7 @@ How a label is fitted:
    never flows onto a second page.
 """
 from reportlab.pdfgen import canvas as rl_canvas
-from reportlab.platypus import BaseDocTemplate, Frame, KeepInFrame, PageTemplate, SimpleDocTemplate
+from reportlab.platypus import BaseDocTemplate, Frame, KeepInFrame, PageTemplate, SimpleDocTemplate, Spacer
 
 # Lowest font scale the reflow search tries. Below this, KeepInFrame shrinks
 # the block instead.
@@ -23,6 +23,18 @@ DEFAULT_MIN_SCALE = 0.4
 FIT_EPSILON = 0.5
 # Binary search iterations - 10 gives a precision of about 0.06% of the scale.
 SEARCH_STEPS = 10
+
+
+class FooterPush(Spacer):
+    """Marker placed in a label's story just above its footer block.
+
+    It has zero height while the label is being fitted, so it never changes
+    the font scale. Once the scale is chosen, build_fitted_label() grows it
+    to fill the unused space. The footer block then sits on the bottom edge
+    of the label instead of floating under the content."""
+
+    def __init__(self):
+        super().__init__(1, 0)
 
 
 def _do_nothing(canvas_obj, doc):
@@ -124,4 +136,17 @@ def build_fitted_label(build_story, avail_width, avail_height, min_scale=DEFAULT
         scale = find_fit_scale(build_story, avail_width, avail_height, min_scale)
         if cache is not None and cache_key is not None:
             cache[cache_key] = scale
-    return keep_in_one_page(build_story(scale), avail_width, avail_height)
+    story = build_story(scale)
+    _push_footer_to_bottom(story, avail_width, avail_height)
+    return keep_in_one_page(story, avail_width, avail_height)
+
+
+def _push_footer_to_bottom(story, avail_width, avail_height):
+    """Grow the story's FooterPush marker (if any) to fill the empty space
+    under the content, so the footer block is pinned to the bottom edge."""
+    pushes = [f for f in story if isinstance(f, FooterPush)]
+    if not pushes:
+        return
+    used = measure_story_height(story, avail_width)
+    free = avail_height - FIT_EPSILON - used - 1.0  # 1pt safety margin
+    pushes[0].height = max(0.0, free)

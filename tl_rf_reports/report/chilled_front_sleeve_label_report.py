@@ -38,7 +38,7 @@ from reportlab.platypus import (
 
 from odoo import api, models
 
-from .label_fit import LabelDocTemplate, build_fitted_label, label_cache_key
+from .label_fit import FooterPush, LabelDocTemplate, build_fitted_label, label_cache_key
 
 # --- Chilled Front Sleeve Label page size: 100mm x 60mm standard thermal roll size. ---
 PAGE_WIDTH = 100 * mm
@@ -201,6 +201,7 @@ class ProductionLabelReportChilledFrontSleeve(models.AbstractModel):
         story.append(Spacer(1, gap(2.5)))
         warning_p1 = "Take extra care when opening the film lid as the steam can get very hot!"
         warning_p2 = "Suitable for home freezing, freeze on day of purchase."
+        story.append(FooterPush())  # pins the two notice lines to the bottom edge
         story.append(Paragraph(warning_p1, styles['warning_text']))
         story.append(Paragraph(warning_p2, styles['warning_text']))
 

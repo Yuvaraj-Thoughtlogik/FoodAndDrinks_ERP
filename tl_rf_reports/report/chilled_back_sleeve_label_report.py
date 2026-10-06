@@ -42,7 +42,7 @@ from reportlab.platypus import (
 
 from odoo import api, models
 
-from .label_fit import build_fitted_label, label_cache_key
+from .label_fit import FooterPush, build_fitted_label, label_cache_key
 
 # --- Chilled Back Sleeve Label page size: 100mm x 75mm standard thermal sleeve label size. ---
 PAGE_WIDTH = 100 * mm
@@ -332,6 +332,7 @@ class ProductionLabelReportChilledBackSleeve(models.AbstractModel):
             ('TOPPADDING', (0, 0), (-1, -1), 0),
             ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
         ]))
+        story.append(FooterPush())  # pins the GB stamp / weight / nutrition block to the bottom edge
         story.append(bottom_table)
 
         return story

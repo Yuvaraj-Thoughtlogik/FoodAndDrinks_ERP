@@ -34,7 +34,7 @@ from reportlab.platypus import (
 
 from odoo import models
 
-from .label_fit import LabelDocTemplate, build_fitted_label, label_cache_key
+from .label_fit import FooterPush, LabelDocTemplate, build_fitted_label, label_cache_key
 
 # --- Frozen Label page size: 100mm x 50mm standard thermal roll size. ---
 PAGE_WIDTH = 100 * mm
@@ -178,6 +178,7 @@ class ProductionLabelReportFrozen(models.AbstractModel):
         address_line = xml_escape(', '.join(part for part in address_parts if part))
         if address_line and not address_line.endswith('.'):
             address_line += '.'
+        story.append(FooterPush())  # pins the company address footer to the bottom edge
         story.append(Paragraph(address_line, styles['footer_address']))
 
         return story
