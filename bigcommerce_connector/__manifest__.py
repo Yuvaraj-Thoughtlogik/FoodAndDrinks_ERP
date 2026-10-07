@@ -41,6 +41,9 @@
             "bigcommerce_connector/static/src/css/bigcommerce_dashboard.css",
         ],
     },
+    'images': [
+        'static/description/big.png',
+    ],
     'installable': True,
     'application': True,
     'auto_install': False,
