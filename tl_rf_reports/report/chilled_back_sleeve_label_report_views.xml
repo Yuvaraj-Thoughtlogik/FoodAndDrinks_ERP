@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Chilled Back Sleeve Label page size: 100mm x 75mm standard thermal sleeve label format -->
+    <record id="paperformat_production_label_chilled_back_sleeve" model="report.paperformat">
+        <field name="name">Production Label Chilled Back Sleeve 100x75mm</field>
+        <field name="default" eval="False"/>
+        <field name="format">custom</field>
+        <field name="page_height">75</field>
+        <field name="page_width">100</field>
+        <field name="orientation">Portrait</field>
+        <field name="margin_top">0</field>
+        <field name="margin_bottom">0</field>
+        <field name="margin_left">0</field>
+        <field name="margin_right">0</field>
+        <field name="header_line" eval="False"/>
+        <field name="header_spacing">0</field>
+        <field name="dpi">90</field>
+    </record>
+
+    <!-- ============ CHILLED BACK SLEEVE LABEL ACTION ============ -->
+    <!-- report_name / report_file must match the QWeb template's xmlid below.
+         NOTE: the report's technical name (module.report_production_label_chilled_back)
+         is kept short so that the derived model _name
+         (report.tl_rf_reports.report_production_label_chilled_back) produces a SQL
+         table name of 57 characters, safely under PostgreSQL's 63-character limit. -->
+    <record id="action_report_production_label_chilled_back_sleeve" model="ir.actions.report">
+        <field name="name">Production Label - Chilled Back Sleeve</field>
+        <field name="model">production.label.wizard</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">tl_rf_reports.report_production_label_chilled_back</field>
+        <field name="report_file">tl_rf_reports.report_production_label_chilled_back</field>
+        <field name="paperformat_id" ref="paperformat_production_label_chilled_back_sleeve"/>
+        <field name="print_report_name">'Production Label Chilled Back Sleeve - %s' % (object.delivery_date_from)</field>
+        <field name="binding_model_id" eval="False"/>
+    </record>
+
+    <!-- ============ CHILLED BACK SLEEVE LABEL QWEB TEMPLATE ============ -->
+    <template id="report_production_label_chilled_back">
+        <t t-call="web.basic_layout">
+            <t t-set="total_labels" t-value="len(label_lines)"/>
+            <t t-foreach="label_lines" t-as="label">
+                <div style="width:100mm; height:75mm; box-sizing:border-box; padding:2.5mm 3.0mm; page-break-after:always; font-family:Arial, Helvetica, sans-serif; position:relative; overflow:hidden; color:#000;">
+
+                    <!-- 1. Product Name (Centered, Bold, Large) -->
+                    <div style="text-align:center; font-size:16px; font-weight:bold; line-height:1.2; margin-top:0.5mm; margin-bottom:1.5mm;">
+                        <span t-esc="label.get('product_name')"/>
+                    </div>
+
+                    <!-- 2. Ingredients Section -->
+                    <div style="text-align:left; font-size:8.5px; line-height:1.2; margin-bottom:1.2mm;">
+                        <t t-if="label.get('ingredients_html')">
+                            <t t-if="not label.get('ingredients_html').strip().lower().startswith('ingredients') and not label.get('ingredients_html').strip().lower().startswith('&lt;b&gt;ingredients')">
+                                <b>Ingredients: </b>
+                            </t>
+                            <span t-raw="label.get('ingredients_html')"/>
+                        </t>
+                        <t t-elif="label.get('ingredients')">
+                            <t t-if="not label.get('ingredients').strip().lower().startswith('ingredients')">
+                                <b>Ingredients: </b>
+                            </t>
+                            <span t-raw="label.get('ingredients')"/>
+                        </t>
+<!--                        <t t-else="">-->
+<!--                            <b>Ingredients:</b> Salmon (<i>Salmo Salar</i>) (<b>Fish</b>) 90%, Mint Glaze 10%, Sugar, Acids (Sodium Diacetate, Malic Acid), Dried Glucose Syrup, Modified Starch, Salt, Dried Mint (3.6%), Yeast Extract (Yeast Extract, Salt), Dried Tomato, Colours (Paprika Extract and Natural Rosemary Flavouring, Curcumin), Natural Flavouring, Thickeners (Xanthan Gum, Guar Gum) Natural Garden Mint Flavouring.-->
+<!--                        </t>-->
+                    </div>
+
+                    <!-- 3. Allergy Advice Section (from product allergens_notice field) -->
+                    <div t-if="label.get('allergy_advice')" style="text-align:left; font-size:8.5px; line-height:1.2; margin-bottom:1.2mm; white-space:pre-line;">
+                        <t t-if="not str(label.get('allergy_advice')).strip().lower().startswith('allergy advice')">
+                            <b>Allergy Advice: </b>
+                        </t>
+                        <t t-out="label.get('allergy_advice')"/>
+                    </div>
+
+                    <!-- 4. Cooking Instructions Section -->
+                    <div style="text-align:left; font-size:8.5px; line-height:1.2; margin-bottom:1.5mm;">
+                        <t t-if="label.get('cooking_instructions_html')">
+                            <span t-raw="label.get('cooking_instructions_html')"/>
+                        </t>
+                        <t t-elif="label.get('cooking_instructions')">
+                            <span t-raw="label.get('cooking_instructions')"/>
+                        </t>
+<!--                        <t t-else="">-->
+<!--                            <div><b>Oven:</b> Pierce film and place in a pre-heated oven at 200°C for approx 20-25 minutes (chilled), 25-30 minutes (frozen).</div>-->
+<!--                            <div><b>Microwave: (850w):</b> Pierce film several times and cook on full power for 3-4 minutes (chilled), 5-6 minutes (frozen).</div>-->
+<!--                            <div>Remove from packaging and serve.</div>-->
+<!--                        </t>-->
+                    </div>
+
+                    <!-- 5. Bottom Section: Left (GB GG476 + Weight) & Right (Nutrition Table) -->
+                    <div style="width:100%; display:table; table-layout:fixed;">
+                        <!-- Left: Oval Stamp & Weight -->
+                        <div style="display:table-cell; width:40%; vertical-align:middle; text-align:center;">
+                            <div style="display:inline-block; border:1.2px solid #000; border-radius:50%; width:23mm; height:13mm; text-align:center; padding-top:1.5mm; box-sizing:border-box;">
+                                <div style="font-size:9.5px; font-weight:bold; line-height:1.0;">GB</div>
+                                <div style="font-size:9.5px; font-weight:bold; line-height:1.0;">GG476</div>
+                            </div>
+                            <div style="font-size:15px; font-weight:bold; margin-top:2.5mm; line-height:1.0;">
+                                <span t-esc="label.get('product_weight_display') or label.get('weight_display') or '250g'"/>
+                            </div>
+                        </div>
+
+                        <!-- Right: Nutritional Table -->
+                        <div style="display:table-cell; width:60%; vertical-align:bottom;">
+                            <!-- Table header + one cell with the product's nutritional_info_html as a paragraph -->
+                            <table style="width:100%; border-collapse:collapse; font-size:7px; line-height:1.15; border:1px solid #000;">
+                                <thead>
+                                    <tr>
+                                        <th style="border:1px solid #000; text-align:center; font-weight:bold; padding:1px 2px;">Nutritional Information</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td style="border:1px solid #000; padding:1px 3px; text-align:left; white-space:pre-line;">
+                                            <t t-out="label.get('nutrition_html') or ''"/>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                </div>
+            </t>
+        </t>
+    </template>
+</odoo>

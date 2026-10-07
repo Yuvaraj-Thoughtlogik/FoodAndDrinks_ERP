@@ -1,0 +1,182 @@
+<odoo>
+    <data noupdate="1">
+        <!-- Zoho Config -->
+        <record id="zoho_example_config" model="zoho.config.module">
+            <field name="name">Odoo_Tests</field>
+            <field name="odoo_model" ref="tl_zoho_crm_integration.model_zoho_example_model"/>
+            <field name="zoho_config_app_id" ref="tl_zoho_crm_integration.zoho_config_crm_application"/>
+
+        </record>
+
+        <!-- Main Fields -->
+        <record id="zoho_field_name" model="zoho.config.fields.map">
+            <field name="name">Name</field>
+            <field name="cr_sync_module_id" ref="zoho_example_config"/>
+            <field name="odoo_field_id" search="[('model','=','zoho.example.model'),('name','=','name')]"/>
+        </record>
+
+        <record id="zoho_field_description" model="zoho.config.fields.map">
+            <field name="name">Description</field>
+            <field name="cr_sync_module_id" ref="zoho_example_config"/>
+            <field name="odoo_field_id" search="[('model','=','zoho.example.model'),('name','=','description')]"/>
+        </record>
+
+        <record id="zoho_field_checkbox" model="zoho.config.fields.map">
+            <field name="name">checkbox</field>
+            <field name="cr_sync_module_id" ref="zoho_example_config"/>
+            <field name="odoo_field_id" search="[('model','=','zoho.example.model'),('name','=','checkbox')]"/>
+        </record>
+
+        <record id="zoho_field_count" model="zoho.config.fields.map">
+            <field name="name">Count</field>
+            <field name="cr_sync_module_id" ref="zoho_example_config"/>
+            <field name="odoo_field_id" search="[('model','=','zoho.example.model'),('name','=','count')]"/>
+        </record>
+
+        <record id="zoho_field_price" model="zoho.config.fields.map">
+            <field name="name">Price</field>
+            <field name="cr_sync_module_id" ref="zoho_example_config"/>
+            <field name="odoo_field_id" search="[('model','=','zoho.example.model'),('name','=','price')]"/>
+        </record>
+
+        <record id="zoho_field_category" model="zoho.config.fields.map">
+            <field name="name">Category</field>
+            <field name="cr_sync_module_id" ref="zoho_example_config"/>
+            <field name="odoo_field_id" search="[('model','=','zoho.example.model'),('name','=','category')]"/>
+        </record>
+
+        <record id="zoho_field_date" model="zoho.config.fields.map">
+            <field name="name">Date</field>
+            <field name="cr_sync_module_id" ref="zoho_example_config"/>
+            <field name="odoo_field_id" search="[('model','=','zoho.example.model'),('name','=','date')]"/>
+        </record>
+
+        <record id="zoho_field_datetime" model="zoho.config.fields.map">
+            <field name="name">Datetime</field>
+            <field name="cr_sync_module_id" ref="zoho_example_config"/>
+            <field name="odoo_field_id" search="[('model','=','zoho.example.model'),('name','=','datetime')]"/>
+        </record>
+
+        <record id="zoho_field_file_data" model="zoho.config.fields.map">
+            <field name="name">File_Data</field>
+            <field name="cr_sync_module_id" ref="zoho_example_config"/>
+            <field name="odoo_field_id" search="[('model','=','zoho.example.model'),('name','=','file_data')]"/>
+        </record>
+
+<!--        <record id="zoho_field_file_name" model="zoho.config.fields.map">-->
+<!--            <field name="name">File Name</field>-->
+<!--            <field name="cr_sync_module_id" ref="zoho_example_config"/>-->
+<!--            <field name="odoo_field_id" search="[('model','=','zoho.example.model'),('name','=','file_data_filename')]"/>-->
+<!--        </record>-->
+
+        <record id="zoho_field_partner_account_id" model="zoho.config.fields.map">
+            <field name="name">Account_Name</field>
+            <field name="cr_sync_module_id" ref="zoho_example_config"/>
+            <field name="zoho_lookup_module">Accounts</field>
+            <field name="odoo_field_id" search="[('model','=','zoho.example.model'),('name','=','partner_id')]"/>
+        </record>
+        <record id="zoho_field_partner_contact_ids" model="zoho.config.fields.map">
+            <field name="name">Contact_Name</field>
+            <field name="cr_sync_module_id" ref="zoho_example_config"/>
+            <field name="zoho_lookup_module">Contacts</field>
+            <field name="odoo_field_id" search="[('model','=','zoho.example.model'),('name','=','partner_ids')]"/>
+        </record>
+
+
+        <record id="zoho_field_tag_ids" model="zoho.config.fields.map">
+            <field name="name">New_Tags</field>
+            <field name="cr_sync_module_id" ref="zoho_example_config"/>
+            <field name="odoo_field_id" search="[('model','=','zoho.example.model'),('name','=','tag_ids')]"/>
+            <field name="is_non_lookup">1</field>
+        </record>
+
+        <!-- Subform Field -->
+        <record id="zoho_field_line_ids" model="zoho.config.fields.map">
+            <field name="name">Lines</field>
+            <field name="cr_sync_module_id" ref="zoho_example_config"/>
+            <field name="odoo_field_id" search="[('model','=','zoho.example.model'),('name','=','line_ids')]"/>
+            <field name="is_subform">1</field>
+        </record>
+
+        <!-- Subform Field Maps for zoho.example.model -->
+        <record id="zoho_line_name" model="zoho.config.subform.fields.map">
+            <field name="name">Line_Name</field>
+            <field name="parent_field_id" ref="zoho_field_line_ids"/>
+            <field name="odoo_field_id" search="[('model','=','zoho.example.model'),('name','=','name')]"/>
+        </record>
+
+        <record id="zoho_line_description" model="zoho.config.subform.fields.map">
+            <field name="name">Line_Description</field>
+            <field name="parent_field_id" ref="zoho_field_line_ids"/>
+            <field name="odoo_field_id" search="[('model','=','zoho.example.model'),('name','=','description')]"/>
+        </record>
+
+        <record id="zoho_line_checkbox" model="zoho.config.subform.fields.map">
+            <field name="name">Line_checkbox</field>
+            <field name="parent_field_id" ref="zoho_field_line_ids"/>
+            <field name="odoo_field_id" search="[('model','=','zoho.example.model'),('name','=','checkbox')]"/>
+        </record>
+
+        <record id="zoho_line_count" model="zoho.config.subform.fields.map">
+            <field name="name">Line_Count</field>
+            <field name="parent_field_id" ref="zoho_field_line_ids"/>
+            <field name="odoo_field_id" search="[('model','=','zoho.example.model'),('name','=','count')]"/>
+        </record>
+
+        <record id="zoho_line_price" model="zoho.config.subform.fields.map">
+            <field name="name">Line_Price</field>
+            <field name="parent_field_id" ref="zoho_field_line_ids"/>
+            <field name="odoo_field_id" search="[('model','=','zoho.example.model'),('name','=','price')]"/>
+        </record>
+
+        <record id="zoho_line_category" model="zoho.config.subform.fields.map">
+            <field name="name">Line_Category</field>
+            <field name="parent_field_id" ref="zoho_field_line_ids"/>
+            <field name="odoo_field_id" search="[('model','=','zoho.example.model'),('name','=','category')]"/>
+        </record>
+
+        <record id="zoho_line_date" model="zoho.config.subform.fields.map">
+            <field name="name">Line_Date</field>
+            <field name="parent_field_id" ref="zoho_field_line_ids"/>
+            <field name="odoo_field_id" search="[('model','=','zoho.example.model'),('name','=','date')]"/>
+        </record>
+
+        <record id="zoho_line_datetime" model="zoho.config.subform.fields.map">
+            <field name="name">Line_Datetime</field>
+            <field name="parent_field_id" ref="zoho_field_line_ids"/>
+            <field name="odoo_field_id" search="[('model','=','zoho.example.model'),('name','=','datetime')]"/>
+        </record>
+
+        <record id="zoho_line_file_data" model="zoho.config.subform.fields.map">
+            <field name="name">Line_File</field>
+            <field name="parent_field_id" ref="zoho_field_line_ids"/>
+            <field name="odoo_field_id" search="[('model','=','zoho.example.model'),('name','=','file_data')]"/>
+        </record>
+
+<!--        <record id="zoho_line_file_name" model="zoho.config.subform.fields.map">-->
+<!--            <field name="name">Line_File Name</field>-->
+<!--            <field name="parent_field_id" ref="zoho_field_line_ids"/>-->
+<!--            <field name="odoo_field_id" search="[('model','=','zoho.example.model'),('name','=','file_data_filename')]"/>-->
+<!--        </record>-->
+
+        <record id="zoho_line_partner_account_id" model="zoho.config.subform.fields.map">
+            <field name="name">Line_Account</field>
+            <field name="parent_field_id" ref="zoho_field_line_ids"/>
+            <field name="zoho_lookup_module">Accounts</field>
+            <field name="odoo_field_id" search="[('model','=','zoho.example.model'),('name','=','partner_id')]"/>
+        </record>
+<!--        <record id="zoho_line_partner_contact_ids" model="zoho.config.subform.fields.map">-->
+<!--            <field name="name">Line_Contact</field>-->
+<!--            <field name="parent_field_id" ref="zoho_field_line_ids"/>-->
+<!--            <field name="zoho_lookup_module">Contacts</field>-->
+<!--            <field name="odoo_field_id" search="[('model','=','zoho.example.model'),('name','=','partner_ids')]"/>-->
+<!--        </record>-->
+
+<!--        <record id="zoho_line_tag_ids" model="zoho.config.subform.fields.map">-->
+<!--            <field name="name">Line_Tags</field>-->
+<!--            <field name="parent_field_id" ref="zoho_field_line_ids"/>-->
+<!--            <field name="odoo_field_id" search="[('model','=','zoho.example.model'),('name','=','tag_ids')]"/>-->
+<!--            <field name="is_non_lookup">1</field>-->
+<!--        </record>-->
+    </data>
+</odoo>

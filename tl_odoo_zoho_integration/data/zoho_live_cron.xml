@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Syncs records queued by 'Live' schedules (Odoo changes and Zoho notifications).
+         It is triggered right after each change; the interval only retries failures. -->
+    <record id="ir_cron_zoho_live_push" model="ir.cron">
+        <field name="name">Zoho: Live Sync Queue</field>
+        <field name="model_id" ref="model_zoho_live_queue"/>
+        <field name="state">code</field>
+        <field name="code">model._cron_process()</field>
+        <field name="interval_number">5</field>
+        <field name="interval_type">minutes</field>
+        <field name="active" eval="True"/>
+    </record>
+</odoo>

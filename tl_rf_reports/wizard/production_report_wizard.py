@@ -104,7 +104,7 @@ class ProductionReportWizard(models.TransientModel):
 
     @api.model
     def _default_category_ids(self):
-        return self.env['product.category'].search([('name', 'in', ['Fresh', 'Chilled'])])
+        return self.env['product.category'].search([('name', '=ilike', 'Fresh')])
 
     category_ids = fields.Many2many(
         'product.category',
@@ -113,8 +113,9 @@ class ProductionReportWizard(models.TransientModel):
         'category_id',
         string='Categories',
         # domain=[('name', 'in', ['Fresh', 'Chilled'])],
-        # default=_default_category_ids,
-        help="Select Fresh, Chilled, or both product categories to include in the report."
+        default=_default_category_ids,
+        help="Fresh is selected by default. Add or remove categories as required; "
+             "leave empty to include all categories."
     )
 
 
@@ -194,6 +195,12 @@ class ProductionReportWizard(models.TransientModel):
         )
         return eligible_orders
 
+    def _includes_all_orders(self):
+        """All Production Report and Box Count Report combine normal + late
+        Manufacturing Orders instead of filtering on the Late Order flag."""
+        self.ensure_one()
+        return self.all_production_report or self.box_count
+
     def _get_production_domain(self):
         """Domain for the draft Manufacturing Orders backing the Production
         Report. A draft MO's own top-level product is a generic pack (e.g.
@@ -222,7 +229,7 @@ class ProductionReportWizard(models.TransientModel):
                 ('delivery_date', '>=', self.delivery_date_from),
                 ('delivery_date', '<=', self.delivery_date_to),
             ]
-            if not self.all_production_report:
+            if not self._includes_all_orders():
                 domain.append(('is_late_order', '=', self.include_late_orders))
             return domain
 
@@ -232,10 +239,10 @@ class ProductionReportWizard(models.TransientModel):
             ('round_batch_id.delivery_date', '>=', self.delivery_date_from),
             ('round_batch_id.delivery_date', '<=', self.delivery_date_to),
         ]
-        # All Production Report combines normal + late Manufacturing Orders
-        # into one total (see report/production_report.py) instead of
-        # filtering to just one side.
-        if not self.all_production_report:
+        # All Production Report and Box Count Report combine normal + late
+        # Manufacturing Orders into one total instead of filtering to just
+        # one side.
+        if not self._includes_all_orders():
             domain.append(('is_late_order', '=', self.include_late_orders))
         if self.depot_ids:
             domain.append(('depot_id', 'in', self.depot_ids.ids))
@@ -255,12 +262,13 @@ class ProductionReportWizard(models.TransientModel):
             ('raw_material_production_id.round_batch_id.delivery_date', '>=', self.delivery_date_from),
             ('raw_material_production_id.round_batch_id.delivery_date', '<=', self.delivery_date_to),
         ]
-        if not self.all_production_report:
+        if not self._includes_all_orders():
             domain.append(('raw_material_production_id.is_late_order', '=', self.include_late_orders))
         if self.depot_ids:
             domain.append(('raw_material_production_id.depot_id', 'in', self.depot_ids.ids))
-        if self.category_id:
-            domain.append(('product_id.categ_id', '=', self.category_id.id))
+        if self.category_ids:
+            # Same category filter as the PDF: on the MO's finished product.
+            domain.append(('raw_material_production_id.product_id.categ_id', 'in', self.category_ids.ids))
         return domain
 
     def action_print_report(self):

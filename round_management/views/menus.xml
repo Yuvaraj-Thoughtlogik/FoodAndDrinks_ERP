@@ -180,6 +180,12 @@
               action="action_round_management_sale_order"
               sequence="10"/>
 
+    <menuitem id="menu_round_management_products"
+              name="Products"
+              parent="menu_round_management_order_management_root"
+              action="sale.product_template_action"
+              sequence="12"/>
+
 
     <record id="action_picking_tree_round_management" model="ir.actions.act_window">
         <field name="name">Round Deliveries</field>

@@ -1,0 +1,338 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <record id="zoho_config_create_field_view_form" model="ir.ui.view">
+        <field name="name">zoho_config_create_field_view_form</field>
+        <field name="model">ir.model.fields</field>
+        <field name="arch" type="xml">
+            <form string="zoho_config_create_field_form">
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="model_id" readonly="1"/>
+                            <field name="model" readonly="1"/>
+                            <field name="name"/>
+                        </group>
+                        <group>
+                            <field name="field_description"/>
+                            <field name="ttype"/>
+                        </group>
+
+                    </group>
+                    <group>
+                        <field name="relation_model_id" invisible="ttype not in ['many2one','many2many','one2many']"/>
+                        <field name="relation" invisible="1"/>
+                    </group>
+                    <!--                    <div class="d-flex gap-3" invisible="ttype not in ['many2one','many2many','one2many']">-->
+                    <!--                        <label for="relation_model_id"/>-->
+                    <!--                    </div>-->
+                    <notebook>
+                        <page name="Selection Options" invisible="ttype != 'selection'">
+                            <group>
+                                <field name="selection_ids" nolabel="1">
+                                    <list editable="bottom">
+                                        <field name="name" string="Label"/>
+                                        <field name="value" string="Key"/>
+                                    </list>
+                                </field>
+                            </group>
+
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- list view for Zoho Config Module -->
+    <record id="view_zoho_config_module_list" model="ir.ui.view">
+        <field name="name">zoho.config.module.list</field>
+        <field name="model">zoho.config.module</field>
+        <field name="arch" type="xml">
+            <list string="Zoho Sync Modules" duplicate="false">
+                <field name="sequence" widget="handle"/>
+                <field name="zoho_config_app_id"/>
+                <field name="name"/>
+                <field name="odoo_model_name"/>
+                <field name="fields_count"/>
+            </list>
+        </field>
+    </record>
+
+
+    <!-- Form view for Zoho Config Module -->
+    <record id="view_zoho_config_module_form" model="ir.ui.view">
+        <field name="name">zoho.config.module.form</field>
+        <field name="model">zoho.config.module</field>
+        <field name="arch" type="xml">
+            <form string="Zoho Sync Module" duplicate="false">
+                <header>
+                    <button name="action_active_view"
+                            type="object"
+                            class="btn-primary"
+                            invisible="is_view_active or not view_id"
+                            string="Activate View"
+                            icon="fa-eye"/>
+                    <button name="action_inactive_view"
+                            type="object"
+                            class="btn-primary"
+                            invisible="not is_view_active"
+                            string="Inactivate View"
+                            icon="fa-eye-slash"/>
+                    <button name="action_create_view"
+                            type="object"
+                            class="btn-primary"
+                            invisible="view_id"
+                            string="Generate View"
+                            />
+                    <button type="object"
+                            class="btn btn-outline-secondary btn-sm shadow-sm"
+                            name="action_create_testcase">
+                        <i class="fa fa-flask me-1"/> Test Sync
+                    </button>
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_fields_map"
+                                type="object"
+                                class="oe_stat_button"
+                                string="Fields Map"
+                                icon="fa-puzzle-piece">
+                        </button>
+                    </div>
+                    <group>
+                        <label for="zoho_config_app_id" class="fw-bold opacity-100"/>
+                        <field name="zoho_config_app_id" options="{'no_create': True}" readonly="create_date" nolabel="1"/>
+                        <label for="name" class="fw-bold opacity-100"/>
+                        <field name="name" nolabel="1"/>
+                        <label for="odoo_model" class="fw-bold opacity-100"/>
+                        <div class="o_row">
+                            <div class="o_col o_col-6">
+                                <field name="odoo_model" readonly="create_date"/>
+                            </div>
+                            <div class="o_col o_col-6">
+                                <field name="odoo_model_name" readonly="1"/>
+                            </div>
+                        </div>
+                        <label for="view_id" invisible="not view_id" class="fw-bold opacity-100"/>
+                        <field name="view_id" readonly="1" invisible="not view_id" nolabel="1"/>
+                        <!--                        <field name="required_fields"/>-->
+                        <!--                        <field name="test_case_view_id"/>-->
+                        <!--                        <field name="test_case_field_id"/>-->
+                        <!--                        <field name="reload_needed"/>-->
+                        <!--                        <field name="is_added_to_sync"/>-->
+                    </group>
+                    <notebook>
+                        <page string="Field Mapping">
+                            <field name="fields_ids" context="{'default_model_id':odoo_model}">
+                                <form string="Field Mapping">
+                                    <group>
+                                        <group>
+                                            <field name="model_id" invisible="1"/>
+                                            <field name="name" readonly="is_default"/>
+                                            <field name="zoho_id_field_label" invisible="1"/>
+                                            <field name="zoho_id_field_name" invisible="1"/>
+                                            <field name="is_non_lookup" invisible="field_type not in ['many2many','many2one'] and new_field_type not in ['many2many','many2one'] "/>
+                                            <field name="zoho_lookup_module" required="not is_non_lookup and (field_type in ['many2one','many2many'] or new_field_type in ['many2one','many2many'])" invisible="is_non_lookup or (field_type not in ['many2one','many2many'] and new_field_type not in ['many2one','many2many'])"/>
+                                        </group>
+                                    </group>
+                                    <group string="Odoo Field Details" readonly="create_date">
+                                        <group >
+                                            <field name="field_option" widget="radio" invisible="create_date" options="{'horizontal': true}" required="1" readonly="create_date"/>
+                                            <field name="odoo_field_id"
+                                                   invisible="field_option == 'new'"
+                                                   options="{'no_quick_create': True,'no_create':True}"
+                                                   readonly="create_date"
+                                                   required="field_option == 'existing'"/>
+                                            <field name="field_type" readonly="1" required="field_option == 'existing'" invisible="field_option == 'new'"/>
+                                            <field name="odoo_field_name" default="x_" readonly="field_option == 'existing' or create_date" invisible="field_option == 'existing'" required="field_option == 'new'">x_</field>
+                                            <field name="new_field_type" invisible="field_option == 'existing'" readonly="create_date" required="field_option == 'new'"/>
+
+                                            <field name="relation_model_option"
+                                                   widget="radio"
+                                                   readonly="create_date"
+                                                   options="{'horizontal': true}"
+                                                   required="field_type in ['many2one','one2many','many2many']"
+                                                   invisible="create_date or field_option == 'existing' or new_field_type not in ['many2one','one2many','many2many']"
+                                            />
+                                            <field name="relation_model"
+                                                   required="relation_model_option == 'new'"
+                                                   readonly="create_date"
+                                                   invisible="relation_model_option == 'existing' or new_field_type not in ['many2one','one2many','many2many']"
+                                            />
+                                            <field name="relation_model_id"
+                                                   required="field_type in ['many2one','one2many','many2many'] and new_field_type in ['many2one','one2many','many2many']"
+                                                   readonly=" create_date or new_field_type not in ['many2one','one2many','many2many']"
+                                                   invisible="relation_model_option == 'new' or (field_type not in ['many2one','one2many','many2many'] and new_field_type not in ['many2one','one2many','many2many'])"
+                                            />
+                                            <field name="is_subform" invisible="not field_type == 'one2many'"/>
+                                        </group>
+                                        <group>
+                                            <field name="is_default" invisible="field_type in ['one2many', 'many2one', 'many2many']"/>
+                                            <field name="default_value" invisible="field_type in ['one2many', 'many2one', 'many2many'] or name !='_default_field'"/>
+                                        </group>
+                                    </group>
+                                    <notebook>
+                                        <page name="Subform Field Mapping" invisible="not field_type == 'one2many' and not new_field_type == 'one2many' ">
+                                            <group >
+                                                <field name="subform_field_ids"
+                                                       context="{
+                                                            'default_restrict_new':relation_model_option == 'new',
+                                                            'default_model_id': relation_model_id,
+                                                            'default_field_option':relation_model_option,
+                                                        }"
+                                                       nolabel="1">
+                                                    <list>
+                                                        <field name="name"/>
+                                                        <field name="odoo_field_id"/>
+                                                        <field name="field_type"/>
+                                                        <field name="is_non_lookup" invisible="not field_type in ['many2many','one2many'] "/>
+                                                        <field name="zoho_lookup_module" required="not is_non_lookup and field_type in ['many2one','many2many']" invisible="is_non_lookup or field_type not in ['many2one','many2many']"/>
+                                                    </list>
+                                                    <form string="Sub Field Mapping">
+                                                        <group>
+                                                            <group>
+                                                                <field name="model_name" readonly="0" invisible="1"/>
+                                                                <field name="model_id" invisible="1"/>
+                                                                <field name="name" readonly="is_default"/>
+                                                                <field name="is_non_lookup" invisible="field_type not in ['many2many','many2one'] and new_field_type not in ['many2many','many2one'] "/>
+                                                                <field name="zoho_lookup_module" required="not is_non_lookup and (field_type in ['many2one','many2many'] or new_field_type in ['many2one','many2many'])" invisible="is_non_lookup or (field_type not in ['many2one','many2many'] and new_field_type not in ['many2one','many2many'])"/>
+                                                            </group>
+                                                        </group>
+                                                        <group string="Odoo Field Details" readonly="create_date">
+                                                            <group>
+                                                                <field name="field_option" widget="radio" invisible="restrict_new or create_date" options="{'horizontal': true}" required="1" readonly="create_date"/>
+                                                                <field name="odoo_field_id"
+                                                                       readonly="create_date"
+                                                                       invisible="field_option == 'new'"
+                                                                       options="{'no_quick_create': True,'no_create':True}"
+                                                                       required="field_option == 'existing'"/>
+                                                                <field name="field_type" readonly="1" required="field_option == 'existing'" invisible="field_option == 'new'"/>
+                                                                <field name="odoo_field_name" default="x_" readonly="field_option == 'existing' or create_date" invisible="field_option == 'existing'" required="field_option == 'new'">x_</field>
+                                                                <field name="new_field_type" invisible="field_option == 'existing'" readonly="create_date" required="field_option == 'new'"/>
+
+                                                                <field name="relation_model_option"
+                                                                       widget="radio"
+                                                                       readonly="create_date"
+                                                                       options="{'horizontal': true}"
+                                                                       required="field_type in ['many2one','one2many','many2many']"
+                                                                       invisible="create_date or field_option == 'existing' or new_field_type not in ['many2one','one2many','many2many']"
+                                                                />
+                                                                <field name="relation_model"
+                                                                       required="relation_model_option == 'new'"
+                                                                       readonly="create_date"
+                                                                       invisible="relation_model_option == 'existing' or new_field_type not in ['many2one','one2many','many2many']"
+                                                                />
+                                                                <field name="relation_model_id"
+                                                                       required="field_type in ['many2one','one2many','many2many'] and new_field_type in ['many2one','one2many','many2many']"
+                                                                       readonly=" create_date or new_field_type not in ['many2one','one2many','many2many']"
+                                                                       invisible="relation_model_option == 'new' or (field_type not in ['many2one','one2many','many2many'] and new_field_type not in ['many2one','one2many','many2many'])"
+                                                                />
+                                                                <!--                                                                <field name="is_subform" invisible="not field_type == 'one2many'"/>-->
+                                                            </group>
+                                                            <group invisible="restrict_new">
+
+                                                            </group>
+                                                            <group>
+                                                                <field name="is_default" invisible="field_type in ['one2many', 'many2one', 'many2many']"/>
+                                                                <field name="default_value" invisible="field_type in ['one2many', 'many2one', 'many2many'] or name !='_default_field'"/>
+                                                            </group>
+                                                        </group>
+                                                    </form>
+                                                </field>
+                                            </group>
+                                        </page>
+                                    </notebook>
+                                </form>
+                                <list>
+                                    <field name="name"/>
+                                    <field name="odoo_field_name"/>
+                                    <field name="field_type"/>
+                                    <field name="is_new_field"/>
+                                    <field name="default_value"/>
+                                    <field name="relation_model"/>
+                                </list>
+                            </field>
+                        </page>
+
+                    </notebook>
+
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_zoho_config_module_kanban" model="ir.ui.view">
+        <field name="name">zoho.config.module.kanban</field>
+        <field name="model">zoho.config.module</field>
+        <field name="arch" type="xml">
+            <kanban class="o_kanban_mobile" duplicate="false">
+                <field name="name"/>
+                <field name="zoho_app_name"/>
+                <field name="odoo_model_name"/> <!-- example extra field -->
+                <field name="fields_count"/> <!-- example extra field -->
+                <!--                <field name="is_added_to_sync"/> &lt;!&ndash; example extra field &ndash;&gt;-->
+
+                <templates>
+
+                    <t t-name="menu">
+                        <!--                        <t t-set="is_active" t-value="record.is_added_to_sync.raw_value == 'installed'"/>-->
+                        <a type="open" class="dropdown-item">Module Info</a>
+                        <a name="action_active_view" type="object" role="menuitem" invisible="is_view_active or not view_id" class="dropdown-item" >Active View</a>
+                        <a name="action_inactive_view" type="object" role="menuitem" invisible="not is_view_active or not view_id" class="dropdown-item" >Inactive View</a>
+                        <a name="unlink" type="object" role="menuitem" class="dropdown-item" >Delete</a>
+
+                    </t>
+                    <t t-name="card" class="zoho_app_kanban flex-row align-items-center" style="gap:10px;">
+
+                        <main class="flex-grow-1 me-4" style="padding:10px;">
+                            <div class="mb-2 d-flex ">
+                                <h5 class="fw-bold text-dark mb-1" t-out="record.zoho_app_name.value"/><span>: </span><h5 class="fw-bold text-dark mb-1" style="padding-left:6px" t-out="record.name.value"/>
+                            </div>
+
+                            <!-- Details -->
+                            <div class="text-muted small mb-2">
+                                <p class="mb-1">
+                                    <i class="fa fa-database me-1 text-secondary"/>
+                                    Odoo Model: <code t-out="record.odoo_model_name.value"/>
+                                </p>
+                                <p class="mb-0">
+                                    <i class="fa fa-list-ul me-1 text-secondary"/>
+                                    Total Fields Maps: <span t-out="record.fields_count.value"/>
+                                </p>
+                            </div>
+
+                            <!-- Footer Buttons -->
+                            <footer name="config_module_footer" class="d-flex justify-content-start gap-2 mt-3">
+                                <button name="action_active_view"
+                                        type="object"
+                                        class="btn btn-primary  btn-sm shadow-sm"
+                                        invisible="is_view_active or not view_id"
+                                        string="Active View"
+                                        icon="fa-eye"/>
+                                <button name="action_inactive_view"
+                                        type="object"
+                                        class="btn btn-primary  btn-sm shadow-sm"
+                                        invisible="not is_view_active or not view_id"
+                                        string="Inactive View"
+                                        icon="fa-eye-slash"/>
+                                <button type="object"
+                                        class="btn btn-outline-secondary btn-sm shadow-sm"
+                                        name="action_view_fields_map">
+                                    <i class="fa fa-puzzle-piece me-1"/>Fields Maps Info
+                                </button>
+                                <button type="object"
+                                        class="btn btn-outline-secondary btn-sm shadow-sm"
+                                        name="action_create_testcase">
+                                    <i class="fa fa-flask me-1"/> Test Sync
+                                </button>
+
+                            </footer>
+                        </main>
+
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+
+</odoo>

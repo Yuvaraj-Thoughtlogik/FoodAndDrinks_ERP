@@ -7,9 +7,6 @@
         <field name="arch" type="xml">
             <form string="Dock Weight Breakdown Report">
                 <sheet>
-                    <!-- Row 0: Delivery Channel Selection -->
-
-
                     <!-- Row 1: Delivery Date From & To on the same line -->
                     <group>
                         <group>
@@ -20,20 +17,29 @@
                         </group>
                     </group>
 
-                    <!-- Row 2: Late Order & Depot Checkboxes with class="o_horizontal_checkboxes" -->
+                    <!-- Row 2: Delivery Channel & Report Type -->
                     <group>
                         <group colspan="4">
-                            <field name="include_late_orders" string="Late Order" />
-                        </group>
-                        <group>
+                            <field name="report_type" widget="radio"  colspan="2"
+                                options="{'horizontal': true}" required="1" />
                             <field name="delivery_channel" widget="radio"
                                 options="{'horizontal': true}" required="1" />
+                            <field name="include_late_orders" invisible="1" />
                         </group>
-                        <group string="Depot" colspan="4" invisible="delivery_channel == 'courier'">
+                    </group>
+                    <hr/>
+
+                    <!-- Row 3: Depot Checkboxes -->
+                    <group>
+                        <group colspan="4" invisible="delivery_channel == 'courier'">
                             <field name="depot_ids"
                                 widget="many2many_checkboxes"
                                 class="o_horizontal_checkboxes"
-                                nolabel="1" />
+                                nolabel="1" colspan="2" />
+                        </group>
+                        <group colspan="4">
+                            <field name="category_ids" widget="many2many_tags"
+                                options="{'no_create': True}" />
                         </group>
                     </group>
                 </sheet>
@@ -45,7 +51,7 @@
                     <button string="Cancel" class="btn-secondary" special="cancel" data-hotkey="x" />
                 </footer>
             </form>
-        </field> 
+        </field>
     </record>
 
     <!-- Action to open the Wizard -->

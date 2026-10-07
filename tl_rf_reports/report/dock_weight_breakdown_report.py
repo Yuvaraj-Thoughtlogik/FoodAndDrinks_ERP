@@ -26,6 +26,12 @@ def _format_weight_display(val):
     return formatted
 
 
+def _category_sort_key(categ_name):
+    """Fresh category always first, every other category alphabetically."""
+    name = (categ_name or '').strip().upper()
+    return (0 if 'FRESH' in name else 1, name)
+
+
 class _DockWeightCanvas(canvas.Canvas):
     """Two-pass canvas that redraws a footer line on every physical page once
     the document is fully laid out. The original QWeb template shows a fixed
@@ -125,6 +131,92 @@ class ReportDockWeightBreakdown(models.AbstractModel):
         pname = (product.name or '') if product else ''
         return self._extract_unit_weight_from_vals(uom_name, weight, gnw, mw, pname)
 
+    # Levels of Bill of Materials exploded for the ReportLab path: the sold
+    # product's BoM (level 1), then the BoM of any of its components (level
+    # 2). Components found at the last level are shown as-is even if they
+    # have a BoM of their own.
+    _BOM_EXPLODE_DEPTH = 2
+
+    def _explode_components(self, product, uom, company_id, cache, level=1):
+        """Components printed for `product` sold in `uom`, as a list of
+        (component product, component uom, ratio) where the component
+        quantity is ratio * sold quantity. A product without a BoM (or past
+        the last level) is returned as its own single component, ratio 1.
+        Results are memoised in `cache` - the same products are sold on
+        many order lines."""
+        key = (product.id, uom.id, company_id, level)
+        if key in cache:
+            return cache[key]
+
+        result = [(product, uom, 1.0)]
+        if level <= self._BOM_EXPLODE_DEPTH:
+            bom = self.env['mrp.bom']._bom_find(product, company_id=company_id)[product]
+            if bom and bom.product_qty:
+                # Sold qty of 1 `uom` expressed as a number of BoM batches.
+                batches = uom._compute_quantity(
+                    1.0, bom.product_uom_id, round=False, raise_if_failure=False,
+                ) / bom.product_qty
+                exploded = []
+                for bom_line in bom.bom_line_ids:
+                    if bom_line._skip_bom_line(product):
+                        continue
+                    line_ratio = bom_line.product_qty * batches
+                    for comp, comp_uom, sub_ratio in self._explode_components(
+                        bom_line.product_id, bom_line.product_uom_id, company_id, cache, level + 1,
+                    ):
+                        exploded.append((comp, comp_uom, line_ratio * sub_ratio))
+                if exploded:
+                    result = exploded
+
+        cache[key] = result
+        return result
+
+    def _line_weight_entries(self, line, categ_ids, is_late, cache):
+        """Weight rows one sale order line contributes to the report: one
+        per BoM component (up to _BOM_EXPLODE_DEPTH levels), or the line's
+        own product when it has no BoM. Returns a list of
+        (product, weight, delta_weight) - delta_weight is the weight of the
+        late quantity change, only computed for late reports. The wizard's
+        category filter is applied to the printed (component) product, as
+        that is what the category pages group by."""
+        qty = float(line.product_uom_qty or 0.0)
+        delta_qty = float(line.late_qty_delta or 0.0) if is_late else 0.0
+        line_uom = line.product_uom_id or line.product_id.uom_id
+        company_id = line.company_id.id or self.env.company.id
+
+        entries = []
+        for comp, comp_uom, ratio in self._explode_components(line.product_id, line_uom, company_id, cache):
+            if categ_ids and comp.categ_id.id not in categ_ids:
+                continue
+            is_sold_product = comp == line.product_id and ratio == 1.0
+            unit_weight = self._extract_unit_weight_from_vals(
+                comp_uom.name or '' if comp_uom else '',
+                comp.weight or comp.product_tmpl_id.weight,
+                (line.gross_net_weight if is_sold_product else False) or comp.product_tmpl_id.gross_net_weight,
+                line.min_weight if is_sold_product else getattr(comp.product_tmpl_id, 'min_weight', False),
+                comp.name,
+            )
+            comp_qty = qty * ratio
+            comp_delta = delta_qty * ratio
+            weight = (unit_weight * comp_qty) if unit_weight > 0 else comp_qty
+            delta_weight = (unit_weight * comp_delta) if unit_weight > 0 else comp_delta
+            entries.append((comp, weight, delta_weight))
+        return entries
+
+    @staticmethod
+    def _add_weight_entry(products_map, product, weight, delta_weight):
+        prod_info = products_map.setdefault(product.id, {
+            'product_name': product.name or '',
+            'total_weight': 0.0,
+            'reduced_weight': 0.0,
+            'increased_weight': 0.0,
+        })
+        prod_info['total_weight'] += weight
+        if delta_weight < 0:
+            prod_info['reduced_weight'] += -delta_weight
+        elif delta_weight > 0:
+            prod_info['increased_weight'] += delta_weight
+
     @api.model
     def _get_report_values(self, docids, data=None):
         docs = self.env['batch.report.wizard'].browse(docids)
@@ -158,7 +250,8 @@ class ReportDockWeightBreakdown(models.AbstractModel):
 
             # Courier Delivery Flow
             if getattr(wizard, 'delivery_channel', 'regal_van') == 'courier':
-                is_late = bool(wizard.include_late_orders)
+                is_late = wizard._is_late_report()
+                categ_ids = wizard._get_filter_category_ids()
                 orders = self.env['sale.order'].search(
                     [
                         ('delivery_channel', '=', 'courier'),
@@ -178,7 +271,8 @@ class ReportDockWeightBreakdown(models.AbstractModel):
                 for order in orders:
                     lines = order.order_line.filtered(
                         lambda l: not l.display_type and l.product_id and l.product_uom_qty > 0
-                        and bool(l.is_late_order) == is_late
+                        and wizard._line_matches_late(l)
+                        and wizard._line_matches_category(l, categ_ids)
                     )
                     if not lines:
                         continue
@@ -238,7 +332,7 @@ class ReportDockWeightBreakdown(models.AbstractModel):
                         grand_total_weight += line_weight
 
                 category_pages = []
-                for c_key, c_val in sorted(categories_map.items(), key=lambda item: item[1]['categ_name']):
+                for c_key, c_val in sorted(categories_map.items(), key=lambda item: _category_sort_key(item[1]['categ_name'])):
                     prod_list = sorted(
                         c_val['products'].values(),
                         key=lambda item: item['product_name']
@@ -273,7 +367,8 @@ class ReportDockWeightBreakdown(models.AbstractModel):
                 continue
 
             # Regal Van Delivery Flow (Batch-based)
-            is_late = bool(wizard.include_late_orders)
+            is_late = wizard._is_late_report()
+            categ_ids = wizard._get_filter_category_ids()
             batch_domain = [
                 ('delivery_date', '>=', wizard.delivery_date_from),
                 ('delivery_date', '<=', wizard.delivery_date_to),
@@ -313,7 +408,8 @@ class ReportDockWeightBreakdown(models.AbstractModel):
                 for order in orders:
                     lines = order.order_line.filtered(
                         lambda l: not l.display_type and l.product_id and l.product_uom_qty > 0
-                        and bool(l.is_late_order) == is_late
+                        and wizard._line_matches_late(l)
+                        and wizard._line_matches_category(l, categ_ids)
                     )
                     if not lines:
                         continue
@@ -385,7 +481,7 @@ class ReportDockWeightBreakdown(models.AbstractModel):
 
             combo_pages = []
             for d_key, d_val in sorted(depots_map.items(), key=lambda item: item[1]['depot_name']):
-                for c_key, c_val in sorted(d_val['categories'].items(), key=lambda item: item[1]['categ_name']):
+                for c_key, c_val in sorted(d_val['categories'].items(), key=lambda item: _category_sort_key(item[1]['categ_name'])):
                     prod_list = sorted(
                         c_val['products'].values(),
                         key=lambda item: item['product_name']
@@ -474,61 +570,32 @@ class ReportDockWeightBreakdown(models.AbstractModel):
         if not orders:
             return None
 
-        is_late = bool(wizard.include_late_orders)
+        is_late = wizard._is_late_report()
+        categ_ids = wizard._get_filter_category_ids()
         categories_map = {}
+        bom_cache = {}
         for order in orders:
             lines = order.order_line.filtered(
                 lambda l: not l.display_type and l.product_id and l.product_uom_qty > 0
-                and bool(l.is_late_order) == is_late
+                and wizard._line_matches_late(l)
             )
             for line in lines:
-                product = line.product_id
-                categ = product.categ_id
-                categ_name = (categ.name or _('Fresh')).strip()
-                # Group by display name, not database id: two different
-                # category records that happen to render the same text
-                # (e.g. per-company duplicates) must not split into two pages.
-                categ_key = categ_name.lower()
-
-                if categ_key not in categories_map:
-                    categories_map[categ_key] = {
+                # Each line prints as its BoM components (2 levels), or as
+                # the sold product itself when it has no BoM.
+                for product, weight, delta_weight in self._line_weight_entries(line, categ_ids, is_late, bom_cache):
+                    categ_name = (product.categ_id.name or _('Fresh')).strip()
+                    # Group by display name, not database id: two different
+                    # category records that happen to render the same text
+                    # (e.g. per-company duplicates) must not split into two pages.
+                    categ_key = categ_name.lower()
+                    categ_map = categories_map.setdefault(categ_key, {
                         'categ_name': categ_name,
                         'products': {},
-                    }
-
-                prod_key = product.id
-                if prod_key not in categories_map[categ_key]['products']:
-                    uom = line.product_uom_id or product.product_tmpl_id.uom_id
-                    unit_weight = self._extract_unit_weight_from_vals(
-                        uom.name or '' if uom else '',
-                        product.weight or product.product_tmpl_id.weight,
-                        line.gross_net_weight or product.product_tmpl_id.gross_net_weight,
-                        line.min_weight,
-                        product.name,
-                    )
-                    categories_map[categ_key]['products'][prod_key] = {
-                        'product_name': product.name or '',
-                        'unit_weight': unit_weight,
-                        'total_weight': 0.0,
-                        'reduced_weight': 0.0,
-                        'increased_weight': 0.0,
-                    }
-
-                qty = float(line.product_uom_qty or 0.0)
-                prod_info = categories_map[categ_key]['products'][prod_key]
-                line_weight = (prod_info['unit_weight'] * qty) if prod_info['unit_weight'] > 0 else qty
-                prod_info['total_weight'] += line_weight
-
-                if is_late:
-                    delta_qty = float(line.late_qty_delta or 0.0)
-                    delta_weight = (prod_info['unit_weight'] * delta_qty) if prod_info['unit_weight'] > 0 else delta_qty
-                    if delta_weight < 0:
-                        prod_info['reduced_weight'] += -delta_weight
-                    elif delta_weight > 0:
-                        prod_info['increased_weight'] += delta_weight
+                    })
+                    self._add_weight_entry(categ_map['products'], product, weight, delta_weight)
 
         category_pages = []
-        for c_key, c_val in sorted(categories_map.items(), key=lambda item: item[1]['categ_name']):
+        for c_key, c_val in sorted(categories_map.items(), key=lambda item: _category_sort_key(item[1]['categ_name'])):
             prod_list = sorted(c_val['products'].values(), key=lambda item: item['product_name'])
             if prod_list:
                 category_pages.append({
@@ -539,9 +606,12 @@ class ReportDockWeightBreakdown(models.AbstractModel):
         if not category_pages:
             return None
 
-        return self._build_courier_pdf_bytes(category_pages, delivery_date_from_str, delivery_date_to_str, is_late)
+        return self._build_courier_pdf_bytes(
+            category_pages, delivery_date_from_str, delivery_date_to_str, is_late,
+            is_all=wizard.report_type == 'all',
+        )
 
-    def _build_courier_pdf_bytes(self, category_pages, delivery_date_from_str, delivery_date_to_str, is_late=False):
+    def _build_courier_pdf_bytes(self, category_pages, delivery_date_from_str, delivery_date_to_str, is_late=False, is_all=False):
         """Pure layout step - takes already-grouped/sorted category pages and
         draws them. Split out from _generate_courier_pdf() so the layout code
         can be exercised standalone (e.g. by a smoke test) without touching
@@ -577,7 +647,7 @@ class ReportDockWeightBreakdown(models.AbstractModel):
                 story.append(PageBreak())
 
             categ_esc = xml_escape((cat_page['categ_name'] or '').upper())
-            flow_label = "Courier ALT's" if is_late else "Courier"
+            flow_label = "Courier ALT's" if is_late else ("Courier All" if is_all else "Courier")
             title = Paragraph(f"{flow_label} {categ_esc} Filleters Weights", title_style)
             info = Paragraph(
                 f"For Packing between {today_str} and {today_str}<br/>"
@@ -652,6 +722,8 @@ class ReportDockWeightBreakdown(models.AbstractModel):
             c.footer_left_text = footer_text
             return c
 
+        doc.title = 'Dock Weight Breakdown Report'  # PDF metadata - shown by browser PDF viewers
+        doc.author = self.env.company.name or ''
         doc.build(story, canvasmaker=_make_canvas)
         pdf_value = buffer.getvalue()
         buffer.close()
@@ -674,89 +746,80 @@ class ReportDockWeightBreakdown(models.AbstractModel):
         printed_at_dt = fields.Datetime.context_timestamp(self, fields.Datetime.now())
         printed_at_str = printed_at_dt.strftime('%d/%m/%Y %H:%M:%S')
 
+        is_late = wizard._is_late_report()
+        categ_ids = wizard._get_filter_category_ids()
+
+        # (depot record, sale orders) pairs to report on. Regal Van orders
+        # come from the Round Batches (depot = batch depot); for 'Both' the
+        # courier orders are added too, each line under its real depot
+        # (line depot, else the order's warehouse) so they merge with the
+        # Regal Van weights there - there is no separate "Courier" depot.
+        depot_lines = []  # (depot, line)
+
         batch_domain = [
             ('delivery_date', '>=', wizard.delivery_date_from),
             ('delivery_date', '<=', wizard.delivery_date_to),
         ]
         if wizard.depot_ids:
             batch_domain.append(('depot_id', 'in', wizard.depot_ids.ids))
-        elif hasattr(wizard, 'depot_id') and wizard.depot_id:
-            batch_domain.append(('depot_id', '=', wizard.depot_id.id))
-
         batches = self.env['round.management.batch'].search(
             batch_domain, order='delivery_date asc, code asc, id asc'
         )
-        if not batches:
-            return None
-
-        is_late = bool(wizard.include_late_orders)
-        depots_map = {}
         for batch in batches:
             orders = batch.order_ids.filtered(
                 lambda so: so.state in ('sale', 'done')
                 and getattr(so, 'delivery_channel', False) in ('regal_van', False)
             )
-            if not orders:
+            for line in orders.order_line:
+                depot_lines.append((batch.depot_id, line))
+
+        if wizard.delivery_channel == 'both':
+            courier_orders = self.env['sale.order'].search([
+                ('delivery_channel', '=', 'courier'),
+                ('state', 'in', ['sale', 'done']),
+                ('delivery_date', '>=', wizard.delivery_date_from),
+                ('delivery_date', '<=', wizard.delivery_date_to),
+            ], order='delivery_date asc, name asc')
+            for line in courier_orders.order_line:
+                depot = line.depot_id or line.order_id.warehouse_id
+                if wizard.depot_ids and depot not in wizard.depot_ids:
+                    continue
+                depot_lines.append((depot, line))
+
+        depots_map = {}
+        bom_cache = {}
+        for depot, line in depot_lines:
+            if not (
+                not line.display_type and line.product_id and line.product_uom_qty > 0
+                and wizard._line_matches_late(line)
+            ):
+                continue
+            # Each line prints as its BoM components (2 levels), or as the
+            # sold product itself when it has no BoM.
+            entries = self._line_weight_entries(line, categ_ids, is_late, bom_cache)
+            if not entries:
                 continue
 
-            depot = batch.depot_id
             depot_name = depot.name or _('Grimsby')
             # Group by display name, not database id: two different depot or
             # category records that happen to render the same text (e.g.
             # per-company duplicates) must not split into two pages.
             depot_key = depot_name.lower()
-
             if depot_key not in depots_map:
                 depots_map[depot_key] = {'depot_name': depot_name, 'categories': {}}
 
-            for order in orders:
-                lines = order.order_line.filtered(
-                    lambda l: not l.display_type and l.product_id and l.product_uom_qty > 0
-                    and bool(l.is_late_order) == is_late
-                )
-                for line in lines:
-                    product = line.product_id
-                    categ = product.categ_id
-                    categ_name = (categ.name or _('FRESH')).upper()
-                    categ_key = categ_name.lower()
-
-                    if categ_key not in depots_map[depot_key]['categories']:
-                        depots_map[depot_key]['categories'][categ_key] = {'categ_name': categ_name, 'products': {}}
-
-                    prod_key = product.id
-                    if prod_key not in depots_map[depot_key]['categories'][categ_key]['products']:
-                        uom = line.product_uom_id or product.product_tmpl_id.uom_id
-                        unit_weight = self._extract_unit_weight_from_vals(
-                            uom.name or '' if uom else '',
-                            product.weight or product.product_tmpl_id.weight,
-                            line.gross_net_weight or product.product_tmpl_id.gross_net_weight,
-                            line.min_weight,
-                            product.name,
-                        )
-                        depots_map[depot_key]['categories'][categ_key]['products'][prod_key] = {
-                            'product_name': product.name or '',
-                            'unit_weight': unit_weight,
-                            'total_weight': 0.0,
-                            'reduced_weight': 0.0,
-                            'increased_weight': 0.0,
-                        }
-
-                    qty = float(line.product_uom_qty or 0.0)
-                    prod_info = depots_map[depot_key]['categories'][categ_key]['products'][prod_key]
-                    line_weight = (prod_info['unit_weight'] * qty) if prod_info['unit_weight'] > 0 else qty
-                    prod_info['total_weight'] += line_weight
-
-                    if is_late:
-                        delta_qty = float(line.late_qty_delta or 0.0)
-                        delta_weight = (prod_info['unit_weight'] * delta_qty) if prod_info['unit_weight'] > 0 else delta_qty
-                        if delta_weight < 0:
-                            prod_info['reduced_weight'] += -delta_weight
-                        elif delta_weight > 0:
-                            prod_info['increased_weight'] += delta_weight
+            for product, weight, delta_weight in entries:
+                categ_name = (product.categ_id.name or _('FRESH')).upper()
+                categ_key = categ_name.lower()
+                categ_map = depots_map[depot_key]['categories'].setdefault(categ_key, {
+                    'categ_name': categ_name,
+                    'products': {},
+                })
+                self._add_weight_entry(categ_map['products'], product, weight, delta_weight)
 
         combo_pages = []
         for d_key, d_val in sorted(depots_map.items(), key=lambda item: item[1]['depot_name']):
-            for c_key, c_val in sorted(d_val['categories'].items(), key=lambda item: item[1]['categ_name']):
+            for c_key, c_val in sorted(d_val['categories'].items(), key=lambda item: _category_sort_key(item[1]['categ_name'])):
                 prod_list = sorted(c_val['products'].values(), key=lambda item: item['product_name'])
                 if prod_list:
                     combo_pages.append({
@@ -768,9 +831,11 @@ class ReportDockWeightBreakdown(models.AbstractModel):
         if not combo_pages:
             return None
 
-        return self._build_van_pdf_bytes(combo_pages, formatted_date, printed_at_str, is_late)
+        return self._build_van_pdf_bytes(
+            combo_pages, formatted_date, printed_at_str, is_late, is_all=wizard.report_type == 'all',
+        )
 
-    def _build_van_pdf_bytes(self, combo_pages, formatted_date, printed_at_str, is_late=False):
+    def _build_van_pdf_bytes(self, combo_pages, formatted_date, printed_at_str, is_late=False, is_all=False):
         """Pure layout step - takes already-grouped/sorted depot+category
         pages and draws them. Split out from _generate_van_pdf() so the
         layout code can be exercised standalone (e.g. by a smoke test)
@@ -795,7 +860,12 @@ class ReportDockWeightBreakdown(models.AbstractModel):
         delta_style = ParagraphStyle('DockVanDelta', fontName='Helvetica', fontSize=7.5, leading=9, alignment=2)
 
         formatted_date_esc = xml_escape(formatted_date)
-        report_title = "Dock Weight ALT's Breakdown Report" if is_late else "Dock Weight Breakdown Report"
+        if is_late:
+            report_title = "Dock Weight ALT's Breakdown Report"
+        elif is_all:
+            report_title = "All Dock Weight Breakdown Report"
+        else:
+            report_title = "Dock Weight Breakdown Report"
 
         story = []
         for idx, combo_page in enumerate(combo_pages):
@@ -866,6 +936,8 @@ class ReportDockWeightBreakdown(models.AbstractModel):
             c.footer_left_text = footer_text
             return c
 
+        doc.title = 'Dock Weight Breakdown Report'  # PDF metadata - shown by browser PDF viewers
+        doc.author = self.env.company.name or ''
         doc.build(story, canvasmaker=_make_canvas)
         pdf_value = buffer.getvalue()
         buffer.close()

@@ -1,0 +1,81 @@
+<odoo>
+    <!-- Step 1: module selection (dialog) -->
+    <record id="view_import_module_wizard_form" model="ir.ui.view">
+        <field name="name">zoho.import.module.form</field>
+        <field name="model">zoho.import.module</field>
+        <field name="arch" type="xml">
+            <form string="Import Zoho Modules">
+                <group>
+                    <field name="zoho_app_id"/>
+                    <field name="modules_ids" widget="many2many_tags" options="{'no_create': True}"/>
+                </group>
+                <div class="text-muted">
+                    The Odoo apps needed by the selected modules are installed on <b>Next</b>,
+                    then the proposed field mapping opens so you can review and adjust it before importing.
+                </div>
+                <footer>
+                    <button name="action_load_mapping" type="object" string="Next" class="btn-primary"/>
+                    <button string="Cancel" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_zoho_import_open_mapping" model="ir.actions.server">
+        <field name="name">Zoho CRM Import: Field Mapping</field>
+        <field name="model_id" ref="model_zoho_import_module"/>
+        <field name="state">code</field>
+        <field name="code">action = model._get_from_context().action_open_mapping()</field>
+    </record>
+
+    <!-- Step 2: field mapping review (full page) -->
+    <record id="view_zoho_import_module_line_list" model="ir.ui.view">
+        <field name="name">zoho.import.module.line.list</field>
+        <field name="model">zoho.import.module.line</field>
+        <field name="arch" type="xml">
+            <list string="Field Mapping" editable="bottom">
+                <header>
+                    <button name="action_import_mapping" type="object" string="Import" class="btn-primary"
+                            display="always"/>
+                </header>
+                <field name="sequence" widget="handle"/>
+                <field name="wizard_id" column_invisible="1"/>
+                <field name="odoo_model_id" column_invisible="1"/>
+                <field name="module_name_id" required="1" options="{'no_create': True, 'no_open': True}"
+                       domain="[('id', 'in', context.get('zoho_import_module_ids', []))]"/>
+                <field name="name"/>
+                <field name="field_option"/>
+                <field name="odoo_field_id" readonly="field_option != 'existing'"
+                       required="field_option == 'existing'" options="{'no_create': True, 'no_open': True}"/>
+                <field name="new_field_name" readonly="field_option != 'new'" optional="show"/>
+                <field name="new_field_type" readonly="field_option != 'new'" optional="show"/>
+                <field name="relation_model_id" optional="hide" options="{'no_create': True}"
+                       readonly="field_option != 'new' or new_field_type not in ('many2one', 'many2many')"/>
+                <field name="zoho_lookup_module" optional="show"/>
+                <field name="is_non_lookup" optional="show"/>
+                <field name="is_default" optional="hide"/>
+                <field name="default_value" optional="show" readonly="not is_default"/>
+                <field name="subform_summary" optional="show"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_zoho_import_module_line_search" model="ir.ui.view">
+        <field name="name">zoho.import.module.line.search</field>
+        <field name="model">zoho.import.module.line</field>
+        <field name="arch" type="xml">
+            <search string="Field Mapping">
+                <field name="name" string="Zoho Field"/>
+                <field name="odoo_field_id"/>
+                <field name="module_name_id"/>
+                <filter name="filter_existing" string="Existing Fields" domain="[('field_option', '=', 'existing')]"/>
+                <filter name="filter_new" string="New Fields" domain="[('field_option', '=', 'new')]"/>
+                <filter name="filter_default" string="Default Filters" domain="[('is_default', '=', True)]"/>
+                <group>
+                    <filter name="group_by_module" string="Zoho Module" context="{'group_by': 'module_name_id'}"/>
+                    <filter name="group_by_field_option" string="Field Option" context="{'group_by': 'field_option'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+</odoo>

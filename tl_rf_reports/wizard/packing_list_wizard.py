@@ -67,6 +67,15 @@ class PackingListWizard(models.TransientModel):
         default=_default_depot_ids,
         help="Select one or more depots. Leave unselected to include all depots."
     )
+    categ_ids = fields.Many2many(
+        'product.category',
+        'packing_list_wizard_category_rel',
+        'wizard_id',
+        'category_id',
+        string='Product Category',
+        help="Only products belonging to these categories are included in the report. "
+             "Leave empty to include all categories."
+    )
     include_late_orders = fields.Boolean(
         string='Late Order',
         default=False,
@@ -94,7 +103,7 @@ class PackingListWizard(models.TransientModel):
     def _onchange_report_type(self):
         self.include_late_orders = self.report_type == 'late'
         self.driver_packing_list = self.report_type == 'driver'
-        if self.driver_packing_list:
+        if self.driver_packing_list or self.include_late_orders:
             self.delivery_channel = 'regal_van'
 
     @api.onchange('driver_packing_list')
@@ -182,10 +191,10 @@ class PackingListWizard(models.TransientModel):
             return self._action_print_driver_packing_list()
 
         if self.delivery_channel == 'courier':
-            # Courier has no confirmed_qty/late split (see SaleOrderLine.
-            # _get_report_line_vals) - it always shows every eligible
-            # line's report_line_ids row(s), so validation checks those
-            # rows exist rather than just that a matching sale order does.
+            # Courier has no late split - it shows every eligible line's
+            # Pack Box history rows (stock.fresh.box.history.line), so
+            # validation checks those rows exist rather than just that a
+            # matching sale order does.
             order_line_domain = [
                 ('order_id.delivery_channel', '=', 'courier'),
                 ('order_id.state', 'in', ['sale', 'done']),
@@ -204,9 +213,8 @@ class PackingListWizard(models.TransientModel):
                     self.delivery_date_to.strftime('%d/%m/%Y'),
                 ))
 
-            order_lines._recompute_report_lines()
-            if not self.env['sale.order.line.report_lines'].search_count(
-                [('sale_order_line_id', 'in', order_lines.ids)]
+            if not self.env['stock.fresh.box.history.line'].search_count(
+                [('sale_line_id', 'in', order_lines.ids)]
             ):
                 raise UserError(_(
                     "No packable report lines were found for Courier Delivery orders with delivery dates between %s and %s."
@@ -241,20 +249,19 @@ class PackingListWizard(models.TransientModel):
             if not eligible_orders:
                 raise UserError(_("Eligible batches were found, but they do not contain any matching Regal Van Delivery sale orders."))
 
-            # Late is report-line-based, not order-based: confirmed_qty and
-            # late_qty_delta each become their own report_line_ids row (see
-            # SaleOrderLine._get_report_line_vals), so validation checks
-            # those rows directly instead of a per-line is_late_order flag
-            # that only tells you a line changed, not whether it produced a
+            # Late is history-line-based, not order-based: the Pack Box
+            # wizard writes normal and late portions as separate
+            # stock.fresh.box.history.line rows, so validation checks those
+            # rows directly instead of a per-line is_late_order flag that
+            # only tells you a line changed, not whether it produced a
             # normal or late row.
             order_lines = eligible_orders.mapped('order_line').filtered(
                 lambda l: not l.display_type and l.product_id and l.product_uom_qty > 0
             )
-            order_lines._recompute_report_lines()
             is_late = bool(self.include_late_orders)
-            if not self.env['sale.order.line.report_lines'].search_count([
-                ('sale_order_line_id', 'in', order_lines.ids),
-                ('late_order', '=', is_late),
+            if not self.env['stock.fresh.box.history.line'].search_count([
+                ('sale_line_id', 'in', order_lines.ids),
+                ('is_late_order', '=', is_late),
             ]):
                 raise UserError(_("Eligible batches were found, but they do not contain any matching Regal Van Delivery sale orders."))
 

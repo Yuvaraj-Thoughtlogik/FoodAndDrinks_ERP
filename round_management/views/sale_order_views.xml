@@ -20,7 +20,7 @@
                 <label for="batch_id" string="Batch Code"/>
                   <div class="o_row">
                       <field name="batch_id" 
-                             string="Batch Code" 
+                             string="Batch Code"
                              context="{
                                  'list_view_ref': 'round_management.view_round_batch_tree',
                                  'order': 'delivery_date asc'
@@ -297,29 +297,69 @@
             
             <xpath expr="//notebook" position="inside">
                 <page string="Order History" name="order_history_tab">
-                    <field name="order_history_ids" mode="list" readonly="1">
-                        <list create="0" delete="0" edit="0">
-                            <field name="name" string="Order Number"/>
-                            <field name="customer_code" string="Customer Code"/>
-                            <field name="partner_id" string="Customer Name"/>
-                            <field name="date_order" string="Order Date"/>
-                            <field name="delivery_date" string="Delivery Date"/>
-                            <field name="delivery_channel" string="Delivery Channel"/>
-                            <field name="round_id" string="Delivery Round"/>
-                            <field name="batch_id" string="Round Batch"/>
+                    <group string="Previous Orders">
+                        <field name="order_history_ids" mode="list,form" nolabel="1" readonly="1">
                             
-                            <!-- Order Flags -->
-                            <field name="is_late_order" string="Late Order" widget="boolean_toggle"/>
-                            <field name="is_staff_order" string="Staff Order" widget="boolean_toggle"/>
-                            <field name="is_b2b" string="B2B" widget="boolean_toggle"/>
-                            
-                            <field name="amount_total" string="Total" widget="monetary"/>
-                            <field name="state" widget="badge" 
-                                   decoration-success="state in ('sale', 'done')" 
-                                   decoration-info="state == 'draft'" 
-                                   decoration-muted="state == 'cancel'"/>
-                        </list>
-                    </field>
+                            <!-- Master Order History List -->
+                            <list create="0" delete="0" edit="0">
+                                <field name="name" string="Ord Num"/>
+                                <field name="is_late_order" string="Late" widget="boolean_toggle"/>
+                                
+                                <!-- Formatted as Date-Only without time -->
+                                <field name="date_order" string="Ord Date" widget="date"/>
+                                <field name="delivery_date" string="Del Date"/>
+                                
+                                <field name="pay_type" string="Pay Type"/>
+                                <field name="round_id" string="Round Name"/>
+                                <field name="amount_total" string="Total £" widget="monetary"/>
+                                
+                                <!-- Delivery Time Slot -->
+                                <field name="delivery_times" string="Time"/>
+                                
+                                <field name="note" string="Notes"/>
+                                
+                                <!-- Alt Addr Flag: Yes / No -->
+                                <field name="has_alt_address" string="Alt Addr"/>
+                                
+                                <field name="state" widget="badge" 
+                                       decoration-success="state in ('sale', 'done')" 
+                                       decoration-info="state == 'draft'" 
+                                       decoration-muted="state == 'cancel'"/>
+                                <field name="batch_id" string="Batch N°"/>
+                            </list>
+
+                            <!-- Inline Form View for line items inspection -->
+                            <form string="Order Details">
+                                <sheet>
+                                    <group col="4">
+                                        <field name="name" string="Order Number"/>
+                                        <field name="date_order" widget="date"/>
+                                        <field name="delivery_date"/>
+                                        <field name="delivery_times"/>
+                                        <field name="has_alt_address"/>
+                                        <field name="amount_total" widget="monetary"/>
+                                    </group>
+                                    <notebook>
+                                        <page string="Order Lines">
+                                            <field name="order_line" readonly="1">
+                                                <list create="0" delete="0" edit="0">
+                                                    <field name="sequence" string="Sub Or..."/>
+                                                    <field name="product_id" string="Code"/>
+                                                    <field name="name" string="Stk/Prc Name"/>
+                                                    <field name="product_uom_qty" string="Quantity"/>
+                                                    <field name="price_unit" string="Price £"/>
+                                                    <field name="price_subtotal" string="Gross £"/>
+                                                    <field name="discount" string="Discount £"/>
+                                                    <field name="qty_delivered_method" string="Status"/>
+                                                </list>
+                                            </field>
+                                        </page>
+                                    </notebook>
+                                </sheet>
+                            </form>
+
+                        </field>
+                    </group>
                 </page>
             </xpath>
 
@@ -364,4 +404,37 @@
         </field>
     </record>
     
+    <record id="view_order_form_inherit_hide_fields" model="ir.ui.view">
+        <field name="name">sale.order.form.inherit.hide.fields</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="arch" type="xml">
+
+            <!-- Hide Payment Terms (payment_term_id) -->
+<!--            <xpath expr="//field[@name='payment_term_id']" position="attributes">-->
+<!--                <attribute name="invisible">1</attribute>-->
+<!--            </xpath>-->
+
+            <!-- Hide Last Ring Date -->
+            <xpath expr="//field[@name='last_ring_date']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+
+        </field>
+    </record>
+
+    <record id="view_order_form_inherit_hide_shipping_weight" model="ir.ui.view">
+        <field name="name">sale.order.form.inherit.hide.shipping.weight</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="delivery.view_order_form_with_carrier"/>
+        <field name="arch" type="xml">
+
+            <!-- Hide Shipping Weight (added by the delivery module) -->
+            <xpath expr="//field[@name='shipping_weight']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+
+        </field>
+    </record>
+
 </odoo>

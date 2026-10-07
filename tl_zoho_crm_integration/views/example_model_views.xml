@@ -1,0 +1,105 @@
+<odoo>
+<!--    access_zoho_example_model,access_zoho_example_model,model_zoho_example_model,base.group_user,1,1,1,1-->
+<!--    access_zoho_example_model_line,access_zoho_example_model_line,model_zoho_example_model_line,base.group_user,1,1,1,1-->
+    <record id="view_zoho_example_model_list" model="ir.ui.view">
+        <field name="name">zoho.example.model.list</field>
+        <field name="model">zoho.example.model</field>
+        <field name="arch" type="xml">
+            <list string="Zoho Example">
+                <field name="id"/>
+                <!--                <field name="x_zoho_id"/>-->
+                <field name="name"/>
+                <field name="count"/>
+                <field name="price"/>
+                <field name="category"/>
+                <field name="checkbox"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Form View for zoho.example.model -->
+    <record id="view_zoho_example_model_form" model="ir.ui.view">
+        <field name="name">zoho.example.model.form</field>
+        <field name="model">zoho.example.model</field>
+        <field name="arch" type="xml">
+            <form string="Zoho Example">
+                <sheet>
+                    <group>
+                        <field name="id"/>
+                        <!--                        <field name="x_zoho_id"/>-->
+                        <field name="name"/>
+                        <field name="description"/>
+                        <field name="checkbox"/>
+                        <field name="count"/>
+                        <field name="price"/>
+                        <field name="category"/>
+                        <field name="date"/>
+                        <field name="datetime"/>
+                        <field name="file_data_filename"/>
+                        <field name="file_data" filename="file_data_filename"/>
+                        <field name="partner_id"/>
+                        <field name="partner_ids"/>
+                        <field name="tag_ids" widget="many2many_tags"/>
+                    </group>
+                    <notebook>
+                        <page string="Lines">
+                            <field name="line_ids">
+                                <list>
+                                    <field name="id"/>
+                                    <field name="name"/>
+                                    <field name="count"/>
+                                    <field name="price"/>
+                                    <!--                                    <field name="category"/>-->
+                                    <field name="checkbox"/>
+                                </list>
+                                <form>
+                                    <group>
+                                        <field name="name"/>
+                                        <field name="description"/>
+                                        <field name="checkbox"/>
+                                        <field name="count"/>
+                                        <field name="price"/>
+                                        <!--                                        <field name="category"/>-->
+                                        <field name="date"/>
+                                        <field name="datetime"/>
+                                        <field name="file_data_filename"/>
+                                        <field name="file_data" filename="file_data_filename"/>
+                                        <field name="partner_id"/>
+
+                                    </group>
+                                </form>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_zoho_example_model" model="ir.actions.act_window">
+        <field name="name">Zoho Example Model</field>
+        <field name="res_model">zoho.example.model</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <record id="action_zoho_example_model_line" model="ir.actions.act_window">
+        <field name="name">Zoho Example Model line</field>
+        <field name="res_model">zoho.example.model.line</field>
+        <field name="view_mode">list,form</field>
+    </record>
+    <menuitem id="menu_zoho_test_model"
+              name="Test Model"
+              parent="tl_odoo_zoho_integration.menu_zoho_integration_root"
+              action="action_zoho_example_model"
+              sequence="30"/>
+    <menuitem id="menu_zoho_example_model"
+              name="Example Zoho Model"
+              parent="menu_zoho_test_model"
+              action="action_zoho_example_model"
+              sequence="30"/>
+    <menuitem id="menu_zoho_example_model_line"
+              name="Example Zoho Model Line"
+              parent="menu_zoho_test_model"
+              action="action_zoho_example_model_line"
+              sequence="30"/>
+</odoo>

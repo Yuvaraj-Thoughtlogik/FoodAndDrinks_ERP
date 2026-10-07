@@ -10,10 +10,15 @@
             <field name="arch" type="xml">
                 <xpath expr="//field[@name='name']" position="attributes">
                     <attribute name="filter_domain">
-                        ['|', '|', '|', '|', '|', '|',
+                        ['|', '|', '|', '|', '|', '|', '|', '|', '|', '|', '|',
                         ('name', 'ilike', self),
                         ('client_order_ref', 'ilike', self),
                         ('partner_id', 'child_of', self),
+                        ('customer_code', 'ilike', self),
+                        ('partner_id.zip', 'ilike', self),
+                        ('partner_id.phone', 'ilike', self),
+                        ('partner_shipping_id.zip', 'ilike', self),
+                        ('partner_shipping_id.phone', 'ilike', self),
                         ('round_id', 'ilike', self),
                         ('round_full_name', 'ilike', self),
                         ('round_code', 'ilike', self),
@@ -21,6 +26,8 @@
                     </attribute>
                 </xpath>
                 <xpath expr="//search" position="inside">
+                    <field name="customer_code" string="Customer Code"
+                           filter_domain="[('customer_code', 'ilike', self)]"/>
                     <filter string="Delivery Date Today"
                             name="filter_delivery_today"
                             domain="[

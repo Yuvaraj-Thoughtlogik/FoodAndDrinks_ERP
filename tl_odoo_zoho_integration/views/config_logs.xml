@@ -1,0 +1,92 @@
+<odoo>
+    <record id="view_zoho_config_logs_form" model="ir.ui.view">
+        <field name="name">zoho.config.logs.form</field>
+        <field name="model">zoho.config.logs</field>
+        <field name="arch" type="xml">
+            <form string="Zoho Config Log" create="false" edit="false">
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="create_date" string="Sync Time"/>
+
+                            <field name="zoho_config_app_id"/>
+                            <!--                            <field name="zoho_config_id"/>-->
+                            <label for="one_way"/>
+                            <div class="oe_row">
+                                <field name="one_way" string="Test Type"/>
+                                <label for="one_way" string="Zoho to Odoo"/>
+                                <field name="two_way" string="Odoo to Zoho"/>
+                                <label for="two_way"/>
+                            </div>
+                            <field name="modules"/>
+                            <field name="status"/>
+                        </group>
+                        <group>
+                            <field name="success_message"/>
+                            <field name="error_message"/>
+                        </group>
+                    </group>
+
+                    <notebook>
+                        <page invisible="not one_way" string="Zoho to Odoo" >
+                            <group>
+                                <group string="Request">
+                                    <field name="one_way_request" colspan="2" widget="json_editor_widget"  nolabel="1"/>
+                                </group>
+                                <group string="Response">
+                                    <field name="one_way_response" colspan="2" widget="json_editor_widget"  nolabel="1"/>
+                                </group>
+
+                            </group>
+                        </page>
+
+                        <page string="Odoo to Zoho" invisible="not two_way">
+                            <group>
+                                <group string="Request">
+                                    <field name="two_way_request" colspan="2" widget="json_editor_widget" nolabel="1"/>
+                                </group>
+                                <group string="Response" >
+                                    <field name="two_way_response" colspan="2" widget="json_editor_widget" nolabel="1"/>
+                                </group>
+                            </group>
+                        </page>
+
+                        <page string="Created &amp; Updated Records">
+                            <group>
+                                <group string="Odoo">
+                                    <!--                                    <field name="created_odoo_ids" widget="json_editor_widget" string="Odoo IDs"/>-->
+                                    <!--                                    <field name="created_zoho_ids" widget="json_editor_widget" string="Zoho IDs"/>-->
+                                    <field name="odoo_ids" colspan="2" widget="json_editor_widget" string="Odoo IDs" nolabel="1"/>
+
+                                </group>
+                                <group string="Zoho">
+                                    <!--                                    <field name="updated_odoo_ids" widget="json_editor_widget" string="Odoo IDs"/>-->
+                                    <!--                                    <field name="updated_zoho_ids" widget="json_editor_widget" string="Zoho IDs"/>-->
+                                    <field name="zoho_ids" colspan="2" widget="json_editor_widget" string="Zoho IDs" nolabel="1"/>
+                                </group>
+                            </group>
+                        </page>
+
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+
+    <record id="view_zoho_config_logs_list" model="ir.ui.view">
+        <field name="name">zoho.config.logs.list</field>
+        <field name="model">zoho.config.logs</field>
+        <field name="arch" type="xml">
+            <list string="Zoho Config Logs">
+                <field name="create_date" string="Sync Time"/>
+                <field name="sync_type"/>
+                <field name="last_sync"/>
+                <field name="modules"/>
+                <field name="status"/>
+            </list>
+        </field>
+    </record>
+
+
+</odoo>

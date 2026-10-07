@@ -21,6 +21,16 @@
                     </button>
 
                 </xpath>
+                <!-- Tel Number (landline); Phone is used as the mobile number. -->
+                <xpath expr="//field[@name='website']" position="after">
+                    <field name="tel_number" widget="phone"/>
+                </xpath>
+                <xpath expr="//field[@name='child_ids']//div[field[@name='phone']]" position="after">
+                    <div class="d-flex align-items-baseline">
+                        <i class="fa fa-fw me-1 fa-phone-square text-primary" title="Tel Number"/>
+                        <field name="tel_number" widget="phone" class="w-100" placeholder="Tel Number"/>
+                    </div>
+                </xpath>
                 <xpath expr="//page[@name='sales_purchases']//group[@name='sale']" position="inside">
                     <field name="partner_customer_source_id"  options="{
                                'no_open': True,

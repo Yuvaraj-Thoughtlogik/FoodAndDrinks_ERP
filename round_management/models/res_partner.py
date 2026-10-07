@@ -3,7 +3,7 @@ from odoo import models, fields,api
 class ResPartner(models.Model):
     _inherit = 'res.partner'
 
-    round_id = fields.Many2one('round.management.round', string='Assigned Round',)
+    round_id = fields.Many2one('round.management.round', string='Assigned Round', required=True)
     batch_ids = fields.One2many(
         'round.management.batch', 
         string='Customer Batches',

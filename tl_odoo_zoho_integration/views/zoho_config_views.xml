@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <record id="view_zoho_config_form" model="ir.ui.view">
+        <field name="name">zoho.config.form</field>
+        <field name="model">zoho.config</field>
+        <field name="arch" type="xml">
+            <form string="Zoho Configuration" create="false">
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="cr_name" readonly="1"/>
+                        </h1>
+                        <br/>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="cr_client_id"/>
+                            <field name="cr_client_secret"/>
+                            <field name="cr_redirect_uri"/>
+                            <field name="notify_base_url" placeholder="https://erp.example.com"/>
+                        </group>
+                        <group>
+                            <field name="config_region_id"/>
+                            <field name="scope_ids" widget="many2many_tags"/>
+                        </group>
+                    </group>
+<!--                    <field name="regenerate_required"/>-->
+
+                    <div style="margin:30px 0;" class="alert alert-warning" role="alert" invisible="not regenerate_required">
+                        Region or scopes have changed. New authorization is required. Please regenerate your credentials.
+                    </div>
+
+                    <div style="display:flex;gap:10px;margin:20px 0;">
+                        <button string="Generate Auth URL" type="object" name="generate_auth_url" class="btn-primary"/>
+                        <button string="Refresh Access Token" type="object" invisible="not cr_refresh_token" name="refresh_access_token" class="btn-primary"/>
+                    </div>
+                    <notebook>
+                        <page name="Tokens">
+                            <group>
+                                <group>
+                                    <field name="cr_access_token" readonly="1"/>
+                                    <field name="cr_refresh_token" readonly="1"/>
+                                    <field name="cr_token_expiry" readonly="1"/>
+                                    <field name="addon_ids" widget="many2many_tags" string="Available Applications"/>
+                                </group>
+                            </group>
+                        </page>
+                    </notebook>
+                </sheet>
+
+            </form>
+        </field>
+    </record>
+
+    <record id="view_zoho_config_list" model="ir.ui.view">
+        <field name="name">zoho.config.list</field>
+        <field name="model">zoho.config</field>
+        <field name="arch" type="xml">
+            <list string="Zoho Configuration">
+                <field name="cr_name"/>
+                <field name="cr_client_id"/>
+                <field name="cr_token_expiry"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="zoho_config_record" model="zoho.config">
+        <field name="cr_name">Zoho OAuth2</field>
+    </record>
+</odoo>

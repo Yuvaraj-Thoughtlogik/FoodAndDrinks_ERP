@@ -1,0 +1,17 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_zoho_config,access_zoho_config,model_zoho_config,base.group_user,1,1,1,1
+access_zoho_config_scope,access_zoho_config_scope,model_zoho_config_scope,base.group_user,1,1,1,1
+access_zoho_config_module,access_zoho_config_module,model_zoho_config_module,base.group_user,1,1,1,1
+access_zoho_config_schedule,access_zoho_config_schedule,model_zoho_config_schedule,base.group_user,1,1,1,1
+access_zoho_config_fields_map,access_zoho_config_fields_map,model_zoho_config_fields_map,base.group_user,1,1,1,1
+access_zoho_config_subform_field_map,access_zoho_config_subform_fields_map,model_zoho_config_subform_fields_map,base.group_user,1,1,1,1
+access_zoho_live_queue,access_zoho_live_queue,model_zoho_live_queue,base.group_user,1,1,1,1
+access_zoho_config_logs,access_zoho_config_logs,model_zoho_config_logs,base.group_user,1,1,1,1
+access_zoho_config_region_user,access.zoho.config.region.user,model_zoho_config_region,base.group_user,1,0,0,0
+access_zoho_config_region_manager,access.zoho.config.region.manager,model_zoho_config_region,base.group_system,1,1,1,1
+access_zoho_config_application_user,access.zoho.config.application.user,model_zoho_config_application,base.group_user,1,1,1,1
+
+
+access_zoho_config_testcase_wizard,access_zoho_config_testcase_wizard,model_zoho_config_testcase_wizard,base.group_user,1,1,1,1
+
+

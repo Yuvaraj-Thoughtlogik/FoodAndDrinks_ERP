@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Plain Label page size: 100mm x 130mm portrait thermal roll format,
+         matching the approved reference Plain Label design. -->
+    <record id="paperformat_production_label_plain" model="report.paperformat">
+        <field name="name">Production Label Plain 100x130mm</field>
+        <field name="default" eval="False"/>
+        <field name="format">custom</field>
+        <field name="page_height">130</field>
+        <field name="page_width">100</field>
+        <field name="orientation">Portrait</field>
+        <field name="margin_top">0</field>
+        <field name="margin_bottom">0</field>
+        <field name="margin_left">0</field>
+        <field name="margin_right">0</field>
+        <field name="header_line" eval="False"/>
+        <field name="header_spacing">0</field>
+        <field name="dpi">90</field>
+    </record>
+
+    <!-- ============ PLAIN LABEL ACTION ============ -->
+    <record id="action_report_production_label_plain" model="ir.actions.report">
+        <field name="name">Production Label - Plain</field>
+        <field name="model">production.label.wizard</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">tl_rf_reports.production_label_plain</field>
+        <field name="report_file">tl_rf_reports.production_label_plain</field>
+        <field name="paperformat_id" ref="paperformat_production_label_plain"/>
+        <field name="print_report_name">'Production Label Plain - %s' % (object.delivery_date_from)</field>
+        <field name="binding_model_id" eval="False"/>
+    </record>
+
+    <!-- ============ PLAIN LABEL QWEB TEMPLATE ============ -->
+    <template id="production_label_plain">
+        <t t-call="web.basic_layout">
+            <t t-set="total_labels" t-value="len(label_lines)"/>
+            <t t-foreach="label_lines" t-as="label">
+                <div style="width:100mm; height:130mm; box-sizing:border-box; padding:2.5mm; page-break-after:always; font-family:Arial, Helvetica, sans-serif; position:relative; overflow:hidden; font-size:10px; line-height:1.25; color:#000;">
+
+                    <!-- Outer Green Border Container -->
+                    <div style="width:100%; height:100%; box-sizing:border-box; border:2px solid #008000; border-radius:3.5mm; padding:2.0mm 2.2mm; position:relative;">
+
+                        <!-- 1. Product Name Header (Green Bold Centered) -->
+                        <div style="text-align:center; color:#008000; font-weight:bold;">
+                            <div style="font-size:15px; line-height:1.15;">
+                                <span t-esc="label.get('product_name_main') or label.get('product_name')"/>
+                            </div>
+                            <div t-if="label.get('product_name_sub')" style="font-size:11px; line-height:1.15; margin-top:0.3mm;">
+                                <span t-esc="label.get('product_name_sub')"/>
+                            </div>
+                        </div>
+
+                        <!-- 2. Cooking Instructions - sourced live from the product's
+                             cooking_instructions_html field. No hardcoded recipe text. -->
+                        <div style="margin-top:1.5mm; font-size:7.8px; line-height:1.22; text-align:left;">
+                            <div t-if="label.get('cooking_heading')" style="font-weight:bold; font-size:8.2px;">
+                                <span t-esc="label.get('cooking_heading')"/>
+                            </div>
+                            <div>
+                                <t t-if="label.get('cooking_instructions_html')">
+                                    <span t-raw="label.get('cooking_instructions_html')"/>
+                                </t>
+                                <t t-elif="label.get('cooking_instructions')">
+                                    <span t-esc="label.get('cooking_instructions')"/>
+                                </t>
+                            </div>
+                        </div>
+                        
+
+                        <!-- 3. Ingredients - sourced live from the product's
+                             ingredients_html field. No hardcoded ingredient list. -->
+                        <div style="margin-top:1.5mm; font-size:7.4px; line-height:1.22; text-align:left;">
+                            <t t-if="label.get('ingredients_html')">
+                                <span t-raw="label.get('ingredients_html')"/>
+                            </t>
+                            <t t-elif="label.get('ingredients')">
+                                <span t-raw="label.get('ingredients')"/>
+                            </t>
+                        </div>
+
+                        <!-- 4. Allergen Notice & Advisory Notices (Hardcoded, fixed legal
+                             text - not product fields) & Catch Info (sourced live from the
+                             product's fish_info field, no hardcoded fallback). -->
+                        <div style="margin-top:1.2mm; font-size:7.5px; line-height:1.22; text-align:left;">
+<!--                            <div>Allergens including Gluten are in <b>Bold</b></div>-->
+<!--                            <div>Although every effort has been made to remove bones, some may remain.</div>-->
+                            <div t-if="label.get('catch_info')">
+                                <span t-esc="label.get('catch_info')"/>
+                            </div>
+                        </div>
+
+                        <!-- 5. Storage & Freezing Notices (Hardcoded Bold) -->
+                        <div style="margin-top:1.0mm; font-size:7.8px; font-weight:bold; line-height:1.22; text-align:left;">
+                            <div>Store at or below 5°C.</div>
+                            <div>Use by date shown on label or if freezing we recommend freezing on day of purchase.</div>
+                        </div>
+
+                        <!-- 6. Bottom Grid (3 Columns: Left Dates/Weight, Middle Nutrition, Right GB Oval) -->
+                        <div style="position:absolute; bottom:6.0mm; left:2.2mm; right:2.2mm; display:table; width:calc(100% - 4.4mm);">
+
+                            <!-- Left: Production Date, Use By, Min Weight -->
+                            <div style="display:table-cell; vertical-align:top; width:28mm; text-align:left; font-size:7.8px; line-height:1.25;">
+                                <div>Production Date:</div>
+                                <div><span t-esc="label.get('production_date_display')"/></div>
+                                <div style="margin-top:0.6mm;">Use By:</div>
+                                <div><span t-esc="label.get('use_by_display')"/></div>
+                                <div t-if="label.get('min_weight_display')" style="margin-top:2.0mm; font-size:9.5px; font-weight:bold;">
+                                    <span t-esc="label.get('min_weight_display')"/>
+                                </div>
+                            </div>
+
+                            <!-- Middle: Nutrition Table - sourced live from the product's
+                                 Nutrition field (product.nutritional_info_html /
+                                 product.template.nutritional_info_html). No hardcoded
+                                 per-100g values. -->
+                            <div style="display:table-cell; vertical-align:top; text-align:left; font-size:6.8px; line-height:1.25; padding-left:1mm;">
+                                <t t-if="label.get('nutrition_html')">
+                                    <span t-raw="label.get('nutrition_html')"/>
+                                </t>
+                                <t t-elif="label.get('nutritional_info_html')">
+                                    <span t-raw="label.get('nutritional_info_html')"/>
+                                </t>
+                            </div>
+
+                            <!-- Right: GB GG476 Oval Stamp -->
+                            <div style="display:table-cell; vertical-align:bottom; text-align:right; width:20mm;">
+                                <div style="display:inline-block; width:18mm; height:12mm; border:1px solid #000; border-radius:50%; text-align:center; vertical-align:middle; line-height:1.15; padding-top:1.5mm; box-sizing:border-box; font-size:8px; font-weight:bold;">
+                                    GB<br/>GG476
+                                </div>
+                            </div>
+
+                        </div>
+
+                        <!-- 7. Footer: Company Address (as provided by the wizard/company record) -->
+                        <div t-if="label.get('company_address')" style="position:absolute; bottom:1.2mm; left:0; right:0; text-align:center; font-size:6.8px; line-height:1.15;">
+                            <span t-esc="label.get('company_address')"/>
+                        </div>
+
+                    </div>
+                </div>
+            </t>
+        </t>
+    </template>
+</odoo>

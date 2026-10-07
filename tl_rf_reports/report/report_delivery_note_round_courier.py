@@ -117,6 +117,7 @@ class ReportDeliveryNoteRoundCourier(DeliveryNoteReportMixin, models.AbstractMod
                 'qty': qty,
                 'product_name': prod_name,
                 'extra_note': extra_note,
+                'special_note': self._special_note(line),
             })
 
         return sorted(cat_dict.values(), key=lambda c: (c['priority'], c['name']))
@@ -370,10 +371,10 @@ class ReportDeliveryNoteRoundCourier(DeliveryNoteReportMixin, models.AbstractMod
 
                 item_rows = [
                     [Paragraph(str(item['qty']), normal_style), Paragraph("X", normal_style),
-                     Paragraph(
-                         xml_escape(item['product_name']) + (f" {xml_escape(item['extra_note'])}" if item['extra_note'] else ''),
-                         normal_style,
-                     )]
+                     Paragraph(xml_escape(self._append_special_note(
+                         item['product_name'] + (f" {item['extra_note']}" if item['extra_note'] else ''),
+                         item.get('special_note'),
+                     )), normal_style)]
                     for item in cat['lines']
                 ]
                 items_table = Table(item_rows, colWidths=[printable_width * 0.06, printable_width * 0.06, printable_width * 0.88])
@@ -404,6 +405,8 @@ class ReportDeliveryNoteRoundCourier(DeliveryNoteReportMixin, models.AbstractMod
             c.disclaimer_text = disclaimer_text
             return c
 
+        doc.title = 'Delivery Note Round - Courier'  # PDF metadata - shown by browser PDF viewers
+        doc.author = self.env.company.name or ''
         doc.build(story, canvasmaker=_make_canvas)
         pdf_value = buffer.getvalue()
         buffer.close()

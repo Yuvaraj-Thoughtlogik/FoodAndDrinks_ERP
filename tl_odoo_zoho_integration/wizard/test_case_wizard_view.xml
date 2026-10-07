@@ -1,0 +1,61 @@
+<odoo>
+<!--    access_zoho_config_testcase_wizard,access_zoho_config_testcase_wizard,model_zoho_config_testcase_wizard,base.group_user,1,1,1,1-->
+
+    <data noupdate="0">
+        <record id="view_zoho_config_testcase_wizard_form" model="ir.ui.view">
+            <field name="name">zoho.config.testcase.wizard.form</field>
+            <field name="model">zoho.config.testcase.wizard</field>
+            <field name="arch" type="xml">
+                <form string="Zoho Sync Test">
+                    <group>
+                        <group>
+                            <field name="config_module_id"/>
+                            <label for="one_way"/>
+                            <div class="oe_row">
+                                <field name="one_way" string="Test Type"/>
+                                <label for="one_way" string="Zoho to Odoo"/>
+                                <field name="two_way" string="Odoo to Zoho"/>
+                                <label for="two_way"/>
+                            </div>
+                        </group>
+                        <group/>
+                        <group invisible="not one_way">
+                            <field name="zoho_record" required="one_way" invisible="not one_way"/>
+                        </group>
+                        <group>
+                            <field name="test_type" invisible="1"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page name="Zoho to Odoo" invisible="not one_way or (not one_way_request and not one_way_response)">
+                            <group>
+                                <group string="Request" >
+                                    <field name="one_way_request" colspan="2" widget="json_editor_widget"  readonly="1" nolabel="1"/>
+                                </group>
+                                <group string="Response"  >
+                                    <field name="one_way_response" colspan="2"  widget="json_editor_widget"  readonly="1" nolabel="1"/>
+                                </group>
+                            </group>
+                        </page>
+                        <page name="Odoo to Zoho" invisible="not two_way or (not two_way_request and not two_way_response)">
+                            <group>
+                                <group string="Request">
+                                    <field name="two_way_request" colspan="2"  widget="json_editor_widget" readonly="1" nolabel="1" />
+                                </group>
+                                <group string="Response">
+                                    <field name="two_way_response" colspan="2" widget="json_editor_widget"  readonly="1" nolabel="1"/>
+                                </group>
+                            </group>
+                        </page>
+                    </notebook>
+
+
+                    <footer>
+                        <button name="action_confirm" type="object" string="Run Test" class="btn-primary"/>
+                        <button string="Cancel" class="btn-secondary" special="cancel"/>
+                    </footer>
+                </form>
+            </field>
+        </record>
+    </data>
+</odoo>

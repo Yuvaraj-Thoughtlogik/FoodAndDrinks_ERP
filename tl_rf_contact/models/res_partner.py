@@ -19,7 +19,7 @@ class ResPartner(models.Model):
     _inherit = "res.partner"
 
     customer_code = fields.Char(
-        string="Customer Code",
+        string="Partner Code",
         copy=False,
     )
 
@@ -59,7 +59,7 @@ class ResPartner(models.Model):
             ("agent", "Agent"),
             ("online", "Online"),
         ],
-        string="Customer Type",
+        string="Customer Type", required=True
     )
 
     last_sale_order = fields.Many2one(comodel_name="sale.order", string="Last Order",compute="_compute_last_sale_order",store=True)

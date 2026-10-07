@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data >
+<!--        <record id="zoho_config_crm_application" model="zoho.config.application">-->
+<!--            <field name="name">Zoho CRM</field>-->
+<!--            <field name="addon_name">tl_zoho_crm_integration</field>-->
+<!--        </record>-->
+
+        <!-- forcecreate="0": skip (instead of failing the upgrade) when the configuration record was deleted. -->
+        <record id="tl_odoo_zoho_integration.zoho_config_record" model="zoho.config" forcecreate="0">
+            <field name="scope_ids"
+                   eval="[
+                   (4, ref('tl_zoho_crm_integration.zoho_scope_zohocrm_users_all')),
+                   (4, ref('tl_zoho_crm_integration.zoho_scope_zohocrm_org_all')),
+                   (4, ref('tl_zoho_crm_integration.zoho_scope_zohocrm_modules_all')),
+                   (4, ref('tl_zoho_crm_integration.zoho_scope_zohocrm_files_read')),
+                   (4, ref('tl_zoho_crm_integration.zoho_scope_zohocrm_files_create')),
+                   (4, ref('tl_zoho_crm_integration.zoho_scope_zohocrm_notifications_all')),
+               ]"
+            />
+        </record>
+
+<!--        <record id="crm_open_config_after_install" model="ir.actions.todo">-->
+<!--            <field name="action_id" ref="tl_odoo_zoho_integration.action_open_after_install"/>-->
+<!--        </record>-->
+    </data>
+</odoo>

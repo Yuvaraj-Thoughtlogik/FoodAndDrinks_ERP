@@ -34,6 +34,8 @@ from reportlab.platypus import (
 
 from odoo import models
 
+from .label_fit import FooterPush, LabelDocTemplate, build_fitted_label, label_cache_key
+
 # --- Frozen Label page size: 100mm x 50mm standard thermal roll size. ---
 PAGE_WIDTH = 100 * mm
 PAGE_HEIGHT = 50 * mm
@@ -47,31 +49,45 @@ class ProductionLabelReportFrozen(models.AbstractModel):
     _description = 'Production Label Report Data - Frozen'
     _inherit = 'report.tl_rf_reports.report_production_label_document_courier'
 
-    def _label_circle_flowable(self):
+    # Lowest font scale tried when reflowing long content. Below this the
+    # label is shrunk as a block, so it still stays on one page.
+    MIN_FONT_SCALE = 0.4
+
+    def _label_circle_flowable(self, scale=1.0):
         """Approximates the UK oval health mark: 'GB / GG 476'"""
-        w, h = 13 * mm, 9.5 * mm
+        w, h = 13 * mm * scale, 9.5 * mm * scale
         d = Drawing(w, h)
-        d.add(Ellipse(w / 2, h / 2, (w / 2) - 0.4 * mm, (h / 2) - 0.4 * mm, strokeWidth=0.8, strokeColor=colors.black, fillColor=None))
-        d.add(String(w / 2, (h / 2) + 0.6 * mm, "GB", fontName='Helvetica-Bold', fontSize=6.5, textAnchor='middle'))
-        d.add(String(w / 2, (h / 2) - 2.2 * mm, "GG 476", fontName='Helvetica-Bold', fontSize=6.5, textAnchor='middle'))
+        d.add(Ellipse(w / 2, h / 2, (w / 2) - 0.4 * mm * scale, (h / 2) - 0.4 * mm * scale,
+                      strokeWidth=max(0.5, 0.8 * scale), strokeColor=colors.black, fillColor=None))
+        d.add(String(w / 2, (h / 2) + 0.6 * mm * scale, "GB", fontName='Helvetica-Bold', fontSize=6.5 * scale, textAnchor='middle'))
+        d.add(String(w / 2, (h / 2) - 2.2 * mm * scale, "GG 476", fontName='Helvetica-Bold', fontSize=6.5 * scale, textAnchor='middle'))
         return d
 
-    def _frozen_label_styles(self):
+    def _frozen_label_styles(self, scale=1.0):
+        """Paragraph styles. `scale` multiplies every font size / leading so
+        long content can be shrunk to fit the fixed 100mm x 50mm label."""
         base, bold, italic = 'Helvetica', 'Helvetica-Bold', 'Helvetica-Oblique'
+
+        def sz(value):
+            return value * scale
+
         return {
-            'title': ParagraphStyle('FrozenTitle', fontName=bold, fontSize=11, leading=12.5, alignment=1),
-            'latin_name': ParagraphStyle('FrozenLatinName', fontName=italic, fontSize=7.5, leading=8.5, alignment=1),
-            'origin': ParagraphStyle('FrozenOrigin', fontName=base, fontSize=7, leading=8, alignment=1),
-            'description': ParagraphStyle('FrozenDescription', fontName=base, fontSize=7, leading=8, alignment=1),
-            'weight': ParagraphStyle('FrozenWeight', fontName=bold, fontSize=8, leading=9, alignment=1),
-            'body': ParagraphStyle('FrozenBody', fontName=base, fontSize=6.5, leading=7.8, alignment=0),
-            'allergen_heading': ParagraphStyle('FrozenAllergenHeading', fontName=base, fontSize=6.5, leading=7.8, alignment=0),
-            'footer_address': ParagraphStyle('FrozenFooterAddress', fontName=base, fontSize=5.6, leading=6.8, alignment=1),
-            'date_label': ParagraphStyle('FrozenDateLabel', fontName=bold, fontSize=6.8, leading=8.5, alignment=0),
-            'date_value': ParagraphStyle('FrozenDateValue', fontName=bold, fontSize=6.8, leading=8.5, alignment=2),
+            'title': ParagraphStyle('FrozenTitle', fontName=bold, fontSize=sz(11), leading=sz(12.5), alignment=1),
+            'latin_name': ParagraphStyle('FrozenLatinName', fontName=italic, fontSize=sz(7.5), leading=sz(8.5), alignment=1),
+            'origin': ParagraphStyle('FrozenOrigin', fontName=base, fontSize=sz(7), leading=sz(8), alignment=1),
+            'description': ParagraphStyle('FrozenDescription', fontName=base, fontSize=sz(7), leading=sz(8), alignment=1),
+            'weight': ParagraphStyle('FrozenWeight', fontName=bold, fontSize=sz(8), leading=sz(9), alignment=1),
+            'body': ParagraphStyle('FrozenBody', fontName=base, fontSize=sz(6.5), leading=sz(7.8), alignment=0),
+            'allergen_heading': ParagraphStyle('FrozenAllergenHeading', fontName=base, fontSize=sz(6.5), leading=sz(7.8), alignment=0),
+            'footer_address': ParagraphStyle('FrozenFooterAddress', fontName=base, fontSize=sz(5.6), leading=sz(6.8), alignment=1),
+            'date_label': ParagraphStyle('FrozenDateLabel', fontName=bold, fontSize=sz(6.8), leading=sz(8.5), alignment=0),
+            'date_value': ParagraphStyle('FrozenDateValue', fontName=bold, fontSize=sz(6.8), leading=sz(8.5), alignment=2),
         }
 
-    def _frozen_label_flowables(self, label, index, total_labels, styles):
+    def _frozen_label_flowables(self, label, index, total_labels, styles, scale=1.0):
+        def gap(mm_value):
+            return mm_value * mm * scale
+
         product_name = xml_escape(label.get('product_name') or '')
         latin_name = xml_escape(label.get('latin_name') or '')
         origin_display = xml_escape(label.get('origin_display') or '')
@@ -94,9 +110,10 @@ class ProductionLabelReportFrozen(models.AbstractModel):
         if weight_range:
             text_col.append(Paragraph(weight_range, styles['weight']))
 
+        stamp_col_w = 14 * mm * scale
         header_table = Table(
-            [[text_col, self._label_circle_flowable()]],
-            colWidths=[PRINTABLE_WIDTH - 14 * mm, 14 * mm],
+            [[text_col, self._label_circle_flowable(scale)]],
+            colWidths=[PRINTABLE_WIDTH - stamp_col_w, stamp_col_w],
         )
         header_table.setStyle(TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
@@ -107,7 +124,7 @@ class ProductionLabelReportFrozen(models.AbstractModel):
             ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
         ]))
         story.append(header_table)
-        story.append(Spacer(1, 0.8 * mm))
+        story.append(Spacer(1, gap(0.8)))
 
         # --- Middle block: 2 Columns (Left: Storage/Allergens/Advisory, Right: Production/Use By) ---
         allergen_val = allergens_display or 'Fish'
@@ -128,8 +145,8 @@ class ProductionLabelReportFrozen(models.AbstractModel):
         date_table.setStyle(TableStyle([
             ('LEFTPADDING', (0, 0), (-1, -1), 0),
             ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-            ('TOPPADDING', (0, 0), (-1, -1), 0.3 * mm),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 0.3 * mm),
+            ('TOPPADDING', (0, 0), (-1, -1), gap(0.3)),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), gap(0.3)),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ]))
 
@@ -146,7 +163,7 @@ class ProductionLabelReportFrozen(models.AbstractModel):
             ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
         ]))
         story.append(mid_table)
-        story.append(Spacer(1, 0.8 * mm))
+        story.append(Spacer(1, gap(0.8)))
 
         # --- Footer: company address (dynamic), centered, full width -----
         company = self.env.company
@@ -161,34 +178,48 @@ class ProductionLabelReportFrozen(models.AbstractModel):
         address_line = xml_escape(', '.join(part for part in address_parts if part))
         if address_line and not address_line.endswith('.'):
             address_line += '.'
+        story.append(FooterPush())  # pins the company address footer to the bottom edge
         story.append(Paragraph(address_line, styles['footer_address']))
 
         return story
 
-    def generate_pdf(self, wizard):
+    def generate_pdf(self, wizard, label_lines=None):
         """Returns the finished Frozen Label PDF (bytes), or None if there
         is nothing to print. One physical label per page at the 100mm x 50mm
-        size."""
-        label_lines = wizard._get_label_data()
+        size. Long content is shrunk to fit that one page."""
+        # label_lines is optional: the Production Label wizard passes it (None
+        # for non-Fresh labels), and the Product Label wizard does not.
+        if label_lines is None:
+            label_lines = wizard._get_label_data()
         if not label_lines:
             return None
 
-        styles = self._frozen_label_styles()
         total_labels = len(label_lines)
 
         buffer = io.BytesIO()
-        doc = SimpleDocTemplate(
+        doc = LabelDocTemplate(
             buffer, pagesize=(PAGE_WIDTH, PAGE_HEIGHT),
             leftMargin=LABEL_MARGIN, rightMargin=LABEL_MARGIN,
             topMargin=LABEL_MARGIN, bottomMargin=LABEL_MARGIN,
         )
 
         story = []
+        fit_cache = {}
         for index, label in enumerate(label_lines):
             if index:
                 story.append(PageBreak())
-            story.extend(self._frozen_label_flowables(label, index, total_labels, styles))
 
+            def build(scale, label=label, index=index):
+                return self._frozen_label_flowables(
+                    label, index, total_labels, self._frozen_label_styles(scale), scale
+                )
+            story.extend(build_fitted_label(
+                build, PRINTABLE_WIDTH, PRINTABLE_HEIGHT, self.MIN_FONT_SCALE,
+                cache=fit_cache, cache_key=label_cache_key(label),
+            ))
+
+        doc.title = 'Frozen Labels'  # PDF metadata - shown by browser PDF viewers
+        doc.author = self.env.company.name or ''
         doc.build(story)
         pdf_value = buffer.getvalue()
         buffer.close()

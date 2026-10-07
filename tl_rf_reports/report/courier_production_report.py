@@ -139,18 +139,17 @@ class ReportCourierProductionReport(models.AbstractModel):
     # QWeb template, no wkhtmltopdf, no background job (same pattern as
     # report_production_report.py's generate_pdf()). `productions` is the
     # Courier mrp.production recordset already filtered by
-    # ProductionReportWizard._get_production_domain(). As with Regal Van, a
-    # Courier MO's own top-level product is the BoM's finished pack, not the
-    # box-type product to report on - that lives on its raw-material
-    # component lines (move_raw_ids), so this groups those, not
-    # mo.product_id.
+    # ProductionReportWizard._get_production_domain(). Each MO's own
+    # product_id/product_qty IS the box-type product/qty to report on - the
+    # Pack Box wizard creates one MO per box directly for that product, so
+    # this groups the MOs themselves, not their raw-material component
+    # lines (move_raw_ids).
     #
-    # Consolidation: each component line (move_raw_ids entry) is one box.
-    # Lines for the same product AND the same "To Consume" quantity
-    # (product_uom_qty) consolidate into a single row - "Boxes" is the COUNT
-    # of such lines, "Box Qty" is that shared per-box quantity. A line
-    # carrying a customer special note (production_sale_line_id.special_requirements_
-    # notes_id) consolidates with any other line carrying that SAME note
+    # Consolidation: each MO is one box. MOs for the same product AND the
+    # same quantity (product_qty) consolidate into a single row - "Boxes" is
+    # the COUNT of such MOs, "Box Qty" is that shared per-box quantity. An
+    # MO carrying a customer special note (production_sale_line_id.special_requirements_
+    # notes_id) consolidates with any other MO carrying that SAME note
     # record (by id), even across different sale order lines, so
     # identically-noted boxes of the same product/quantity share one row
     # while a different note still gets its own - identical rule to
@@ -162,24 +161,24 @@ class ReportCourierProductionReport(models.AbstractModel):
         if not productions:
             return None
 
-        moves = productions.mapped('move_raw_ids').filtered(lambda m: m.product_id)
+        productions = productions.filtered(lambda m: m.product_id)
         if wizard.category_ids:
             allowed_categ_ids = set(wizard.category_ids.ids)
-            moves = moves.filtered(lambda m: m.product_id.categ_id.id in allowed_categ_ids)
-        if not moves:
+            productions = productions.filtered(lambda m: m.product_id.categ_id.id in allowed_categ_ids)
+        if not productions:
             return None
 
         groups = {}
-        for move in moves:
-            product = move.product_id
-            qty = move.product_uom_qty or 0.0
-            uom = move.product_uom
-            special_note = (move.special_requirements_notes or '').strip()
-            # Notes-less lines consolidate across any sale order line; a
-            # noted line consolidates with any other line carrying the SAME
-            # note record (by id), regardless of which sale order line it
-            # came from.
-            notes_scope = move.production_sale_line_id.special_requirements_notes_id.id if special_note else 0
+        for mo in productions:
+            product = mo.product_id
+            qty = mo.product_qty or 0.0
+            uom = mo.product_uom_id
+            special_note = (mo.production_sale_line_id.special_requirements_notes_id.name or '').strip()
+            # Notes-less MOs consolidate across any sale order line; a noted
+            # MO consolidates with any other MO carrying the SAME note
+            # record (by id), regardless of which sale order line it came
+            # from.
+            notes_scope = mo.production_sale_line_id.special_requirements_notes_id.id if special_note else 0
             group_key = (product.id, qty, uom.id, notes_scope)
 
             group = groups.setdefault(group_key, {
@@ -301,6 +300,8 @@ class ReportCourierProductionReport(models.AbstractModel):
             c.printed_date_text = printed_date_str
             return c
 
+        doc.title = 'Courier Fresh Production Report'  # PDF metadata - shown by browser PDF viewers
+        doc.author = self.env.company.name or ''
         doc.build(story, canvasmaker=_make_canvas)
         pdf_value = buffer.getvalue()
         buffer.close()

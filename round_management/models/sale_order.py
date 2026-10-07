@@ -1,5 +1,5 @@
 from odoo import models, api, fields
-from odoo.exceptions import UserError
+from odoo.exceptions import UserError, ValidationError
 from odoo.tools import _
 from datetime import datetime, time
 import pytz
@@ -70,12 +70,6 @@ class SaleOrder(models.Model):
         readonly=False,
         copy=True,
     )
-    # delivery_time_slot = fields.Selection([
-    #     ('08:00_12:00', '08:00 to 12:00'),
-    #     ('12:00_16:00', '12:00 to 16:00'),
-    #     ('13:00_19:00', '13:00 to 19:00'),
-    #     ('18:00_21:00', '18:00 to 21:00'),
-    # ], string='Delivery Times', help="Independent delivery time selection")
 
     week_number = fields.Char(
         string='ISO Week No.',
@@ -101,13 +95,7 @@ class SaleOrder(models.Model):
         string='No Between Times on Round',
         readonly=True
     )
-    # delivery_times = fields.Char(
-    #     string='Delivery Times',
-    #     compute='_compute_delivery_times',
-    #     store=True,
-    #     readonly=True,
-    #     help="Operating delivery times calculated from round configuration"
-    # )
+
     delivery_times = fields.Char(
         string='Delivery Times',
         compute='_compute_delivery_times',
@@ -117,30 +105,13 @@ class SaleOrder(models.Model):
     )
     round_full_name = fields.Char(compute='_compute_round_full_name', store=True)
 
-    @api.depends('round_id.code', 'round_id.name')
-    def _compute_round_full_name(self):
-        for rec in self:
-            if rec.round_id:
-                rec.round_full_name = f'{rec.round_id.code}-{rec.round_id.name}'
-            else:
-                rec.round_full_name = False
-
-    _DAY_FIELDS = {
-        0: ('mon_active', 'mon_from', 'mon_to'),  # Monday
-        1: ('tue_active', 'tue_from', 'tue_to'),  # Tuesday
-        2: ('wed_active', 'wed_from', 'wed_to'),  # Wednesday
-        3: ('thu_active', 'thu_from', 'thu_to'),  # Thursday
-        4: ('fri_active', 'fri_from', 'fri_to'),  # Friday
-        5: ('sat_active', 'sat_from', 'sat_to'),  # Saturday
-        6: ('sun_active', 'sun_from', 'sun_to'),  # Sunday
-    }
-
     is_alternative_round = fields.Boolean(
         string="Is Alternative Round",
         default=False,
         compute="_compute_is_alternative_round",
         store=True,
     )
+
     # Payment Modes
     pay_card_reader = fields.Boolean(string="Card Reader", default=False)
     pay_kb = fields.Boolean(string="K/B", default=False)
@@ -160,7 +131,7 @@ class SaleOrder(models.Model):
         readonly=False,
         help="Automatically mapped based on the selected Round Batch."
     )
-    
+
     order_history_ids = fields.One2many(
         'sale.order',
         compute='_compute_order_history_ids',
@@ -168,11 +139,170 @@ class SaleOrder(models.Model):
         help="Historical sales orders for the selected customer, excluding the current order."
     )
 
+    has_alt_address = fields.Selection([
+        ('Yes', 'Yes'),
+        ('No', 'No')
+    ], string="Alt Addr", compute="_compute_has_alt_address", store=True)
+
+    pay_type = fields.Char(
+        string="Pay Type",
+        compute="_compute_pay_type",
+        store=True
+    )
+
+    @api.onchange('partner_id', 'round_id')
+    def _onchange_partner_or_round_auto_batch_check(self):
+        """
+        Triggers when Customer or Round changes in UI:
+        - Auto-selects active batch if available.
+        - Returns warning banner if round exists but no active batch.
+        """
+        target_round = self.round_id or (self.partner_id and self.partner_id.round_id)
+
+        if not target_round:
+            self.batch_id = False
+            return
+
+        today = fields.Date.context_today(self)
+
+        next_batch = self.env['round.management.batch'].search([
+            ('round_id', '=', target_round.id),
+            ('state', '=', 'act'),
+            ('delivery_date', '>=', today),
+        ], order='delivery_date asc, id asc', limit=1)
+
+        if not next_batch:
+            next_batch = self.env['round.management.batch'].search([
+                ('round_id', '=', target_round.id),
+                ('state', '=', 'act'),
+            ], order='delivery_date desc, id desc', limit=1)
+
+        if next_batch:
+            self.batch_id = next_batch.id
+        else:
+            self.batch_id = False
+            round_name = (
+                    self.round_full_name
+                    or target_round.display_name
+                    or target_round.name
+                    or "Selected Round"
+            )
+            return {
+                'warning': {
+                    'title': "No Active Round Batch Available",
+                    'message': (
+                        f"There is currently no active batch available for the selected round “{round_name}”. "
+                        f"Please select an alternative round or choose an available Courier Batch to continue creating the Sales Order."
+                    ),
+                }
+            }
+
+    @api.constrains('batch_id', 'round_id', 'state')
+    def _check_batch_id_mandatory_on_save(self):
+        """
+        Strict validation only blocks when confirming or in sale/done state.
+        Allows draft UI auto-saves and wizard action buttons to execute without raising exceptions.
+        """
+        if (
+                self.env.context.get('skip_batch_validation')
+                or self.env.context.get('action_select_alt')
+                or self.env.context.get('bin_size')
+        ):
+            return
+
+        for order in self:
+            if order.round_id and not order.batch_id and order.state in ['sale', 'done']:
+                round_name = (
+                        order.round_full_name
+                        or order.round_id.display_name
+                        or order.round_id.name
+                        or "Selected Round"
+                )
+                raise ValidationError(
+                    f"No Active Round Batch Available\n\n"
+                    f"There is currently no active batch available for the selected round “{round_name}”. "
+                    f"Please select an alternative round or choose an available Courier Batch to continue creating the Sales Order."
+                )
+
+    def action_confirm(self):
+        """Enforces batch check when user clicks Confirm."""
+        for order in self:
+            if order.round_id and not order.batch_id:
+                round_name = (
+                        order.round_full_name
+                        or order.round_id.display_name
+                        or order.round_id.name
+                        or "Selected Round"
+                )
+                raise ValidationError(
+                    f"No Active Round Batch Available\n\n"
+                    f"There is currently no active batch available for the selected round “{round_name}”. "
+                    f"Please select an alternative round or choose an available Courier Batch to continue creating the Sales Order."
+                )
+            if order.is_alternative_round and order.batch_id.is_alt_limit_reached:
+                raise UserError(
+                    _("Max Alternative Drops have been reached for batch '%s'.") % order.batch_id.display_name
+                )
+
+        res = super().action_confirm()
+        for order in self:
+            if order.batch_id:
+                valid_pickings = order.picking_ids.filtered(lambda p: p.state != 'cancel')
+                if valid_pickings:
+                    valid_pickings.with_context(
+                        building_backorder=True,
+                        dont_check_company=True
+                    ).write({'batch_id': order.batch_id.id})
+
+        return res
+
+    @api.depends('round_id.code', 'round_id.name')
+    def _compute_round_full_name(self):
+        for rec in self:
+            if rec.round_id:
+                rec.round_full_name = f'{rec.round_id.code}-{rec.round_id.name}'
+            else:
+                rec.round_full_name = False
+
+    _DAY_FIELDS = {
+        0: ('mon_active', 'mon_from', 'mon_to'),
+        1: ('tue_active', 'tue_from', 'tue_to'),
+        2: ('wed_active', 'wed_from', 'wed_to'),
+        3: ('thu_active', 'thu_from', 'thu_to'),
+        4: ('fri_active', 'fri_from', 'fri_to'),
+        5: ('sat_active', 'sat_from', 'sat_to'),
+        6: ('sun_active', 'sun_from', 'sun_to'),
+    }
+
+    @api.depends('partner_id', 'partner_shipping_id')
+    def _compute_has_alt_address(self):
+        for order in self:
+            if order.partner_shipping_id and order.partner_id and order.partner_shipping_id != order.partner_id:
+                order.has_alt_address = 'Yes'
+            else:
+                order.has_alt_address = 'No'
+
+    @api.depends('pay_card_reader', 'pay_kb', 'pay_lnp', 'pay_cash', 'pay_cheque', 'pay_card')
+    def _compute_pay_type(self):
+        for order in self:
+            modes = []
+            if order.pay_card or order.pay_card_reader:
+                modes.append("DEBIT CARD")
+            if order.pay_cash:
+                modes.append("CASH")
+            if order.pay_cheque:
+                modes.append("CHEQUE")
+            if order.pay_kb:
+                modes.append("K/B")
+            if order.pay_lnp:
+                modes.append("LNP")
+
+            order.pay_type = ", ".join(modes) if modes else "N/A"
+
     @api.depends('partner_id')
     def _compute_order_history_ids(self):
         for order in self:
             if order.partner_id:
-                # Fetch all orders for the commercial partner excluding this current order
                 domain = [
                     ('partner_id.commercial_partner_id', '=', order.partner_id.commercial_partner_id.id),
                     ('id', '!=', order.id if isinstance(order.id, int) else 0)
@@ -180,7 +310,7 @@ class SaleOrder(models.Model):
                 order.order_history_ids = self.search(domain, order='date_order desc')
             else:
                 order.order_history_ids = self.env['sale.order']
-                
+
     def action_open_delivery_address_wizard(self):
         self.ensure_one()
         if not self.partner_id:
@@ -196,6 +326,7 @@ class SaleOrder(models.Model):
                 'default_sale_order_id': self.id,
                 'default_partner_id': self.partner_id.id,
                 'default_delivery_address_id': self.partner_shipping_id.id or self.partner_id.id,
+                'skip_batch_validation': True,
             }
         }
 
@@ -211,7 +342,6 @@ class SaleOrder(models.Model):
     def _onchange_batch_id_set_delivery_channel(self):
         if self.batch_id and self.batch_id.delivery_channel:
             self.delivery_channel = self.batch_id.delivery_channel
-
 
     @api.onchange('pay_card_reader')
     def _onchange_pay_card_reader(self):
@@ -272,26 +402,6 @@ class SaleOrder(models.Model):
         for rec in self:
             rec.is_alternative_round = True if rec.batch_id.round_id != rec.round_id else False
 
-    def action_confirm(self):
-        """Enforces Max. Alternative Drops limit and links round batch to delivery pickings."""
-
-        for order in self:
-            if order.is_alternative_round and order.batch_id.is_alt_limit_reached:
-                raise UserError(
-                    _("Max Alternative Drops have been reached for batch '%s'.") % order.batch_id.display_name)
-        res = super().action_confirm()
-        for order in self:
-            if order.batch_id:
-                valid_pickings = order.picking_ids.filtered(lambda p: p.state != 'cancel')
-                if valid_pickings:
-                    # Pass context to bypass stock_picking_batch sanity checks and user assignments
-                    valid_pickings.with_context(
-                        building_backorder=True,
-                        dont_check_company=True
-                    ).write({'batch_id': order.batch_id.id})
-
-        return res
-
     @api.depends('batch_id', 'batch_id.delivery_times')
     def _compute_delivery_times(self):
         for order in self:
@@ -304,10 +414,6 @@ class SaleOrder(models.Model):
             order.permanent_notes = partner.comment if partner and partner.comment else False
 
     def _local_time_to_utc_datetime(self, date_val, local_time):
-        """Combine a date with a local time and return the equivalent naive
-        UTC datetime, since commitment_date (Datetime field) is stored
-        internally in UTC but should represent a fixed local wall-clock time.
-        """
         self.ensure_one()
         if not date_val:
             return False
@@ -323,25 +429,22 @@ class SaleOrder(models.Model):
         if value in (False, None, ''):
             return ""
 
-        # Normalize to a float number of hours first
         if isinstance(value, str):
             value = value.strip()
             if ':' in value:
-                # e.g. "5:00", "05:30"
                 h_str, m_str = value.split(':', 1)
                 try:
                     hours = int(h_str)
                     minutes = int(m_str)
                 except ValueError:
-                    return value  # fallback: unparseable, show as-is
+                    return value
             else:
-                # e.g. "5", "5.5"
                 try:
                     float_val = float(value)
                     hours = int(float_val)
                     minutes = int(round((float_val - hours) * 60))
                 except ValueError:
-                    return value  # fallback: unparseable, show as-is
+                    return value
         elif isinstance(value, (int, float)):
             hours = int(value)
             minutes = int(round((value - hours) * 60))
@@ -354,7 +457,7 @@ class SaleOrder(models.Model):
     def _compute_is_late_order(self):
         for rec in self:
             rec.is_late_order = bool(
-               rec.batch_id and rec.batch_id.state == 'prt'
+                rec.batch_id and rec.batch_id.state == 'prt'
             )
 
     @api.depends('delivery_date', 'commitment_date')
@@ -365,7 +468,6 @@ class SaleOrder(models.Model):
                 local_dt = fields.Datetime.context_timestamp(order, order.commitment_date)
                 target_date = local_dt.date()
             if target_date:
-                # %A returns full day name (e.g. Wednesday)
                 order.delivery_day_name = f"({target_date.strftime('%A')})"
             else:
                 order.delivery_day_name = ""
@@ -451,7 +553,13 @@ class SaleOrder(models.Model):
                 if vals.get('delivery_date'):
                     d_date = fields.Date.to_date(vals['delivery_date'])
                     naive_dt = datetime.combine(d_date, DEFAULT_DELIVERY_TIME)
-                    vals['commitment_date'] = local_tz.localize(naive_dt).astimezone(pytz.UTC).replace(tzinfo=None)
+
+                    vals['commitment_date'] = (
+                        local_tz.localize(naive_dt)
+                        .astimezone(pytz.UTC)
+                        .replace(tzinfo=None)
+                    )
+
                     if 'week_number' not in vals:
                         iso_year, iso_week, _ = d_date.isocalendar()
                         vals['week_number'] = f"{iso_year}{str(iso_week).zfill(2)}"
@@ -461,15 +569,61 @@ class SaleOrder(models.Model):
             elif 'commitment_date' in vals and 'delivery_date' not in vals:
                 if vals.get('commitment_date'):
                     c_dt = fields.Datetime.to_datetime(vals['commitment_date'])
-                    local_d = pytz.UTC.localize(c_dt).astimezone(local_tz).date()
+                    local_d = (
+                        pytz.UTC.localize(c_dt)
+                        .astimezone(local_tz)
+                        .date()
+                    )
+
                     vals['delivery_date'] = local_d
+
                     if 'week_number' not in vals:
                         iso_year, iso_week, _ = local_d.isocalendar()
                         vals['week_number'] = f"{iso_year}{str(iso_week).zfill(2)}"
                 else:
                     vals['delivery_date'] = False
 
-        return super().write(vals)
+        res = super().write(vals)
+
+        if 'order_line' in vals:
+            for order in self:
+                draft_invoices = order.invoice_ids.filtered(
+                    lambda inv:
+                    inv.move_type == 'out_invoice'
+                    and inv.state == 'draft'
+                )
+
+                for invoice in draft_invoices:
+                    inv_line_map = {}
+                    for inv_line in invoice.invoice_line_ids:
+                        for sale_line in inv_line.sale_line_ids:
+                            inv_line_map[sale_line.id] = inv_line
+
+                    so_line_ids = order.order_line.ids
+
+                    for line in order.order_line:
+                        if line.id in inv_line_map:
+                            inv_line_map[line.id].write({
+                                'quantity': line.product_uom_qty,
+                                'price_unit': line.price_unit,
+                                'name': line.name,
+                            })
+                        else:
+                            self.env['account.move.line'].create({
+                                'move_id': invoice.id,
+                                'product_id': line.product_id.id,
+                                'quantity': line.product_uom_qty,
+                                'price_unit': line.price_unit,
+                                'name': line.name,
+                                'tax_ids': [(6, 0, line.tax_ids.ids)],
+                                'sale_line_ids': [(6, 0, [line.id])],
+                            })
+
+                    for so_line_id, inv_line in inv_line_map.items():
+                        if so_line_id not in so_line_ids:
+                            inv_line.unlink()
+
+        return res
 
     @api.depends('partner_id', 'partner_id.round_id')
     def _compute_partner_id_set_round(self):
@@ -507,6 +661,7 @@ class SaleOrder(models.Model):
             'res_id': wizard.id,
             'view_mode': 'form',
             'target': 'new',
+            'context': dict(self.env.context, skip_batch_validation=True),
         }
 
     def copy(self, default=None):
@@ -542,8 +697,6 @@ class SaleOrder(models.Model):
         for order in self:
             if order.pricelist_id and order.pricelist_id.pricelist_category == 'b2b':
                 order.is_b2b = True
-            #elif order.partner_id and order.partner_id.customer_type == 'b2b_trade':
-                #order.is_b2b = True
             else:
                 order.is_b2b = False
 
@@ -555,74 +708,14 @@ class SaleOrder(models.Model):
                 order.is_staff_order = (order.pricelist_id.pricelist_category == 'staff')
             else:
                 order.is_staff_order = False
-            
-    @api.depends('partner_id', 'partner_id.round_id')
-    def _compute_partner_id_set_round(self):
-        for rec in self:
-            if rec.partner_id and rec.partner_id.round_id:
-                rec.round_id = rec.partner_id.round_id
-            else:
-                rec.round_id = False
-    
-    @api.depends('round_id')
-    def _compute_auto_select_batch_id(self):
-        today = fields.Date.context_today(self)
-        for order in self:
-            if not order.round_id:
-                order.batch_id = False
-                continue
 
-            # Find the nearest future or today's active batch
-            next_batch = self.env['round.management.batch'].search([
-                ('round_id', '=', order.round_id.id),
-                ('state', 'in', ['act']),
-                ('delivery_date', '>=', today),
-            ], order='delivery_date asc, id asc', limit=1)
 
-            # Fallback to the most recent past batch if no upcoming batch exists
-            if not next_batch:
-                next_batch = self.env['round.management.batch'].search([
-                    ('round_id', '=', order.round_id.id),
-                    ('state', 'in', ['act']),
-                ], order='delivery_date desc, id desc', limit=1)
-
-            order.batch_id = next_batch.id if next_batch else False
-            
-    @api.onchange('round_id')
-    def _onchange_round_id_auto_select_next_batch(self):
-        """
-        Automatically selects the next active ('act') batch for the selected main round.
-        Picks the nearest upcoming active batch based on delivery date.
-        """
-        if not self.round_id:
-            self.batch_id = False
-            return
-
-        today = fields.Date.context_today(self)
-
-        # 1. Search for the nearest future or today's active batch ('act' only)
-        next_batch = self.env['round.management.batch'].search([
-            ('round_id', '=', self.round_id.id),
-            ('state', '=', 'act'),
-            ('delivery_date', '>=', today),
-        ], order='delivery_date asc, id asc', limit=1)
-
-        # 2. Fallback: if no future active batch exists, pick the most recent active batch
-        if not next_batch:
-            next_batch = self.env['round.management.batch'].search([
-                ('round_id', '=', self.round_id.id),
-                ('state', '=', 'act'),
-            ], order='delivery_date desc, id desc', limit=1)
-
-        self.batch_id = next_batch if next_batch else False
-            
 class SaleOrderSpecialNote(models.Model):
     _name = 'sale.order.special.note'
     _description = 'Special Requirements Note'
     _order = 'name'
 
     name = fields.Char(string="Note", required=True)
-
 
 
 class SaleOrderLine(models.Model):
@@ -634,18 +727,12 @@ class SaleOrderLine(models.Model):
         ondelete='set null',
     )
 
-    # Declared here only so round_management (StockFreshBoxWizard.
-    # action_analyze_orders) doesn't hard-depend on tl_rf_reports, which
-    # defines this field's real compute (SaleOrderLine._compute_late_order:
-    # current qty minus the qty confirmed when the batch was locked in).
-    # The two modules are always installed together in this addon suite, so
-    # tl_rf_reports' compute is what actually runs - this plain field is
-    # just a fallback/placeholder for the dependency direction.
     late_qty_delta = fields.Float(
         string="Late Qty Delta",
         default=0.0,
         digits='Product Unit of Measure',
     )
+
 
 class Pricelist(models.Model):
     _inherit = 'product.pricelist'
@@ -655,8 +742,8 @@ class Pricelist(models.Model):
         ('b2b', 'B2B'),
         ('standard', 'Standard'),
     ], string="Pricelist Category", default='standard', required=True)
-    
-    
+
+
 class ProductProduct(models.Model):
     _inherit = 'product.product'
 
@@ -664,17 +751,16 @@ class ProductProduct(models.Model):
         super()._compute_display_name()
         for product in self:
             if product.display_name:
-                # Strips [code] prefix from selected field display
                 product.display_name = re.sub(r'^\[.*?\]\s*', '', product.display_name)
 
     @api.model
     def _name_search(self, name='', domain=None, operator='ilike', limit=100, order=None):
-        # Pass display_default_code=False in context to suppress right-hand reference column in dropdown
         res = super(ProductProduct, self.with_context(display_default_code=False))._name_search(
             name=name, domain=domain, operator=operator, limit=limit, order=order
         )
         return res
-        
+
+
 class ProductTemplate(models.Model):
     _inherit = 'product.template'
 

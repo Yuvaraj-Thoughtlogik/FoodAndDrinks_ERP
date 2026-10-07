@@ -1,3 +1,4 @@
+import re
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError
 
@@ -18,12 +19,30 @@ class UkAddressLookupWizard(models.TransientModel):
 
         selected = self.selected_line_id
         uk_country = self.env['res.country'].search([('code', '=', 'GB')], limit=1)
-        line2_parts = [p for p in [selected.line_2, selected.line_3] if p]
+
+        raw_line1 = (selected.line_1 or selected.line1 or '').strip()
+        
+        # Match door/building number at start of string (e.g., "1 Lower Meadows" -> "1" and "Lower Meadows")
+        match = re.match(r'^(\d+[a-zA-Z]?)\s+(.*)$', raw_line1)
+        
+        if match:
+            street_val = match.group(1)      # e.g., "1"
+            street2_first = match.group(2)   # e.g., "Lower Meadows"
+        else:
+            street_val = raw_line1
+            street2_first = False
+
+        # Gather remaining lines (line2, line3)
+        extra_lines = [p for p in [selected.line_2 or getattr(selected, 'line2', False), 
+                                   selected.line_3 or getattr(selected, 'line3', False)] if p]
+        
+        if street2_first:
+            extra_lines.insert(0, street2_first)
 
         self.partner_id.write({
-            'street': selected.line_1,
-            'street2': ", ".join(line2_parts),
-            'city': selected.post_town.title() if selected.post_town else False,
+            'street': street_val,
+            'street2': ", ".join(extra_lines) if extra_lines else False,
+            'city': selected.post_town.title() if hasattr(selected, 'post_town') and selected.post_town else (selected.city.title() if hasattr(selected, 'city') and selected.city else False),
             'zip': selected.postcode,
             'country_id': uk_country.id if uk_country else False,
         })

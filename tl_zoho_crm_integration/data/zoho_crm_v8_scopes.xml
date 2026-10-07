@@ -1,0 +1,177 @@
+<?xml version="1.0" ?>
+<odoo>
+    <data noupdate="1">
+        <record id="zoho_scope_zohocrm_users_all" model="zoho.config.scope">
+            <field name="name">ZohoCRM.users.ALL</field>
+        </record>
+        <record id="zoho_scope_zohocrm_org_all" model="zoho.config.scope">
+            <field name="name">ZohoCRM.org.ALL</field>
+        </record>
+        <record id="zoho_scope_zohocrm_settings_all" model="zoho.config.scope">
+            <field name="name">ZohoCRM.settings.ALL</field>
+        </record>
+        <record id="zoho_scope_zohocrm_settings_territories_read" model="zoho.config.scope">
+            <field name="name">ZohoCRM.settings.territories.READ</field>
+        </record>
+        <record id="zoho_scope_zohocrm_settings_custom_views_read" model="zoho.config.scope">
+            <field name="name">ZohoCRM.settings.custom_views.READ</field>
+        </record>
+        <record id="zoho_scope_zohocrm_settings_related_lists_read" model="zoho.config.scope">
+            <field name="name">ZohoCRM.settings.related_lists.READ</field>
+        </record>
+        <record id="zoho_scope_zohocrm_settings_modules_read" model="zoho.config.scope">
+            <field name="name">ZohoCRM.settings.modules.READ</field>
+        </record>
+        <record id="zoho_scope_zohocrm_settings_variables_read" model="zoho.config.scope">
+            <field name="name">ZohoCRM.settings.variables.READ</field>
+        </record>
+        <record id="zoho_scope_zohocrm_settings_tags_read" model="zoho.config.scope">
+            <field name="name">ZohoCRM.settings.tags.READ</field>
+        </record>
+        <record id="zoho_scope_zohocrm_settings_tab_groups_read" model="zoho.config.scope">
+            <field name="name">ZohoCRM.settings.tab_groups.READ</field>
+        </record>
+        <record id="zoho_scope_zohocrm_settings_fields_read" model="zoho.config.scope">
+            <field name="name">ZohoCRM.settings.fields.READ</field>
+        </record>
+        <record id="zoho_scope_zohocrm_settings_layouts_read" model="zoho.config.scope">
+            <field name="name">ZohoCRM.settings.layouts.READ</field>
+        </record>
+        <record id="zoho_scope_zohocrm_settings_macros_read" model="zoho.config.scope">
+            <field name="name">ZohoCRM.settings.macros.READ</field>
+        </record>
+        <record id="zoho_scope_zohocrm_settings_custom_links_read" model="zoho.config.scope">
+            <field name="name">ZohoCRM.settings.custom_links.READ</field>
+        </record>
+        <record id="zoho_scope_zohocrm_settings_custom_buttons_read" model="zoho.config.scope">
+            <field name="name">ZohoCRM.settings.custom_buttons.READ</field>
+        </record>
+        <record id="zoho_scope_zohocrm_settings_roles_read" model="zoho.config.scope">
+            <field name="name">ZohoCRM.settings.roles.READ</field>
+        </record>
+        <record id="zoho_scope_zohocrm_settings_profiles_read" model="zoho.config.scope">
+            <field name="name">ZohoCRM.settings.profiles.READ</field>
+        </record>
+        <record id="zoho_scope_zohocrm_settings_currencies_read" model="zoho.config.scope">
+            <field name="name">ZohoCRM.settings.currencies.READ</field>
+        </record>
+        <record id="zoho_scope_zohocrm_modules_all" model="zoho.config.scope">
+            <field name="name">ZohoCRM.modules.ALL</field>
+        </record>
+        <record id="zoho_scope_zohocrm_modules_approvals_all" model="zoho.config.scope">
+            <field name="name">ZohoCRM.modules.approvals.ALL</field>
+        </record>
+        <record id="zoho_scope_zohocrm_modules_leads_all" model="zoho.config.scope">
+            <field name="name">ZohoCRM.modules.leads.ALL</field>
+        </record>
+        <record id="zoho_scope_zohocrm_modules_accounts_all" model="zoho.config.scope">
+            <field name="name">ZohoCRM.modules.accounts.ALL</field>
+        </record>
+        <record id="zoho_scope_zohocrm_modules_contacts_all" model="zoho.config.scope">
+            <field name="name">ZohoCRM.modules.contacts.ALL</field>
+        </record>
+        <record id="zoho_scope_zohocrm_modules_deals_all" model="zoho.config.scope">
+            <field name="name">ZohoCRM.modules.deals.ALL</field>
+        </record>
+        <record id="zoho_scope_zohocrm_modules_campaigns_all" model="zoho.config.scope">
+            <field name="name">ZohoCRM.modules.campaigns.ALL</field>
+        </record>
+        <record id="zoho_scope_zohocrm_modules_tasks_all" model="zoho.config.scope">
+            <field name="name">ZohoCRM.modules.tasks.ALL</field>
+        </record>
+        <record id="zoho_scope_zohocrm_modules_cases_all" model="zoho.config.scope">
+            <field name="name">ZohoCRM.modules.cases.ALL</field>
+        </record>
+        <record id="zoho_scope_zohocrm_modules_events_all" model="zoho.config.scope">
+            <field name="name">ZohoCRM.modules.events.ALL</field>
+        </record>
+        <record id="zoho_scope_zohocrm_modules_calls_all" model="zoho.config.scope">
+            <field name="name">ZohoCRM.modules.calls.ALL</field>
+        </record>
+        <record id="zoho_scope_zohocrm_modules_solutions_all" model="zoho.config.scope">
+            <field name="name">ZohoCRM.modules.solutions.ALL</field>
+        </record>
+        <record id="zoho_scope_zohocrm_modules_products_all" model="zoho.config.scope">
+            <field name="name">ZohoCRM.modules.products.ALL</field>
+        </record>
+        <record id="zoho_scope_zohocrm_modules_vendors_all" model="zoho.config.scope">
+            <field name="name">ZohoCRM.modules.vendors.ALL</field>
+        </record>
+        <record id="zoho_scope_zohocrm_modules_pricebooks_all" model="zoho.config.scope">
+            <field name="name">ZohoCRM.modules.pricebooks.ALL</field>
+        </record>
+        <record id="zoho_scope_zohocrm_modules_quotes_all" model="zoho.config.scope">
+            <field name="name">ZohoCRM.modules.quotes.ALL</field>
+        </record>
+        <record id="zoho_scope_zohocrm_modules_salesorders_all" model="zoho.config.scope">
+            <field name="name">ZohoCRM.modules.salesorders.ALL</field>
+        </record>
+        <record id="zoho_scope_zohocrm_modules_purchaseorders_all" model="zoho.config.scope">
+            <field name="name">ZohoCRM.modules.purchaseorders.ALL</field>
+        </record>
+        <record id="zoho_scope_zohocrm_modules_invoices_all" model="zoho.config.scope">
+            <field name="name">ZohoCRM.modules.invoices.ALL</field>
+        </record>
+        <record id="zoho_scope_zohocrm_modules_custom_all" model="zoho.config.scope">
+            <field name="name">ZohoCRM.modules.custom.ALL</field>
+        </record>
+        <record id="zoho_scope_zohocrm_modules_dashboards_read" model="zoho.config.scope">
+            <field name="name">ZohoCRM.modules.dashboards.READ</field>
+        </record>
+        <record id="zoho_scope_zohocrm_modules_notes_all" model="zoho.config.scope">
+            <field name="name">ZohoCRM.modules.notes.ALL</field>
+        </record>
+        <record id="zoho_scope_zohocrm_modules_activities_all" model="zoho.config.scope">
+            <field name="name">ZohoCRM.modules.activities.ALL</field>
+        </record>
+        <record id="zoho_scope_zohocrm_modules_search_read" model="zoho.config.scope">
+            <field name="name">ZohoCRM.modules.search.READ</field>
+        </record>
+        <record id="zoho_scope_zohocrm_modules_services_all" model="zoho.config.scope">
+            <field name="name">ZohoCRM.modules.services.ALL</field>
+        </record>
+        <record id="zoho_scope_zohocrm_modules_appointments_all" model="zoho.config.scope">
+            <field name="name">ZohoCRM.modules.appointments.ALL</field>
+        </record>
+        <record id="zoho_scope_zohocrm_modules_appointments_rescheduled_history_read" model="zoho.config.scope">
+            <field name="name">ZohoCRM.modules.appointments_rescheduled_history.READ</field>
+        </record>
+        <record id="zoho_scope_zohocrm_coql_read" model="zoho.config.scope">
+            <field name="name">ZohoCRM.coql.READ</field>
+        </record>
+        <record id="zoho_scope_zohocrm_notifications_all" model="zoho.config.scope">
+            <field name="name">ZohoCRM.notifications.ALL</field>
+        </record>
+        <record id="zoho_scope_zohocrm_notifications_read" model="zoho.config.scope">
+            <field name="name">ZohoCRM.notifications.READ</field>
+        </record>
+        <record id="zoho_scope_zohocrm_notifications_create" model="zoho.config.scope">
+            <field name="name">ZohoCRM.notifications.CREATE</field>
+        </record>
+        <record id="zoho_scope_zohocrm_notifications_update" model="zoho.config.scope">
+            <field name="name">ZohoCRM.notifications.UPDATE</field>
+        </record>
+        <record id="zoho_scope_zohocrm_notifications_delete" model="zoho.config.scope">
+            <field name="name">ZohoCRM.notifications.DELETE</field>
+        </record>
+        <record id="zoho_scope_zohocrm_bulk_all" model="zoho.config.scope">
+            <field name="name">ZohoCRM.bulk.ALL</field>
+        </record>
+        <record id="zoho_scope_zohocrm_bulk_read" model="zoho.config.scope">
+            <field name="name">ZohoCRM.bulk.READ</field>
+        </record>
+        <record id="zoho_scope_zohocrm_bulk_create" model="zoho.config.scope">
+            <field name="name">ZohoCRM.bulk.CREATE</field>
+        </record>
+        <record id="zoho_scope_zohocrm_features_read" model="zoho.config.scope">
+            <field name="name">ZohoCRM.features.READ</field>
+        </record>
+        <record id="zoho_scope_zohocrm_files_read" model="zoho.config.scope">
+            <field name="name">ZohoCRM.Files.READ</field>
+        </record>
+        <record id="zoho_scope_zohocrm_files_create" model="zoho.config.scope">
+            <field name="name">ZohoCRM.Files.CREATE</field>
+        </record>
+
+    </data>
+</odoo>
